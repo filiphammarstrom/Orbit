@@ -335,6 +335,17 @@ export async function addTaskLink(taskId, input) {
   return camelLink(data);
 }
 
+export async function startGoogleCalendarOAuth() {
+  const current = await session();
+  if (!current?.access_token) throw new Error('Du är inte inloggad.');
+  const response = await fetch('/api/google-auth-start', {
+    headers: { authorization: `Bearer ${current.access_token}` }
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error || 'Kunde inte starta Google OAuth.');
+  return data.url;
+}
+
 export async function createCalendarIntegration(input = {}) {
   const user = (await session())?.user;
   if (!user) throw new Error('Du är inte inloggad.');

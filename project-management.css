@@ -77,7 +77,9 @@
 .calendar-sync-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:10px}
 .calendar-sync-head h3{font:700 13px Manrope;margin:0 0 3px}
 .calendar-sync-head p{font-size:10px;color:#918b99;margin:0}
+.calendar-actions{display:flex;gap:6px;align-items:center}
 .small-link{display:inline-flex;align-items:center;text-decoration:none;font-size:10px;white-space:nowrap;padding:8px 10px}
+.small-link:disabled{opacity:.55}
 .calendar-sync-list{display:grid;gap:8px;margin:10px 0 12px}
 .calendar-sync-row{display:grid;grid-template-columns:64px 1fr auto;gap:8px;align-items:center;background:#fff;border:1px solid var(--line);border-radius:10px;padding:9px}
 .calendar-sync-row strong{display:block;font-size:11px}
@@ -112,7 +114,7 @@
   .brief-card button{width:100%}
   .link-form{grid-template-columns:1fr}
   .schedule-grid{grid-template-columns:1fr}
-  .calendar-sync-head{flex-direction:column}
+  .calendar-sync-head,.calendar-actions{flex-direction:column;align-items:stretch;width:100%}
   .calendar-sync-form,.calendar-sync-row{grid-template-columns:1fr}
   .calendar-sync-form .primary,.small-link{width:100%;justify-content:center}
   .task-link-card{grid-template-columns:34px 1fr}

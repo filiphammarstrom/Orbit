@@ -1,4 +1,4 @@
-import { configured, session, signIn, signUp, signOut, loadCloudState, createCloudTask, updateCloudTask, subscribeToChanges, addComment, addTaskLink, createCalendarIntegration, queueCalendarSync, saveDailyBrief, markNotificationRead, decideApproval, createTeam, createInvitation, shareAreaWithTeam } from './cloud.js';
+import { configured, session, signIn, signUp, signOut, loadCloudState, createCloudTask, updateCloudTask, subscribeToChanges, addComment, addTaskLink, startGoogleCalendarOAuth, queueCalendarSync, saveDailyBrief, markNotificationRead, decideApproval, createTeam, createInvitation, shareAreaWithTeam } from './cloud.js';
 
 let state, view = 'today', projectView='list', liveChannel;
 const $ = s => document.querySelector(s);
@@ -191,32 +191,28 @@ function renderTaskLinks(t){
 
 function renderCalendarSync(t){
   const links=calendarLinksForTask(t.id),integrations=googleCalendarIntegrations(),manualUrl=googleCalendarTemplateUrl(t);
-  const defaultIntegration=integrations[0],defaultCalendar=defaultIntegration?.settings?.calendarId||'primary';
+  const activeIntegrations=integrations.filter(i=>i.status==='active'),defaultIntegration=activeIntegrations[0],defaultCalendar=defaultIntegration?.settings?.calendarId||'primary';
   const start=t.dueAt||new Date().toISOString(),end=t.dueAt?addMinutes(t.dueAt,30):addMinutes(new Date().toISOString(),30);
   return `<div class="calendar-sync-section">
-    <div class="calendar-sync-head"><div><h3>Google Calendar</h3><p>Planera uppgiften som kalenderblock.</p></div>${manualUrl?`<a class="secondary small-link" href="${escapeHtml(manualUrl)}" target="_blank" rel="noreferrer">Öppna i Google Calendar</a>`:''}</div>
+    <div class="calendar-sync-head"><div><h3>Google Calendar</h3><p>Planera uppgiften som kalenderblock.</p></div><div class="calendar-actions">${manualUrl?`<a class="secondary small-link" href="${escapeHtml(manualUrl)}" target="_blank" rel="noreferrer">Öppna manuellt</a>`:''}<button class="secondary small-link" id="googleOAuthButton" type="button">${activeIntegrations.length?'Anslut igen':'Anslut Google'}</button></div></div>
     ${!t.dueAt?'<p class="hint">Sätt en deadline på uppgiften för att förifylla kalenderstart.</p>':''}
+    ${integrations.some(i=>i.status!=='active')?'<p class="hint">En kalenderkoppling väntar på OAuth. Klicka “Anslut Google”.</p>':''}
     ${links.length?`<div class="calendar-sync-list">${links.map(l=>`<div class="calendar-sync-row"><span class="calendar-status ${l.status}">${calendarStatusLabel(l.status)}</span><div><strong>${escapeHtml(formatDateTime(l.startAt)||'Kalenderblock')}</strong><small>${escapeHtml(l.calendarId)} · ${escapeHtml(l.timeZone)}</small></div>${l.eventUrl?`<a href="${escapeHtml(safeHref(l.eventUrl))}" target="_blank" rel="noreferrer">Visa</a>`:''}</div>`).join('')}</div>`:'<p class="hint">Ingen kalender-sync köad ännu.</p>'}
-    ${integrations.length?`<form id="calendarSyncForm" class="calendar-sync-form">
-      <label>Koppling<select name="integrationAccountId">${integrations.map(i=>option(i.id,`${i.displayName||'Google Calendar'} · ${i.status==='active'?'aktiv':'väntar på OAuth'}`,defaultIntegration?.id)).join('')}</select></label>
+    ${activeIntegrations.length?`<form id="calendarSyncForm" class="calendar-sync-form">
+      <label>Koppling<select name="integrationAccountId">${activeIntegrations.map(i=>option(i.id,`${i.displayName||'Google Calendar'} · aktiv`,defaultIntegration?.id)).join('')}</select></label>
       <label>Kalender-ID<input name="calendarId" value="${escapeHtml(defaultCalendar)}" placeholder="primary"></label>
       <label>Start<input name="startAt" type="datetime-local" value="${toDateTimeLocalValue(start)}" required></label>
       <label>Slut<input name="endAt" type="datetime-local" value="${toDateTimeLocalValue(end)}" required></label>
       <label>Tidszon<input name="timeZone" value="Europe/Stockholm"></label>
       <button class="primary" type="submit">Köa kalender-sync</button>
-    </form>`:`<form id="calendarIntegrationForm" class="calendar-sync-form">
-      <p class="hint wide">Skapa en kalenderkoppling i Orbit. Den kan köa sync direkt, men automatisk Google-skapning kräver OAuth/worker som nästa backend-steg.</p>
-      <label>Namn<input name="displayName" value="Min Google Calendar"></label>
-      <label>Kalender-ID<input name="calendarId" value="primary"></label>
-      <button class="primary" type="submit">Skapa kalenderkoppling</button>
-    </form>`}
+    </form>`:'<p class="hint oauth-required">Automatisk sync kräver att Google OAuth är ansluten. Manuell länk fungerar redan om uppgiften har deadline.</p>'}
   </div>`;
 }
 
 function bindCalendarSync(id){
   const task=state.tasks.find(t=>t.id===id);if(!task)return;
-  const integrationForm=$('#calendarIntegrationForm');
-  if(integrationForm)integrationForm.onsubmit=async e=>{e.preventDefault();const data=Object.fromEntries(new FormData(integrationForm));await createCalendarIntegration(data);await load();openInspector(id);toast('Kalenderkopplingen är skapad.')};
+  const oauthButton=$('#googleOAuthButton');
+  if(oauthButton)oauthButton.onclick=async()=>{try{oauthButton.disabled=true;const url=await startGoogleCalendarOAuth();window.location.href=url}catch(error){oauthButton.disabled=false;toast(error.message)}};
   const syncForm=$('#calendarSyncForm');
   if(syncForm)syncForm.onsubmit=async e=>{e.preventDefault();const data=Object.fromEntries(new FormData(syncForm)),startAt=fromDateTimeLocalValue(data.startAt),endAt=fromDateTimeLocalValue(data.endAt);if(!startAt||!endAt||new Date(endAt)<=new Date(startAt)){toast('Sluttiden måste vara efter starttiden.');return}await queueCalendarSync(id,{...data,startAt,endAt,title:task.title,description:task.notes||''});await load();openInspector(id);toast('Kalender-sync är köad.')};
 }

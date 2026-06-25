@@ -82,15 +82,30 @@ Rekommenderat flöde för ChatGPT/Claude:
 
 ## Google Calendar och Slack
 
-Orbit har nu databas-, UI- och MCP-stöd för integrationer. Uppgifter kan köas för Google Calendar-sync och öppnas manuellt i Google Calendar med förifyllda datum. Själva OAuth-callbacken/worker-processen behöver fortfarande köras server-side med hemliga nycklar. Lägg aldrig Google/Slack secrets i frontend eller i GitHub.
+Orbit har nu databas-, UI-, MCP- och Vercel Function-stöd för Google Calendar. Uppgifter kan köas för Google Calendar-sync och öppnas manuellt i Google Calendar med förifyllda datum. Lägg aldrig Google/Slack secrets i frontend eller i GitHub.
+
+Google Calendar kräver dessa Vercel environment variables:
+
+- `SUPABASE_URL`
+- `SUPABASE_SERVICE_ROLE_KEY`
+- `GOOGLE_CLIENT_ID`
+- `GOOGLE_CLIENT_SECRET`
+- `GOOGLE_REDIRECT_URI`, t.ex. `https://orbit-iota-sage.vercel.app/api/google-auth-callback`
+- `GOOGLE_TOKEN_ENCRYPTION_KEY`
+- `OAUTH_STATE_SECRET`
+- `CRON_SECRET`
+- `APP_URL`, t.ex. `https://orbit-iota-sage.vercel.app`
 
 Google Calendar-flödet:
 
 1. Lägg deadline på uppgiften.
-2. Öppna uppgiftens Google Calendar-sektion och använd “Öppna i Google Calendar” för manuell kalenderpost, eller skapa en kalenderkoppling och köa sync.
-3. Kör OAuth server-side och spara token säkert i en secret/vault.
-4. Registrera/uppdatera kopplingen i Orbit med `register_integration` och en `tokenRef`, inte själva token.
-5. En integrations-worker läser pending `task_calendar_links`, skapar/uppdaterar event i Google Calendar och sparar `providerEventId` + `eventUrl`.
+2. Öppna uppgiftens Google Calendar-sektion och använd “Öppna manuellt” för en förifylld kalenderpost.
+3. Klicka “Anslut Google” för att köra OAuth via `/api/google-auth-start` och `/api/google-auth-callback`.
+4. OAuth-callbacken sparar refresh token krypterat i `private.integration_tokens` via service-role-begränsad RPC.
+5. Köa sync från uppgiftspanelen.
+6. Kör `/api/google-calendar-sync` med headern `Authorization: Bearer <CRON_SECRET>` för att skapa pending events i Google Calendar och spara `providerEventId` + `eventUrl`.
+
+Google Calendar API-scope som används: `https://www.googleapis.com/auth/calendar.events`.
 
 Slack-flödet:
 
