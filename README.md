@@ -34,7 +34,7 @@ Ett nytt konto får automatiskt ett privat område. All data skyddas med RLS: en
 
 ## Driftsättning
 
-Projektet är konfigurerat för Vercel. Lägg in `VITE_SUPABASE_URL` och `VITE_SUPABASE_ANON_KEY` som miljövariabler i Vercel och driftsätt repot. Ange Vercel-domänen som Site URL och Redirect URL i Supabase Auth.
+Projektet är konfigurerat för Vercel. Lägg in `VITE_SUPABASE_URL` och `VITE_SUPABASE_PUBLISHABLE_KEY` som miljövariabler i Vercel och driftsätt repot. Om ditt Supabase-projekt bara visar legacy-nycklar kan du använda `VITE_SUPABASE_ANON_KEY` istället. Ange Vercel-domänen som Site URL och Redirect URL i Supabase Auth.
 
 ## MCP
 
