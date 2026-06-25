@@ -10,6 +10,8 @@ Orbit är en molnbaserad fleranvändarapp för områden, projekt, team och villk
 - Underuppgifter samt beroenden där alla eller minst ett föregående steg krävs
 - Externa MCP-händelser och tidsbaserad aktivering
 - Kontextlänkar från andra appar, t.ex. mail, dokument, chattar och kalenderposter
+- “Tilldelat till mig”-vy med separering mellan uppgifter från andra och egna uppgifter
+- Team & delning-vy för att skapa team, bjuda in via e-post och dela områden med rätt team
 - Integrationsgrund för Google Calendar och Slack
 - Daglig Orbit-brief från MCP/AI samt sparade agentförslag
 - AI-control via MCP: externa AI-klienter kan läsa workspace, skapa projekt, masskapa tasks, tilldela personer och uppdatera status
@@ -30,7 +32,7 @@ npm install
 npm run dev
 ```
 
-Ett nytt konto får automatiskt ett privat område. All data skyddas med RLS: en användare ser endast egna områden och områden vars team personen är aktiv medlem i. Tilldelade personer måste också ha åtkomst till området.
+Ett nytt konto får automatiskt ett privat område. Om kontots e-post redan finns i en väntande teaminbjudan kopplas användaren automatiskt in i teamet vid signup. All data skyddas med RLS: en användare ser endast egna områden och områden vars team personen är aktiv medlem i. Tilldelade personer måste också ha åtkomst till området.
 
 ## Driftsättning
 

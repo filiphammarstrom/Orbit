@@ -11,6 +11,7 @@ const camelTask = t => ({
   title: t.title,
   notes: t.notes,
   projectId: t.project_id,
+  createdBy: t.created_by,
   assigneeId: t.assignee_id,
   parentTaskId: t.parent_task_id,
   bucket: t.bucket,
@@ -90,7 +91,8 @@ export async function loadCloudState() {
     approvals,
     taskLinks,
     dailyBriefs,
-    agentRuns
+    agentRuns,
+    invitations
   ] = await Promise.all([
     supabase.from('profiles').select('*'),
     supabase.from('teams').select('*'),
@@ -105,10 +107,11 @@ export async function loadCloudState() {
     supabase.from('approvals').select('*'),
     supabase.from('task_links').select('*').order('created_at', { ascending: false }),
     supabase.from('daily_briefs').select('*').order('created_at', { ascending: false }).limit(30),
-    supabase.from('agent_runs').select('*').order('created_at', { ascending: false }).limit(30)
+    supabase.from('agent_runs').select('*').order('created_at', { ascending: false }).limit(30),
+    supabase.from('invitations').select('*').order('expires_at', { ascending: false })
   ]);
 
-  const failed = [profiles, teams, members, areas, projects, tasks, dependencies, comments, notifications, activity, approvals, taskLinks, dailyBriefs, agentRuns].find(r => r.error);
+  const failed = [profiles, teams, members, areas, projects, tasks, dependencies, comments, notifications, activity, approvals, taskLinks, dailyBriefs, agentRuns, invitations].find(r => r.error);
   if (failed) throw failed.error;
 
   return {
@@ -119,6 +122,7 @@ export async function loadCloudState() {
       ownerId: t.owner_id,
       memberIds: members.data.filter(m => m.team_id === t.id && m.status === 'active').map(m => m.user_id)
     })),
+    teamMembers: members.data.map(m => ({ teamId: m.team_id, userId: m.user_id, role: m.role, status: m.status })),
     areas: areas.data.map(a => ({ id: a.id, name: a.name, icon: a.icon, color: a.color, ownerId: a.owner_id, teamId: a.team_id })),
     projects: projects.data.map(p => ({
       id: p.id,
@@ -161,6 +165,17 @@ export async function loadCloudState() {
       result: r.result || {},
       createdAt: r.created_at,
       completedAt: r.completed_at
+    })),
+    invitations: invitations.data.map(i => ({
+      id: i.id,
+      teamId: i.team_id,
+      email: i.email,
+      role: i.role,
+      token: i.token,
+      invitedBy: i.invited_by,
+      expiresAt: i.expires_at,
+      acceptedAt: i.accepted_at,
+      createdAt: i.created_at || i.expires_at
     })),
     events: []
   };
@@ -235,6 +250,10 @@ export function subscribeToChanges(onChange) {
     .on('postgres_changes', { event: '*', schema: 'public', table: 'notifications' }, onChange)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'task_links' }, onChange)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'daily_briefs' }, onChange)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'teams' }, onChange)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'team_members' }, onChange)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'areas' }, onChange)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'invitations' }, onChange)
     .subscribe();
 }
 
@@ -291,5 +310,62 @@ export async function decideApproval(id, status, note = '') {
   const { data, error } = await supabase.from('approvals').update({ status, note, decided_at: new Date().toISOString() }).eq('id', id).select().single();
   if (error) throw error;
   if (status === 'approved') await updateCloudTask(data.task_id, { completed: true });
+  return data;
+}
+
+export async function createTeam(name) {
+  const user = (await session())?.user;
+  if (!user) throw new Error('Du är inte inloggad.');
+  const cleanName = (name || '').trim();
+  if (!cleanName) throw new Error('Teamet behöver ett namn.');
+
+  const { data, error } = await supabase.from('teams').insert({ name: cleanName, owner_id: user.id }).select().single();
+  if (error) throw error;
+
+  const { error: memberError } = await supabase.from('team_members').insert({ team_id: data.id, user_id: user.id, role: 'owner', status: 'active' });
+  if (memberError) throw memberError;
+
+  return data;
+}
+
+export async function createInvitation(teamId, email, role = 'member') {
+  const user = (await session())?.user;
+  if (!user) throw new Error('Du är inte inloggad.');
+  const cleanEmail = (email || '').trim().toLowerCase();
+  if (!cleanEmail) throw new Error('Inbjudan behöver en e-postadress.');
+  const cleanRole = role === 'admin' ? 'admin' : 'member';
+  const row = { team_id: teamId, email: cleanEmail, role: cleanRole, invited_by: user.id };
+
+  const inserted = await supabase.from('invitations').insert(row).select().single();
+  if (!inserted.error) return {
+    id: inserted.data.id,
+    teamId: inserted.data.team_id,
+    email: inserted.data.email,
+    role: inserted.data.role,
+    acceptedAt: inserted.data.accepted_at,
+    expiresAt: inserted.data.expires_at
+  };
+
+  if (inserted.error.code !== '23505') throw inserted.error;
+  const { data, error } = await supabase.from('invitations')
+    .update({ role: cleanRole, expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString() })
+    .eq('team_id', teamId)
+    .eq('email', cleanEmail)
+    .select()
+    .single();
+  if (error) throw error;
+  return {
+    id: data.id,
+    teamId: data.team_id,
+    email: data.email,
+    role: data.role,
+    acceptedAt: data.accepted_at,
+    expiresAt: data.expires_at
+  };
+}
+
+export async function shareAreaWithTeam(areaId, teamId) {
+  const { data, error } = await supabase.from('areas').update({ team_id: teamId || null }).eq('id', areaId).select().single();
+  if (error) throw error;
   return data;
 }
