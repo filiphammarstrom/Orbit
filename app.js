@@ -29,10 +29,51 @@ const toast=text=>{$('#toast').textContent=text;$('#toast').classList.add('show'
 const avatarHtml=p=>`<span class="mini-avatar" title="${p.name}" style="background:${p.color}">${p.initials}</span>`;
 const linksForTask=id=>(state.taskLinks||[]).filter(l=>l.taskId===id);
 const localDateISO=(date=new Date())=>new Date(date.getTime()-date.getTimezoneOffset()*60000).toISOString().slice(0,10);
+const startOfLocalDay=(date=new Date())=>{const d=new Date(date);d.setHours(0,0,0,0);return d};
+const toDateTimeLocalValue=iso=>{if(!iso)return'';const d=new Date(iso);return Number.isNaN(d.getTime())?'':new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,16)};
+const fromDateTimeLocalValue=value=>{if(!value)return null;const d=new Date(value);return Number.isNaN(d.getTime())?null:d.toISOString()};
+const sameLocalDate=(iso,date=new Date())=>Boolean(iso)&&localDateISO(new Date(iso))===localDateISO(date);
+const isDueToday=t=>sameLocalDate(t.dueAt);
+const isOverdue=t=>Boolean(t.dueAt)&&!t.completed&&new Date(t.dueAt).getTime()<startOfLocalDay().getTime();
+const isReminderDue=t=>Boolean(t.reminderAt)&&!t.completed&&new Date(t.reminderAt).getTime()<=Date.now();
+const formatDateTime=iso=>{if(!iso)return'';const d=new Date(iso);if(Number.isNaN(d.getTime()))return'';const same=sameLocalDate(iso);return new Intl.DateTimeFormat('sv-SE',same?{hour:'2-digit',minute:'2-digit'}:{weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}).format(d)};
+const formatTime=iso=>{const d=new Date(iso);return Number.isNaN(d.getTime())?'':new Intl.DateTimeFormat('sv-SE',{hour:'2-digit',minute:'2-digit'}).format(d)};
+const scheduleLabel=t=>t.dueAt?formatDateTime(t.dueAt):(t.due||'');
+const reminderLabel=t=>t.reminderAt?formatDateTime(t.reminderAt):'';
+const tasksForBucketView=id=>id==='today'?visible().filter(t=>t.bucket==='today'||isDueToday(t)||isOverdue(t)||isReminderDue(t)):visible().filter(t=>t.bucket===id);
+const reminderAlerts=()=>visible().filter(isReminderDue).sort((a,b)=>new Date(a.reminderAt)-new Date(b.reminderAt)).slice(0,20);
+const parseClock=text=>{let m=text.match(/\b(?:kl\.?\s*)?([01]?\d|2[0-3])[:.]([0-5]\d)\b/);if(m)return{h:Number(m[1]),m:Number(m[2])};m=text.match(/\bkl\.?\s*([01]?\d|2[0-3])\b/);return m?{h:Number(m[1]),m:0}:null};
+const weekdayIndex={söndag:0,sondag:0,sön:0,son:0,måndag:1,mandag:1,mån:1,man:1,tisdag:2,tis:2,onsdag:3,ons:3,torsdag:4,tor:4,fredag:5,fre:5,lördag:6,lordag:6,lör:6,lor:6};
+function parseNaturalDateTime(text,now=new Date()){
+  const raw=(text||'').trim(),s=raw.toLowerCase();if(!s)return{dueAt:null,reminderAt:null};
+  const clock=parseClock(s);let date=null,defaultTime={h:9,m:0};
+  if(/\b(i dag|idag)\b/.test(s))date=startOfLocalDay(now);
+  else if(/\b(i morgon|imorgon)\b/.test(s)){date=startOfLocalDay(now);date.setDate(date.getDate()+1)}
+  else if(/\b(övermorgon|overmorgon|i övermorgon|i overmorgon)\b/.test(s)){date=startOfLocalDay(now);date.setDate(date.getDate()+2)}
+  else if(/\bikväll\b/.test(s)){date=startOfLocalDay(now);defaultTime={h:18,m:0}}
+  const iso=s.match(/\b(20\d{2})-(\d{1,2})-(\d{1,2})\b/);
+  if(!date&&iso)date=new Date(Number(iso[1]),Number(iso[2])-1,Number(iso[3]));
+  const slash=s.match(/\b([0-3]?\d)[/-]([01]?\d)(?:[/-](\d{2,4}))?\b/);
+  if(!date&&slash){let year=slash[3]?Number(slash[3]):now.getFullYear();if(year<100)year+=2000;date=new Date(year,Number(slash[2])-1,Number(slash[1]))}
+  if(!date){const word=Object.keys(weekdayIndex).find(w=>new RegExp(`\\b${w}\\b`).test(s));if(word){date=startOfLocalDay(now);let diff=(weekdayIndex[word]-date.getDay()+7)%7;if(diff===0)diff=7;date.setDate(date.getDate()+diff)}}
+  if(!date&&clock){date=startOfLocalDay(now);date.setHours(clock.h,clock.m,0,0);if(date.getTime()<now.getTime())date.setDate(date.getDate()+1);return{dueAt:date.toISOString(),reminderAt:null}}
+  if(!date)return{dueAt:null,reminderAt:null};
+  const time=clock||defaultTime;date.setHours(time.h,time.m,0,0);
+  let reminderAt=null;
+  if(/\b(påminn|paminn|reminder)\b/.test(s)){
+    let minutes=30;
+    const min=s.match(/(\d+)\s*(min|minuter)/),hour=s.match(/(\d+)\s*(h|tim|timme|timmar)/);
+    if(min)minutes=Number(min[1]);else if(hour)minutes=Number(hour[1])*60;else if(/dag(en)? innan/.test(s))minutes=24*60;
+    const reminder=new Date(date);reminder.setMinutes(reminder.getMinutes()-minutes);reminderAt=reminder.toISOString();
+  }
+  return{dueAt:date.toISOString(),reminderAt};
+}
+const scheduleFromForm=data=>{const parsed=parseNaturalDateTime(data.due),dueAt=fromDateTimeLocalValue(data.dueAt)||parsed.dueAt,reminderAt=fromDateTimeLocalValue(data.reminderAt)||parsed.reminderAt;return{due:(data.due||'').trim()||(dueAt?formatDateTime(dueAt):''),dueAt,reminderAt}};
+function bindScheduleAssist(form){const due=form?.elements?.due,dueAt=form?.elements?.dueAt,reminder=form?.elements?.reminderAt;if(!due||!dueAt||!reminder)return;const fill=()=>{const parsed=parseNaturalDateTime(due.value);if(parsed.dueAt&&!dueAt.value)dueAt.value=toDateTimeLocalValue(parsed.dueAt);if(parsed.reminderAt&&!reminder.value)reminder.value=toDateTimeLocalValue(parsed.reminderAt)};due.onblur=fill;due.onchange=fill}
 const safeHref=url=>{const value=(url||'').trim();return !value||/^(javascript|data|vbscript):/i.test(value)?'#':value};
 const linkKindLabel=kind=>({email:'Mail',calendar:'Kalender',document:'Dokument',chat:'Chatt',web:'Webb',file:'Fil',mcp:'MCP',other:'Länk'})[kind]||'Länk';
 const linkKindIcon=kind=>({email:'✉',calendar:'◷',document:'▤',chat:'☵',web:'↗',file:'▣',mcp:'✦',other:'↗'})[kind]||'↗';
-const navCount=id=>id==='assigned'?assignedToMe().length:id==='team'?(state.invitations||[]).filter(i=>!i.acceptedAt).length:bucketViews.includes(id)?visible().filter(t=>t.bucket===id).length:0;
+const navCount=id=>id==='assigned'?assignedToMe().length:id==='team'?(state.invitations||[]).filter(i=>!i.acceptedAt).length:bucketViews.includes(id)?tasksForBucketView(id).length:0;
 const option=(value,label,selected)=>`<option value="${escapeHtml(value)}" ${String(value)===String(selected||'')?'selected':''}>${escapeHtml(label)}</option>`;
 const projectOptionsHtml=selected=>'<option value="">Personligt / Inbox</option>'+state.areas.map(a=>`<optgroup label="${escapeHtml(a.name)}">${state.projects.filter(p=>p.areaId===a.id).map(p=>option(p.id,p.name,selected)).join('')}</optgroup>`).join('');
 const assigneesForProject=projectId=>{const p=project(projectId);return p?membersForArea(area(p.areaId)):[person(state.currentUserId)]};
@@ -54,14 +95,14 @@ function render(){
   else if(view==='assigned'){tasks=assignedRoots(assignedToMe());title='Tilldelat till mig';eye='SAMARBETE'}
   else if(view.startsWith('area:')){const a=area(view.split(':')[1]),ids=state.projects.filter(p=>p.areaId===a.id).map(p=>p.id);tasks=topLevel(visible().filter(t=>ids.includes(t.projectId)));title=a.name;eye='OMRÅDE'}
   else if(view.startsWith('project:')){const p=project(view.split(':')[1]);currentProject=p;const canPlan=p.ownerId===state.currentUserId||(!p.ownerId&&area(p.areaId)?.ownerId===state.currentUserId);tasks=topLevel(state.tasks.filter(t=>t.projectId===p.id&&!t.completed&&(t.visible||canPlan)));title=p.name;eye=area(p.areaId)?.name.toUpperCase()||'PROJEKT'}
-  else{tasks=topLevel(visible().filter(t=>t.bucket===view));title=labels[view]}
+  else{tasks=topLevel(tasksForBucketView(view));title=labels[view]}
   $('#pageTitle').textContent=title;$('#eyebrow').textContent=eye;
   $('#subtitle').textContent=view==='today'?new Intl.DateTimeFormat('sv-SE',{weekday:'long',day:'numeric',month:'long'}).format(new Date()):showAreas?'Separata platser för privatliv, jobb och allt däremellan':showTeam?'Skapa team, bjud in personer och bestäm vilka områden teamet får se.':view==='assigned'?'Allt som ligger på dig, oavsett projekt eller område.':`${tasks.length} aktiva uppgifter`;
   $('#sectionTitle').textContent=showAreas?'Dina områden':showTeam?'Team, inbjudningar och åtkomst':view==='assigned'?'Uppgifter tilldelade till dig':view==='inbox'?'Okategoriserat':'Att göra';
   $('#projectToolbar').classList.toggle('open',Boolean(currentProject));
   if(currentProject){const colors={on_track:'#42a68b',at_risk:'#e2a33d',off_track:'#d96761'},labels={on_track:'På rätt väg',at_risk:'Risk',off_track:'Försenat'};$('#projectHealth').innerHTML=`<span class="health-pill"><i style="background:${colors[currentProject.health]}"></i>${labels[currentProject.health]}</span>`}
   $('.section-head>div').style.display=showAreas||showTeam?'none':'';$('#addRow').style.display=showAreas||showTeam?'none':'';$('#focusCard').style.display=view==='today'?'flex':'none';
-  const todayAll=state.tasks.filter(t=>t.visible&&t.bucket==='today'),done=todayAll.filter(t=>t.completed).length,pct=todayAll.length?Math.round(done/todayAll.length*100):0;
+  const todayAll=state.tasks.filter(t=>t.visible&&(t.bucket==='today'||isDueToday(t)||(!t.completed&&(isOverdue(t)||isReminderDue(t))))),done=todayAll.filter(t=>t.completed).length,pct=todayAll.length?Math.round(done/todayAll.length*100):0;
   $('#todayCount').textContent=todayAll.filter(t=>!t.completed).length;$('#progressText').textContent=pct+'%';$('.done-ring').style.strokeDashoffset=100-pct;
   $('#taskList').innerHTML=showAreas?areaCards():showTeam?teamSharingContent():view==='assigned'?assignedContent():currentProject?projectContent(tasks):tasks.length?tasks.map(taskGroupHtml).join(''):'<div class="empty">Här är lugnt och fint.</div>';
   document.querySelectorAll('.task').forEach(el=>el.onclick=e=>{if(!e.target.classList.contains('check'))openInspector(el.dataset.id)});
@@ -75,10 +116,17 @@ function render(){
 
 function projectContent(tasks){if(!tasks.length)return'<div class="empty">Projektet väntar på sin första uppgift.</div>';if(projectView==='board')return boardHtml(tasks);if(projectView==='calendar')return calendarHtml(tasks);if(projectView==='flow')return flowHtml(tasks);return tasks.map(taskGroupHtml).join('')}
 function boardHtml(tasks){const columns=[[['idea','planned','todo'],'ATT GÖRA'],[['doing'],'PÅGÅR'],[['waiting'],'VÄNTAR'],[['review'],'GRANSKNING']];return `<div class="board">${columns.map(([statuses,label])=>{const cards=tasks.filter(t=>statuses.includes(t.status||'todo'));return `<div class="board-column"><h3>${label} · ${cards.length}</h3>${cards.map(t=>`<button class="board-card" data-id="${t.id}"><strong>${escapeHtml(t.title)}</strong><span class="mini-avatar" style="background:${person(t.assigneeId).color}">${person(t.assigneeId).initials}</span></button>`).join('')}</div>`}).join('')}</div>`}
-function calendarHtml(tasks){const days=[['MÅN','mån'],['TIS','tis'],['ONS','ons'],['TOR','tor'],['FRE','fre'],['LÖR','lör'],['SÖN','sön']];return `<div class="calendar-view">${days.map(([label,key])=>`<div class="calendar-day"><h3>${label}</h3>${tasks.filter(t=>(t.due||'').toLowerCase().includes(key)).map(t=>`<div class="calendar-task" data-id="${t.id}">${escapeHtml(t.title)}</div>`).join('')}</div>`).join('')}</div>${tasks.some(t=>t.due&&!days.some(([,key])=>t.due.toLowerCase().includes(key)))?'<p class="hint">Uppgifter med exakta datum visas när kalenderdatum har sparats strukturerat.</p>':''}`}
+function calendarHtml(tasks){const start=startOfLocalDay();start.setDate(start.getDate()-((start.getDay()+6)%7));const days=Array.from({length:7},(_,i)=>{const d=new Date(start);d.setDate(d.getDate()+i);return d});const undated=tasks.filter(t=>!t.dueAt&&t.due);return `<div class="calendar-view">${days.map(d=>{const iso=localDateISO(d),cards=tasks.filter(t=>t.dueAt&&sameLocalDate(t.dueAt,d));return `<div class="calendar-day"><h3>${new Intl.DateTimeFormat('sv-SE',{weekday:'short'}).format(d).toUpperCase()}<small>${new Intl.DateTimeFormat('sv-SE',{day:'numeric',month:'short'}).format(d)}</small></h3>${cards.map(t=>`<div class="calendar-task" data-id="${t.id}"><strong>${escapeHtml(formatTime(t.dueAt))}</strong>${escapeHtml(t.title)}</div>`).join('')}${!cards.length?`<p>${iso===localDateISO()?'Inget planerat idag':'—'}</p>`:''}</div>`}).join('')}</div>${undated.length?`<p class="hint">${undated.length} uppgift${undated.length===1?'':'er'} har bara datumtext. Öppna uppgiften och spara en deadline för att lägga den i kalendern.</p>`:''}`}
 function flowHtml(tasks){const sorted=[...tasks].sort((a,b)=>state.dependencies.some(d=>d.taskId===b.id&&d.dependsOnTaskId===a.id)?-1:0);return `<div class="flow-view">${sorted.map(t=>`<button class="flow-node ${t.visible?'':'waiting'}" data-id="${t.id}"><strong>${escapeHtml(t.title)}</strong><small>${t.visible?'Redo att göra':`Väntar på ${state.dependencies.filter(d=>d.taskId===t.id).length} steg`}</small></button>`).join('')}</div>`}
 
-function renderNotifications(){const items=state.notifications||[],unread=items.filter(n=>!n.readAt).length;$('#notificationCount').textContent=unread;$('#notificationCount').style.display=unread?'grid':'none';$('#notificationDot').style.display='none';$('#notificationList').innerHTML=items.length?items.map(n=>`<button class="notification-item ${n.readAt?'':'unread'}" data-notification="${n.id}" data-task="${n.taskId||''}"><span><strong>${escapeHtml(n.title)}</strong><p>${escapeHtml(n.body)}</p><time>${new Date(n.createdAt).toLocaleString('sv-SE',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}</time></span></button>`).join(''):'<div class="empty">Inga notiser ännu.</div>';document.querySelectorAll('[data-notification]').forEach(n=>n.onclick=async()=>{await markNotificationRead(n.dataset.notification);if(n.dataset.task)openInspector(n.dataset.task);await load()})}
+function renderNotifications(){
+  const items=state.notifications||[],reminders=reminderAlerts(),unread=items.filter(n=>!n.readAt).length+reminders.length;
+  $('#notificationCount').textContent=unread;$('#notificationCount').style.display=unread?'grid':'none';$('#notificationDot').style.display='none';
+  const reminderHtml=reminders.map(t=>`<button class="notification-item unread reminder-alert" data-notification="reminder:${t.id}" data-task="${t.id}"><span><strong>Påminnelse: ${escapeHtml(t.title)}</strong><p>${scheduleLabel(t)?`Deadline ${escapeHtml(scheduleLabel(t))}`:'Dags att titta på den här uppgiften.'}</p><time>${escapeHtml(reminderLabel(t))}</time></span></button>`).join('');
+  const itemHtml=items.map(n=>`<button class="notification-item ${n.readAt?'':'unread'}" data-notification="${n.id}" data-task="${n.taskId||''}"><span><strong>${escapeHtml(n.title)}</strong><p>${escapeHtml(n.body)}</p><time>${new Date(n.createdAt).toLocaleString('sv-SE',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}</time></span></button>`).join('');
+  $('#notificationList').innerHTML=reminderHtml||itemHtml?reminderHtml+itemHtml:'<div class="empty">Inga notiser ännu.</div>';
+  document.querySelectorAll('[data-notification]').forEach(n=>n.onclick=async()=>{if(n.dataset.notification.startsWith('reminder:')){openInspector(n.dataset.task);return}await markNotificationRead(n.dataset.notification);if(n.dataset.task)openInspector(n.dataset.task);await load()})
+}
 
 function assignedContent(){
   const mine=assignedRoots(assignedToMe()),fromOthers=mine.filter(t=>t.createdBy&&t.createdBy!==state.currentUserId),own=mine.filter(t=>!t.createdBy||t.createdBy===state.currentUserId);
@@ -126,8 +174,8 @@ function bindTeamSharing(){
 function areaCards(){return `<div class="area-grid">${state.areas.map(a=>{const projects=state.projects.filter(p=>p.areaId===a.id),members=membersForArea(a);return `<button class="area-card" data-area="${a.id}"><div class="area-card-head"><span class="area-card-icon" style="background:${a.color}">${a.icon}</span><div><h3>${a.name}</h3><p>${projects.length} projekt · ${visible().filter(t=>projects.some(p=>p.id===t.projectId)).length} uppgifter</p></div></div><div class="area-card-projects">${projects.map(p=>`<span>${p.name}</span>`).join('')||'<span>Inga projekt ännu</span>'}</div><div class="access-note">${a.teamId?'Delas med':'Privat för dig'}<span class="team-stack">${members.map(avatarHtml).join('')}</span>${a.teamId?team(a.teamId).name:'Endast du'}</div></button>`}).join('')}</div>`}
 function taskGroupHtml(t){const all=childrenOf(t.id),shown=all.filter(c=>c.visible&&!c.completed),done=all.filter(c=>c.completed).length;return `<div class="task-group">${taskHtml(t,all.length?`${done}/${all.length}`:'')}${shown.length?`<div class="subtasks">${shown.map(c=>taskHtml(c)).join('')}</div>`:''}${all.some(c=>!c.visible&&!c.completed)?`<div class="subtask-waiting">⚡ ${all.filter(c=>!c.visible&&!c.completed).length} nästa steg väntar på ett villkor</div>`:''}</div>`}
 function taskHtml(t,progress=''){
-  const p=project(t.projectId),a=person(t.assigneeId),ar=areaForProject(t.projectId),linkCount=linksForTask(t.id).length;
-  return `<article class="task ${progress?'has-children':''}" data-id="${t.id}"><button class="check p${t.priority}" data-id="${t.id}" aria-label="${t.taskType==='approval'?'Godkänn':'Markera klar'}"></button><div><div class="task-title">${t.taskType==='milestone'?'◆ ':t.taskType==='approval'?'✓ ':''}${escapeHtml(t.title)}</div><div class="task-meta">${progress?`<span class="subtask-progress">☷ ${progress} delsteg</span>`:''}${linkCount?`<span class="context-count">↗ ${linkCount}</span>`:''}${t.due?`<span class="due">◷ ${escapeHtml(t.due)}</span>`:''}${p?`<span class="project-tag"><i class="project-dot" style="background:${p.color}"></i>${p.name}</span>`:''}${ar&&!t.parentTaskId?`<span class="area-badge"><i style="background:${ar.color}"></i>${ar.name}</span>`:''}</div></div>${avatarHtml(a)}</article>`
+  const p=project(t.projectId),a=person(t.assigneeId),ar=areaForProject(t.projectId),linkCount=linksForTask(t.id).length,when=scheduleLabel(t),remind=reminderLabel(t);
+  return `<article class="task ${progress?'has-children':''}" data-id="${t.id}"><button class="check p${t.priority}" data-id="${t.id}" aria-label="${t.taskType==='approval'?'Godkänn':'Markera klar'}"></button><div><div class="task-title">${t.taskType==='milestone'?'◆ ':t.taskType==='approval'?'✓ ':''}${escapeHtml(t.title)}</div><div class="task-meta">${progress?`<span class="subtask-progress">☷ ${progress} delsteg</span>`:''}${linkCount?`<span class="context-count">↗ ${linkCount}</span>`:''}${when?`<span class="due ${isOverdue(t)?'overdue':''}">◷ ${escapeHtml(when)}</span>`:''}${remind?`<span class="reminder ${isReminderDue(t)?'due-now':''}">⏰ ${isReminderDue(t)?'Nu':escapeHtml(remind)}</span>`:''}${p?`<span class="project-tag"><i class="project-dot" style="background:${p.color}"></i>${p.name}</span>`:''}${ar&&!t.parentTaskId?`<span class="area-badge"><i style="background:${ar.color}"></i>${ar.name}</span>`:''}</div></div>${avatarHtml(a)}</article>`
 }
 async function complete(id){const openChildren=childrenOf(id).filter(t=>!t.completed);if(openChildren.length){toast(`${openChildren.length} underuppgift${openChildren.length>1?'er':''} återstår.`);return}const task=state.tasks.find(t=>t.id===id),approval=(state.approvals||[]).find(a=>a.taskId===id&&a.status==='pending');if(task?.taskType==='approval'&&approval){if(approval.requestedFrom!==state.currentUserId){toast('Inväntar godkännande från rätt person.');return}await decideApproval(approval.id,'approved')}else await api('/tasks/'+id,{method:'PATCH',body:JSON.stringify({completed:true})});await load();toast(task?.taskType==='approval'?'Godkänt.':`Klart!${state.tasks.some(t=>t.visible&&!t.completed&&t.trigger?.taskId===id)?' Nästa steg är nu synligt.':''}`)}
 function renderTaskLinks(t){
@@ -147,7 +195,9 @@ function renderTaskEditForm(t){
         <label>Projekt<select name="projectId" id="editProjectSelect">${projectOptionsHtml(t.projectId||'')}</select></label>
         <label>Tilldelad<select name="assigneeId" id="editAssigneeSelect">${assigneeOptionsHtml(t.projectId,t.assigneeId)}</select></label>
         <label>Prioritet<select name="priority">${[[1,'P1 — Hög'],[2,'P2 — Medium'],[3,'P3 — Låg']].map(([id,label])=>option(id,label,t.priority)).join('')}</select></label>
-        <label>Datum / påminnelse<input name="due" value="${escapeHtml(t.due||'')}" placeholder="T.ex. fredag 14:00"></label>
+        <label>Snabbtext<input name="due" value="${escapeHtml(t.due||'')}" placeholder="T.ex. imorgon 09:00"></label>
+        <label>Deadline<input name="dueAt" type="datetime-local" value="${toDateTimeLocalValue(t.dueAt)}"></label>
+        <label>Påminnelse<input name="reminderAt" type="datetime-local" value="${toDateTimeLocalValue(t.reminderAt)}"></label>
       </div>
       <button class="primary" type="submit">Spara ändringar</button>
     </form>
@@ -157,6 +207,7 @@ function renderTaskEditForm(t){
 function bindTaskEditForm(id){
   const form=$('#taskEditForm');if(!form)return;
   const projectSelect=$('#editProjectSelect'),assigneeSelect=$('#editAssigneeSelect');
+  bindScheduleAssist(form);
   projectSelect.onchange=()=>{assigneeSelect.innerHTML=assigneeOptionsHtml(projectSelect.value,defaultAssigneeForProject(projectSelect.value))};
   form.onsubmit=async e=>{
     e.preventDefault();
@@ -164,6 +215,7 @@ function bindTaskEditForm(id){
     if(!data.title.trim()){toast('Titel saknas.');return}
     const projectId=data.projectId||null;
     const assigneeId=projectId?data.assigneeId:state.currentUserId;
+    const schedule=scheduleFromForm(data);
     await api('/tasks/'+id,{method:'PATCH',body:JSON.stringify({
       title:data.title.trim(),
       notes:data.notes||'',
@@ -172,7 +224,9 @@ function bindTaskEditForm(id){
       projectId,
       assigneeId,
       priority:Number(data.priority||3),
-      due:data.due||''
+      due:schedule.due,
+      dueAt:schedule.dueAt,
+      reminderAt:schedule.reminderAt
     })});
     await load();
     openInspector(id);
@@ -183,7 +237,8 @@ function bindTaskEditForm(id){
 function openInspector(id){
   const t=state.tasks.find(x=>x.id===id);if(!t)return;
   const p=project(t.projectId),a=person(t.assigneeId),ar=areaForProject(t.projectId),tm=team(ar?.teamId),subs=childrenOf(t.id),comments=(state.comments||[]).filter(c=>c.taskId===id);
-  $('#inspectorContent').innerHTML=`<p class="eyebrow">${ar?escapeHtml(ar.name).toUpperCase():'UPPGIFT'}</p><button class="check big-check p${t.priority}" id="detailCheck"></button><h2>${escapeHtml(t.title)}</h2>${subs.length?`<div class="parent-lock">Huvuduppgiften blir klar automatiskt när alla ${subs.length} delsteg är klara.</div>`:''}${t.activationReason?`<div class="activation-explain"><strong>✦ Varför ser jag detta nu?</strong>${escapeHtml(t.activationReason)}${t.activatedAt?` · ${new Date(t.activatedAt).toLocaleString('sv-SE')}`:''}</div>`:''}${t.notes?`<p style="color:#777;font-size:13px;line-height:1.6">${escapeHtml(t.notes)}</p>`:''}<div class="detail-row"><span>Status</span><strong class="status-chip">${statusLabel(t.status)}</strong></div><div class="detail-row"><span>Område</span><strong>${ar?ar.icon+' '+ar.name:'Personligt'}</strong></div><div class="detail-row"><span>Projekt</span><strong>${p?p.name:'Inbox'}</strong></div><div class="detail-row"><span>Tilldelad</span><strong>${a.name}</strong></div><div class="detail-row"><span>Åtkomst</span><strong>${tm?tm.name:'Endast du'}</strong></div><div class="detail-row"><span>När</span><strong>${t.due||'Inget datum'}</strong></div>${renderTaskEditForm(t)}${subs.length?`<div class="inspector-subtasks"><h3>Underuppgifter · ${subs.filter(s=>s.completed).length}/${subs.length}</h3>${subs.map(s=>`<div class="inspector-subtask ${s.completed?'done':''} ${!s.visible?'waiting':''}">${s.completed?'✓':s.visible?`<button class="check p${s.priority}" data-id="${s.id}"></button>`:'⚡'}<span>${escapeHtml(s.title)}</span><small>${!s.visible?'Väntar':person(s.assigneeId).initials}</small></div>`).join('')}</div>`:''}${t.trigger?`<div class="trigger-box"><strong>⚡ Aktiverad av villkor</strong>${escapeHtml(t.trigger.label||'Ett externt villkor')}</div>`:''}${renderTaskLinks(t)}<div class="comment-section"><h3>Kommentarer · ${comments.length}</h3>${comments.map(c=>`<div class="comment">${avatarHtml(person(c.authorId))}<div><p>${escapeHtml(c.body)}</p><time>${new Date(c.createdAt).toLocaleString('sv-SE')}</time></div></div>`).join('')}<form class="comment-form" id="commentForm"><input name="comment" placeholder="Skriv en kommentar eller @nämn någon…" required><button>Skicka</button></form></div>`;
+  const when=scheduleLabel(t),remind=reminderLabel(t);
+  $('#inspectorContent').innerHTML=`<p class="eyebrow">${ar?escapeHtml(ar.name).toUpperCase():'UPPGIFT'}</p><button class="check big-check p${t.priority}" id="detailCheck"></button><h2>${escapeHtml(t.title)}</h2>${subs.length?`<div class="parent-lock">Huvuduppgiften blir klar automatiskt när alla ${subs.length} delsteg är klara.</div>`:''}${t.activationReason?`<div class="activation-explain"><strong>✦ Varför ser jag detta nu?</strong>${escapeHtml(t.activationReason)}${t.activatedAt?` · ${new Date(t.activatedAt).toLocaleString('sv-SE')}`:''}</div>`:''}${t.notes?`<p style="color:#777;font-size:13px;line-height:1.6">${escapeHtml(t.notes)}</p>`:''}<div class="detail-row"><span>Status</span><strong class="status-chip">${statusLabel(t.status)}</strong></div><div class="detail-row"><span>Område</span><strong>${ar?ar.icon+' '+ar.name:'Personligt'}</strong></div><div class="detail-row"><span>Projekt</span><strong>${p?p.name:'Inbox'}</strong></div><div class="detail-row"><span>Tilldelad</span><strong>${a.name}</strong></div><div class="detail-row"><span>Åtkomst</span><strong>${tm?tm.name:'Endast du'}</strong></div><div class="detail-row"><span>Deadline</span><strong>${when?escapeHtml(when):'Inget datum'}</strong></div><div class="detail-row"><span>Påminnelse</span><strong>${remind?`${isReminderDue(t)?'Nu · ':''}${escapeHtml(remind)}`:'Ingen'}</strong></div>${renderTaskEditForm(t)}${subs.length?`<div class="inspector-subtasks"><h3>Underuppgifter · ${subs.filter(s=>s.completed).length}/${subs.length}</h3>${subs.map(s=>`<div class="inspector-subtask ${s.completed?'done':''} ${!s.visible?'waiting':''}">${s.completed?'✓':s.visible?`<button class="check p${s.priority}" data-id="${s.id}"></button>`:'⚡'}<span>${escapeHtml(s.title)}</span><small>${!s.visible?'Väntar':person(s.assigneeId).initials}</small></div>`).join('')}</div>`:''}${t.trigger?`<div class="trigger-box"><strong>⚡ Aktiverad av villkor</strong>${escapeHtml(t.trigger.label||'Ett externt villkor')}</div>`:''}${renderTaskLinks(t)}<div class="comment-section"><h3>Kommentarer · ${comments.length}</h3>${comments.map(c=>`<div class="comment">${avatarHtml(person(c.authorId))}<div><p>${escapeHtml(c.body)}</p><time>${new Date(c.createdAt).toLocaleString('sv-SE')}</time></div></div>`).join('')}<form class="comment-form" id="commentForm"><input name="comment" placeholder="Skriv en kommentar eller @nämn någon…" required><button>Skicka</button></form></div>`;
   $('#detailCheck').onclick=()=>{complete(id);if(!subs.length)$('#inspector').classList.remove('open')};
   document.querySelectorAll('.inspector-subtask .check').forEach(b=>b.onclick=async()=>{await complete(b.dataset.id);openInspector(id)});
   bindTaskEditForm(id);
@@ -193,15 +248,16 @@ function openInspector(id){
 }
 function statusLabel(s){return({idea:'Idé',planned:'Planerad',todo:'Att göra',doing:'Pågår',waiting:'Väntar',review:'Granskning',done:'Klar'})[s]||'Att göra'}
 function buildDailyBrief(){
-  const active=state.tasks.filter(t=>t.visible&&!t.completed),today=topLevel(active.filter(t=>t.bucket==='today')),p1=topLevel(active.filter(t=>t.priority===1)),doing=topLevel(active.filter(t=>t.status==='doing')),waiting=topLevel(active.filter(t=>t.status==='waiting')),inbox=topLevel(active.filter(t=>t.bucket==='inbox')),linked=active.filter(t=>linksForTask(t.id).length);
+  const active=state.tasks.filter(t=>t.visible&&!t.completed),today=topLevel(active.filter(t=>t.bucket==='today'||isDueToday(t)||isOverdue(t)||isReminderDue(t))),overdue=topLevel(active.filter(isOverdue)),p1=topLevel(active.filter(t=>t.priority===1)),doing=topLevel(active.filter(t=>t.status==='doing')),waiting=topLevel(active.filter(t=>t.status==='waiting')),inbox=topLevel(active.filter(t=>t.bucket==='inbox')),linked=active.filter(t=>linksForTask(t.id).length);
   const focus=[...new Map([...p1,...doing,...today,...inbox].map(t=>[t.id,t])).values()].slice(0,5);
   const suggestions=[];
+  if(overdue.length)suggestions.push({type:'overdue',text:`${overdue.length} uppgift${overdue.length>1?'er är':' är'} försenad${overdue.length>1?'e':''}.`});
   if(p1.length)suggestions.push({type:'priority',text:`Börja med ${p1.length} P1-uppgift${p1.length>1?'er':''}.`});
   if(inbox.length>=3)suggestions.push({type:'inbox',text:`Rensa inboxen: ${inbox.length} okategoriserade uppgifter väntar.`});
   if(waiting.length)suggestions.push({type:'waiting',text:`${waiting.length} uppgift${waiting.length>1?'er':''} står i vänteläge. Följ upp blockeringen eller låt MCP bevaka händelsen.`});
   if(linked.length)suggestions.push({type:'context',text:`${linked.length} uppgift${linked.length>1?'er har':' har'} länkar till mail, dokument eller andra appar.`});
   if(!suggestions.length)suggestions.push({type:'calm',text:'Läget är rent. Välj en tydlig nästa uppgift och håll flödet enkelt.'});
-  return {briefDate:localDateISO(),title:'Dagens Orbit-brief',summary:`Du har ${today.length} uppgift${today.length===1?'':'er'} i “Gör idag”, ${p1.length} P1 och ${waiting.length} väntande. ${focus.length?`Föreslaget fokus: ${focus.map(t=>t.title).join(', ')}.`:'Ingen akut fokusuppgift hittades.'}`,focusTaskIds:focus.map(t=>t.id),blockers:waiting.slice(0,5).map(t=>({taskId:t.id,title:t.title,reason:t.activationReason||t.trigger?.label||'Markerad som väntar'})),suggestions,generatedBy:'orbit-client-agent'};
+  return {briefDate:localDateISO(),title:'Dagens Orbit-brief',summary:`Du har ${today.length} uppgift${today.length===1?'':'er'} i dagens vy, ${p1.length} P1${overdue.length?`, ${overdue.length} försenad${overdue.length>1?'e':''}`:''} och ${waiting.length} väntande. ${focus.length?`Föreslaget fokus: ${focus.map(t=>t.title).join(', ')}.`:'Ingen akut fokusuppgift hittades.'}`,focusTaskIds:focus.map(t=>t.id),blockers:waiting.slice(0,5).map(t=>({taskId:t.id,title:t.title,reason:t.activationReason||t.trigger?.label||'Markerad som väntar'})),suggestions,generatedBy:'orbit-client-agent'};
 }
 function renderDailyBrief(){
   const card=$('#briefCard');if(!card||!state)return;
@@ -215,11 +271,13 @@ function renderDailyBrief(){
 }
 function refreshAssignees(){const projectId=$('#projectSelect').value;$('#assigneeSelect').innerHTML=assigneeOptionsHtml(projectId,defaultAssigneeForProject(projectId))}
 function openDialog(){
+  $('#taskForm').reset();
   $('#projectSelect').innerHTML=projectOptionsHtml('');
   if(view.startsWith('project:'))$('#projectSelect').value=view.split(':')[1]; else if(bucketViews.includes(view))$('#taskForm').elements.bucket.value=view;
   const candidates=state.tasks.filter(t=>!t.completed&&t.visible);
   $('#parentTaskSelect').innerHTML='<option value="">Ingen — fristående uppgift</option>'+candidates.map(t=>`<option value="${t.id}">${escapeHtml(t.title)}</option>`).join('');
   $('#dependencyTaskSelect').innerHTML=candidates.map(t=>`<option value="${t.id}">${escapeHtml(t.title)}</option>`).join('');
+  bindScheduleAssist($('#taskForm'));
   refreshAssignees();$('#taskDialog').showModal();setTimeout(()=>$('#newTitle').focus(),50)
 }
 $('#projectSelect').onchange=refreshAssignees;
@@ -232,6 +290,7 @@ $('#taskForm').onsubmit=async e=>{
   if(!data.title.trim())return;
   const link={kind:data.linkKind||'other',provider:data.linkProvider||'',title:data.linkTitle||data.title,url:data.linkUrl||''};
   const type=data.triggerType,val=type==='task_completed'?dependencies[0]:data.triggerValue;
+  const schedule=scheduleFromForm(data);data.due=schedule.due;data.dueAt=schedule.dueAt;data.reminderAt=schedule.reminderAt;
   delete data.triggerType;delete data.triggerValue;delete data.dependencyTaskIds;delete data.linkKind;delete data.linkProvider;delete data.linkTitle;delete data.linkUrl;
   data.dependencyTaskIds=dependencies;
   data.links=link.url.trim()?[link]:[];

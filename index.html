@@ -51,7 +51,12 @@
         <label>Underuppgift till<select name="parentTaskId" id="parentTaskSelect"><option value="">Ingen — fristående uppgift</option></select></label>
         <label>Återkommer<select name="recurrenceRule"><option value="">Nej</option><option value="daily">Dagligen</option><option value="weekly">Varje vecka</option><option value="monthly">Varje månad</option></select></label>
       </div>
-      <label>Datum, tid eller påminnelse<input name="due" placeholder="T.ex. fredag 14:00"></label>
+      <div class="form-grid schedule-grid">
+        <label>Snabbtext<input name="due" placeholder="T.ex. imorgon 09:00 eller fredag 14:00"></label>
+        <label>Deadline<input name="dueAt" type="datetime-local"></label>
+        <label>Påminnelse<input name="reminderAt" type="datetime-local"></label>
+      </div>
+      <p class="hint">Tips: skriv en snabbtext och lämna deadline tom, så försöker Orbit tolka datumet åt dig.</p>
       <details>
         <summary>↗ Lägg till länk från annan app</summary>
         <div class="form-grid link-grid">

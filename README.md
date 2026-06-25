@@ -8,7 +8,8 @@ Orbit är en molnbaserad fleranvändarapp för områden, projekt, team och villk
 - Lista, Kanban-tavla, kalender och visuell flödeskarta
 - Anpassade uppgiftsstatusar, milstolpar och godkännanden
 - Underuppgifter samt beroenden där alla eller minst ett föregående steg krävs
-- Redigering av uppgifter direkt i sidopanelen: titel, anteckningar, status, prioritet, bucket, projekt, tilldelad person och datumtext
+- Redigering av uppgifter direkt i sidopanelen: titel, anteckningar, status, prioritet, bucket, projekt, tilldelad person, deadline och påminnelse
+- Strukturerade datumfält (`due_at`, `reminder_at`) används i listor, kalender, AI-brief och MCP — med enkel svensk snabbtolkning som “imorgon 09:00”
 - Externa MCP-händelser och tidsbaserad aktivering
 - Kontextlänkar från andra appar, t.ex. mail, dokument, chattar och kalenderposter
 - “Tilldelat till mig”-vy med separering mellan uppgifter från andra och egna uppgifter

@@ -15,8 +15,11 @@
 .calendar-view{display:grid;grid-template-columns:repeat(7,1fr);border:1px solid var(--line);border-radius:12px;overflow:hidden;background:#fff}
 .calendar-day{min-height:125px;border-right:1px solid var(--line);padding:10px}
 .calendar-day:last-child{border:0}
-.calendar-day h3{font-size:10px;color:#999;margin:0 0 9px}
+.calendar-day h3{font-size:10px;color:#999;margin:0 0 9px;display:flex;justify-content:space-between;gap:6px}
+.calendar-day h3 small{font-weight:600;color:#b0aab6;text-transform:none}
+.calendar-day p{margin:22px 0 0;color:#c1bcc7;font-size:10px;text-align:center}
 .calendar-task{font-size:9px;background:var(--purple-soft);color:#5947a4;padding:6px;border-radius:6px;margin-bottom:5px}
+.calendar-task strong{display:block;margin-bottom:2px;color:#7659ef}
 
 .flow-view{display:flex;align-items:flex-start;gap:36px;overflow:auto;padding:30px 10px;min-height:260px}
 .flow-node{position:relative;min-width:170px;max-width:190px;border:1px solid var(--line);background:#fff;border-radius:12px;padding:13px;box-shadow:0 5px 18px #3424500d}
@@ -66,6 +69,10 @@
 .brief-tags button,.brief-tags span{border:0;background:#fff;border-radius:999px;padding:6px 9px;color:#675c78;font-size:10px;box-shadow:0 1px 7px #33234f0d}
 
 .context-count{color:#6f58d9}
+.reminder{color:#8d6a35}
+.reminder.due-now{color:#c8722a;font-weight:700}
+.reminder-alert strong{color:#6f4cdb}
+.schedule-grid{grid-template-columns:1.4fr 1fr 1fr}
 .link-section{margin-top:27px}
 .task-links{display:grid;gap:8px;margin:10px 0 12px}
 .task-link-card{display:grid;grid-template-columns:31px 1fr;gap:9px;align-items:center;padding:10px;border:1px solid var(--line);border-radius:11px;background:#fbfafc;color:var(--ink);text-decoration:none}
@@ -87,6 +94,7 @@
   .brief-card{flex-direction:column;margin:-3px 0 18px}
   .brief-card button{width:100%}
   .link-form{grid-template-columns:1fr}
+  .schedule-grid{grid-template-columns:1fr}
   .task-link-card{grid-template-columns:34px 1fr}
   .task-edit-form .compact-grid{grid-template-columns:1fr}
   .task-edit-form .primary{width:100%}

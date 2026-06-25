@@ -26,6 +26,8 @@ const taskInputSchema = {
     bucket: { type: 'string' },
     priority: { type: 'number' },
     due: { type: 'string' },
+    dueAt: { type: 'string' },
+    reminderAt: { type: 'string' },
     status: { type: 'string' },
     taskType: { type: 'string' },
     activationMode: { type: 'string' },
@@ -136,6 +138,8 @@ const tools = [
         bucket: { type: 'string' },
         priority: { type: 'number' },
         due: { type: 'string' },
+        dueAt: { type: 'string' },
+        reminderAt: { type: 'string' },
         status: { type: 'string' },
         completed: { type: 'boolean' },
         visible: { type: 'boolean' }
@@ -276,7 +280,9 @@ const tools = [
         projectId: { type: 'string' },
         bucket: { type: 'string' },
         priority: { type: 'number' },
-        due: { type: 'string' }
+        due: { type: 'string' },
+        dueAt: { type: 'string' },
+        reminderAt: { type: 'string' }
       }
     }
   },
@@ -320,7 +326,17 @@ const tools = [
 ];
 
 function todayISO() {
-  return new Date().toISOString().slice(0, 10);
+  return stockholmDateISO(new Date());
+}
+
+function stockholmDateISO(value) {
+  return new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Stockholm', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(value));
+}
+
+function nullableIso(value) {
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date.toISOString();
 }
 
 function accessFilter(ctx) {
@@ -530,7 +546,8 @@ async function listTasks(ctx, args = {}) {
 
 function buildBrief(tasks, linksByTask, date = todayISO()) {
   const active = tasks.filter(t => t.visible && !t.completed);
-  const today = active.filter(t => t.bucket === 'today');
+  const today = active.filter(t => t.bucket === 'today' || (t.due_at && stockholmDateISO(t.due_at) === date));
+  const overdue = active.filter(t => t.due_at && stockholmDateISO(t.due_at) < date);
   const p1 = active.filter(t => Number(t.priority) === 1);
   const doing = active.filter(t => t.status === 'doing');
   const waiting = active.filter(t => t.status === 'waiting');
@@ -539,6 +556,7 @@ function buildBrief(tasks, linksByTask, date = todayISO()) {
   const focus = uniqTasks([...p1, ...doing, ...today]).slice(0, 5);
 
   const suggestions = [];
+  if (overdue.length) suggestions.push({ type: 'overdue', text: `${overdue.length} uppgift${overdue.length > 1 ? 'er är' : ' är'} försenad${overdue.length > 1 ? 'e' : ''}.` });
   if (p1.length) suggestions.push({ type: 'priority', text: `Börja med ${p1.length} P1-uppgift${p1.length > 1 ? 'er' : ''}.` });
   if (inbox.length >= 3) suggestions.push({ type: 'inbox', text: `Rensa inboxen: ${inbox.length} okategoriserade uppgifter väntar.` });
   if (waiting.length) suggestions.push({ type: 'waiting', text: `${waiting.length} uppgift${waiting.length > 1 ? 'er' : ''} står i vänteläge. Be agenten följa upp blockeringen.` });
@@ -547,12 +565,12 @@ function buildBrief(tasks, linksByTask, date = todayISO()) {
 
   return {
     title: `Dagens Orbit-brief · ${date}`,
-    summary: `Du har ${today.length} uppgift${today.length === 1 ? '' : 'er'} i “Gör idag”, ${p1.length} P1 och ${waiting.length} väntande. ${focus.length ? `Föreslaget fokus: ${focus.map(t => t.title).join(', ')}.` : 'Ingen akut fokusuppgift hittades.'}`,
+    summary: `Du har ${today.length} uppgift${today.length === 1 ? '' : 'er'} i dagens vy, ${p1.length} P1${overdue.length ? `, ${overdue.length} försenad${overdue.length > 1 ? 'e' : ''}` : ''} och ${waiting.length} väntande. ${focus.length ? `Föreslaget fokus: ${focus.map(t => t.title).join(', ')}.` : 'Ingen akut fokusuppgift hittades.'}`,
     focusTaskIds: focus.map(t => t.id),
-    focusTasks: focus.map(t => ({ id: t.id, title: t.title, priority: t.priority, bucket: t.bucket, due: t.due_text, links: linksByTask.get(t.id) || [] })),
+    focusTasks: focus.map(t => ({ id: t.id, title: t.title, priority: t.priority, bucket: t.bucket, due: t.due_text, dueAt: t.due_at, reminderAt: t.reminder_at, links: linksByTask.get(t.id) || [] })),
     blockers: waiting.slice(0, 5).map(t => ({ taskId: t.id, title: t.title, reason: t.activation_reason || t.trigger_event || 'Markerad som väntar' })),
     suggestions,
-    counts: { active: active.length, today: today.length, priority1: p1.length, waiting: waiting.length, inbox: inbox.length, linked: linked.length }
+    counts: { active: active.length, today: today.length, overdue: overdue.length, priority1: p1.length, waiting: waiting.length, inbox: inbox.length, linked: linked.length }
   };
 }
 
@@ -670,6 +688,8 @@ async function createTask(ctx, input = {}, tempMap = new Map(), defaults = {}) {
     bucket: input.bucket || 'inbox',
     priority: Number(input.priority || 3),
     due_text: input.due || '',
+    due_at: nullableIso(input.dueAt),
+    reminder_at: nullableIso(input.reminderAt),
     status: input.status || 'todo',
     task_type: input.taskType || 'task',
     activation_mode: input.activationMode || 'all',
@@ -712,6 +732,8 @@ async function updateTask(ctx, input) {
     bucket: input.bucket,
     priority: input.priority !== undefined ? Number(input.priority) : undefined,
     due_text: input.due,
+    due_at: input.dueAt !== undefined ? nullableIso(input.dueAt) : undefined,
+    reminder_at: input.reminderAt !== undefined ? nullableIso(input.reminderAt) : undefined,
     status: input.completed ? 'done' : input.status,
     completed: input.completed,
     visible: input.visible
@@ -911,6 +933,8 @@ async function call(name, a = {}) {
       bucket: a.bucket || 'inbox',
       priority: a.priority || 3,
       due: a.due || '',
+      dueAt: a.dueAt,
+      reminderAt: a.reminderAt,
       links: a.permalink ? [{ kind: 'chat', provider: 'Slack', title: 'Slack-meddelande', url: a.permalink, externalId: a.messageTs, metadata: { channelId: a.channelId, threadTs: a.threadTs || '' } }] : []
     });
     const slackLink = await createSlackLink(ctx, { ...a, taskId: task.id });

@@ -17,6 +17,8 @@ const camelTask = t => ({
   bucket: t.bucket,
   priority: t.priority,
   due: t.due_text || '',
+  dueAt: t.due_at,
+  reminderAt: t.reminder_at,
   completed: t.completed,
   visible: t.visible,
   status: t.status || 'todo',
@@ -56,6 +58,12 @@ const cleanLinks = links => (Array.isArray(links) ? links : [])
     metadata: link.metadata || {}
   }))
   .filter(link => link.url.trim() || link.external_id.trim() || link.title.trim());
+
+const nullableIso = value => {
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date.toISOString();
+};
 
 export async function session() {
   if (!configured) return null;
@@ -196,6 +204,8 @@ export async function createCloudTask(input) {
     bucket: input.bucket || 'inbox',
     priority: Number(input.priority || 3),
     due_text: input.due || '',
+    due_at: nullableIso(input.dueAt),
+    reminder_at: nullableIso(input.reminderAt),
     status: input.status || 'todo',
     task_type: input.taskType || 'task',
     recurrence_rule: input.recurrenceRule || null,
@@ -241,6 +251,8 @@ export async function updateCloudTask(id, patch) {
   if ('bucket' in patch) row.bucket = patch.bucket || 'inbox';
   if ('priority' in patch) row.priority = Number(patch.priority || 3);
   if ('due' in patch) row.due_text = patch.due || '';
+  if ('dueAt' in patch) row.due_at = nullableIso(patch.dueAt);
+  if ('reminderAt' in patch) row.reminder_at = nullableIso(patch.reminderAt);
   if ('status' in patch) row.status = patch.status;
   row.updated_at = new Date().toISOString();
 
