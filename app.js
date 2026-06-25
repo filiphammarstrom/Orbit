@@ -1,4 +1,4 @@
-import { configured, session, signIn, signUp, signOut, loadCloudState, createCloudTask, updateCloudTask, subscribeToChanges, addComment, addTaskLink, saveDailyBrief, markNotificationRead, decideApproval, createTeam, createInvitation, shareAreaWithTeam } from './cloud.js';
+import { configured, session, signIn, signUp, signOut, loadCloudState, createCloudTask, updateCloudTask, subscribeToChanges, addComment, addTaskLink, createCalendarIntegration, queueCalendarSync, saveDailyBrief, markNotificationRead, decideApproval, createTeam, createInvitation, shareAreaWithTeam } from './cloud.js';
 
 let state, view = 'today', projectView='list', liveChannel;
 const $ = s => document.querySelector(s);
@@ -28,6 +28,8 @@ const escapeHtml=(s='')=>String(s).replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;
 const toast=text=>{$('#toast').textContent=text;$('#toast').classList.add('show');setTimeout(()=>$('#toast').classList.remove('show'),2200)};
 const avatarHtml=p=>`<span class="mini-avatar" title="${p.name}" style="background:${p.color}">${p.initials}</span>`;
 const linksForTask=id=>(state.taskLinks||[]).filter(l=>l.taskId===id);
+const calendarLinksForTask=id=>(state.calendarLinks||[]).filter(l=>l.taskId===id);
+const googleCalendarIntegrations=()=>(state.integrations||[]).filter(i=>i.provider==='google_calendar');
 const localDateISO=(date=new Date())=>new Date(date.getTime()-date.getTimezoneOffset()*60000).toISOString().slice(0,10);
 const startOfLocalDay=(date=new Date())=>{const d=new Date(date);d.setHours(0,0,0,0);return d};
 const toDateTimeLocalValue=iso=>{if(!iso)return'';const d=new Date(iso);return Number.isNaN(d.getTime())?'':new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,16)};
@@ -38,6 +40,9 @@ const isOverdue=t=>Boolean(t.dueAt)&&!t.completed&&new Date(t.dueAt).getTime()<s
 const isReminderDue=t=>Boolean(t.reminderAt)&&!t.completed&&new Date(t.reminderAt).getTime()<=Date.now();
 const formatDateTime=iso=>{if(!iso)return'';const d=new Date(iso);if(Number.isNaN(d.getTime()))return'';const same=sameLocalDate(iso);return new Intl.DateTimeFormat('sv-SE',same?{hour:'2-digit',minute:'2-digit'}:{weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}).format(d)};
 const formatTime=iso=>{const d=new Date(iso);return Number.isNaN(d.getTime())?'':new Intl.DateTimeFormat('sv-SE',{hour:'2-digit',minute:'2-digit'}).format(d)};
+const addMinutes=(iso,minutes)=>{const d=new Date(iso||Date.now());d.setMinutes(d.getMinutes()+minutes);return d.toISOString()};
+const googleDate=iso=>new Date(iso).toISOString().replace(/[-:]/g,'').replace(/\.\d{3}Z$/,'Z');
+const googleCalendarTemplateUrl=t=>{if(!t.dueAt)return'';const details=[t.notes||'',`Orbit task: ${t.id}`].filter(Boolean).join('\n\n');const params=new URLSearchParams({action:'TEMPLATE',text:t.title,details,dates:`${googleDate(t.dueAt)}/${googleDate(addMinutes(t.dueAt,30))}`});return `https://calendar.google.com/calendar/render?${params.toString()}`};
 const scheduleLabel=t=>t.dueAt?formatDateTime(t.dueAt):(t.due||'');
 const reminderLabel=t=>t.reminderAt?formatDateTime(t.reminderAt):'';
 const tasksForBucketView=id=>id==='today'?visible().filter(t=>t.bucket==='today'||isDueToday(t)||isOverdue(t)||isReminderDue(t)):visible().filter(t=>t.bucket===id);
@@ -73,6 +78,7 @@ function bindScheduleAssist(form){const due=form?.elements?.due,dueAt=form?.elem
 const safeHref=url=>{const value=(url||'').trim();return !value||/^(javascript|data|vbscript):/i.test(value)?'#':value};
 const linkKindLabel=kind=>({email:'Mail',calendar:'Kalender',document:'Dokument',chat:'Chatt',web:'Webb',file:'Fil',mcp:'MCP',other:'Länk'})[kind]||'Länk';
 const linkKindIcon=kind=>({email:'✉',calendar:'◷',document:'▤',chat:'☵',web:'↗',file:'▣',mcp:'✦',other:'↗'})[kind]||'↗';
+const calendarStatusLabel=status=>({pending:'Köad',synced:'Synkad',failed:'Misslyckad',deleted:'Borttagen'})[status]||status;
 const navCount=id=>id==='assigned'?assignedToMe().length:id==='team'?(state.invitations||[]).filter(i=>!i.acceptedAt).length:bucketViews.includes(id)?tasksForBucketView(id).length:0;
 const option=(value,label,selected)=>`<option value="${escapeHtml(value)}" ${String(value)===String(selected||'')?'selected':''}>${escapeHtml(label)}</option>`;
 const projectOptionsHtml=selected=>'<option value="">Personligt / Inbox</option>'+state.areas.map(a=>`<optgroup label="${escapeHtml(a.name)}">${state.projects.filter(p=>p.areaId===a.id).map(p=>option(p.id,p.name,selected)).join('')}</optgroup>`).join('');
@@ -183,6 +189,38 @@ function renderTaskLinks(t){
   return `<div class="link-section"><h3>Länkar från andra appar · ${links.length}</h3>${links.length?`<div class="task-links">${links.map(l=>`<a class="task-link-card" href="${escapeHtml(safeHref(l.url))}" target="_blank" rel="noreferrer"><span>${linkKindIcon(l.kind)}</span><div><strong>${escapeHtml(l.title||l.url||linkKindLabel(l.kind))}</strong><small>${escapeHtml([l.provider,linkKindLabel(l.kind)].filter(Boolean).join(' · '))}</small></div></a>`).join('')}</div>`:'<p class="hint">Inga länkar ännu. Lägg till mail, dokument, chatt eller annat som hör till uppgiften.</p>'}<form class="link-form" id="taskLinkForm"><select name="kind"><option value="email">Mail</option><option value="calendar">Kalender</option><option value="document">Dokument</option><option value="chat">Chatt</option><option value="web">Webb</option><option value="other">Annat</option></select><input name="title" placeholder="Titel"><input name="url" placeholder="Länk / deep link" required><button>＋</button></form></div>`
 }
 
+function renderCalendarSync(t){
+  const links=calendarLinksForTask(t.id),integrations=googleCalendarIntegrations(),manualUrl=googleCalendarTemplateUrl(t);
+  const defaultIntegration=integrations[0],defaultCalendar=defaultIntegration?.settings?.calendarId||'primary';
+  const start=t.dueAt||new Date().toISOString(),end=t.dueAt?addMinutes(t.dueAt,30):addMinutes(new Date().toISOString(),30);
+  return `<div class="calendar-sync-section">
+    <div class="calendar-sync-head"><div><h3>Google Calendar</h3><p>Planera uppgiften som kalenderblock.</p></div>${manualUrl?`<a class="secondary small-link" href="${escapeHtml(manualUrl)}" target="_blank" rel="noreferrer">Öppna i Google Calendar</a>`:''}</div>
+    ${!t.dueAt?'<p class="hint">Sätt en deadline på uppgiften för att förifylla kalenderstart.</p>':''}
+    ${links.length?`<div class="calendar-sync-list">${links.map(l=>`<div class="calendar-sync-row"><span class="calendar-status ${l.status}">${calendarStatusLabel(l.status)}</span><div><strong>${escapeHtml(formatDateTime(l.startAt)||'Kalenderblock')}</strong><small>${escapeHtml(l.calendarId)} · ${escapeHtml(l.timeZone)}</small></div>${l.eventUrl?`<a href="${escapeHtml(safeHref(l.eventUrl))}" target="_blank" rel="noreferrer">Visa</a>`:''}</div>`).join('')}</div>`:'<p class="hint">Ingen kalender-sync köad ännu.</p>'}
+    ${integrations.length?`<form id="calendarSyncForm" class="calendar-sync-form">
+      <label>Koppling<select name="integrationAccountId">${integrations.map(i=>option(i.id,`${i.displayName||'Google Calendar'} · ${i.status==='active'?'aktiv':'väntar på OAuth'}`,defaultIntegration?.id)).join('')}</select></label>
+      <label>Kalender-ID<input name="calendarId" value="${escapeHtml(defaultCalendar)}" placeholder="primary"></label>
+      <label>Start<input name="startAt" type="datetime-local" value="${toDateTimeLocalValue(start)}" required></label>
+      <label>Slut<input name="endAt" type="datetime-local" value="${toDateTimeLocalValue(end)}" required></label>
+      <label>Tidszon<input name="timeZone" value="Europe/Stockholm"></label>
+      <button class="primary" type="submit">Köa kalender-sync</button>
+    </form>`:`<form id="calendarIntegrationForm" class="calendar-sync-form">
+      <p class="hint wide">Skapa en kalenderkoppling i Orbit. Den kan köa sync direkt, men automatisk Google-skapning kräver OAuth/worker som nästa backend-steg.</p>
+      <label>Namn<input name="displayName" value="Min Google Calendar"></label>
+      <label>Kalender-ID<input name="calendarId" value="primary"></label>
+      <button class="primary" type="submit">Skapa kalenderkoppling</button>
+    </form>`}
+  </div>`;
+}
+
+function bindCalendarSync(id){
+  const task=state.tasks.find(t=>t.id===id);if(!task)return;
+  const integrationForm=$('#calendarIntegrationForm');
+  if(integrationForm)integrationForm.onsubmit=async e=>{e.preventDefault();const data=Object.fromEntries(new FormData(integrationForm));await createCalendarIntegration(data);await load();openInspector(id);toast('Kalenderkopplingen är skapad.')};
+  const syncForm=$('#calendarSyncForm');
+  if(syncForm)syncForm.onsubmit=async e=>{e.preventDefault();const data=Object.fromEntries(new FormData(syncForm)),startAt=fromDateTimeLocalValue(data.startAt),endAt=fromDateTimeLocalValue(data.endAt);if(!startAt||!endAt||new Date(endAt)<=new Date(startAt)){toast('Sluttiden måste vara efter starttiden.');return}await queueCalendarSync(id,{...data,startAt,endAt,title:task.title,description:task.notes||''});await load();openInspector(id);toast('Kalender-sync är köad.')};
+}
+
 function renderTaskEditForm(t){
   return `<details class="task-edit-card" open>
     <summary>✎ Redigera uppgift</summary>
@@ -238,10 +276,11 @@ function openInspector(id){
   const t=state.tasks.find(x=>x.id===id);if(!t)return;
   const p=project(t.projectId),a=person(t.assigneeId),ar=areaForProject(t.projectId),tm=team(ar?.teamId),subs=childrenOf(t.id),comments=(state.comments||[]).filter(c=>c.taskId===id);
   const when=scheduleLabel(t),remind=reminderLabel(t);
-  $('#inspectorContent').innerHTML=`<p class="eyebrow">${ar?escapeHtml(ar.name).toUpperCase():'UPPGIFT'}</p><button class="check big-check p${t.priority}" id="detailCheck"></button><h2>${escapeHtml(t.title)}</h2>${subs.length?`<div class="parent-lock">Huvuduppgiften blir klar automatiskt när alla ${subs.length} delsteg är klara.</div>`:''}${t.activationReason?`<div class="activation-explain"><strong>✦ Varför ser jag detta nu?</strong>${escapeHtml(t.activationReason)}${t.activatedAt?` · ${new Date(t.activatedAt).toLocaleString('sv-SE')}`:''}</div>`:''}${t.notes?`<p style="color:#777;font-size:13px;line-height:1.6">${escapeHtml(t.notes)}</p>`:''}<div class="detail-row"><span>Status</span><strong class="status-chip">${statusLabel(t.status)}</strong></div><div class="detail-row"><span>Område</span><strong>${ar?ar.icon+' '+ar.name:'Personligt'}</strong></div><div class="detail-row"><span>Projekt</span><strong>${p?p.name:'Inbox'}</strong></div><div class="detail-row"><span>Tilldelad</span><strong>${a.name}</strong></div><div class="detail-row"><span>Åtkomst</span><strong>${tm?tm.name:'Endast du'}</strong></div><div class="detail-row"><span>Deadline</span><strong>${when?escapeHtml(when):'Inget datum'}</strong></div><div class="detail-row"><span>Påminnelse</span><strong>${remind?`${isReminderDue(t)?'Nu · ':''}${escapeHtml(remind)}`:'Ingen'}</strong></div>${renderTaskEditForm(t)}${subs.length?`<div class="inspector-subtasks"><h3>Underuppgifter · ${subs.filter(s=>s.completed).length}/${subs.length}</h3>${subs.map(s=>`<div class="inspector-subtask ${s.completed?'done':''} ${!s.visible?'waiting':''}">${s.completed?'✓':s.visible?`<button class="check p${s.priority}" data-id="${s.id}"></button>`:'⚡'}<span>${escapeHtml(s.title)}</span><small>${!s.visible?'Väntar':person(s.assigneeId).initials}</small></div>`).join('')}</div>`:''}${t.trigger?`<div class="trigger-box"><strong>⚡ Aktiverad av villkor</strong>${escapeHtml(t.trigger.label||'Ett externt villkor')}</div>`:''}${renderTaskLinks(t)}<div class="comment-section"><h3>Kommentarer · ${comments.length}</h3>${comments.map(c=>`<div class="comment">${avatarHtml(person(c.authorId))}<div><p>${escapeHtml(c.body)}</p><time>${new Date(c.createdAt).toLocaleString('sv-SE')}</time></div></div>`).join('')}<form class="comment-form" id="commentForm"><input name="comment" placeholder="Skriv en kommentar eller @nämn någon…" required><button>Skicka</button></form></div>`;
+  $('#inspectorContent').innerHTML=`<p class="eyebrow">${ar?escapeHtml(ar.name).toUpperCase():'UPPGIFT'}</p><button class="check big-check p${t.priority}" id="detailCheck"></button><h2>${escapeHtml(t.title)}</h2>${subs.length?`<div class="parent-lock">Huvuduppgiften blir klar automatiskt när alla ${subs.length} delsteg är klara.</div>`:''}${t.activationReason?`<div class="activation-explain"><strong>✦ Varför ser jag detta nu?</strong>${escapeHtml(t.activationReason)}${t.activatedAt?` · ${new Date(t.activatedAt).toLocaleString('sv-SE')}`:''}</div>`:''}${t.notes?`<p style="color:#777;font-size:13px;line-height:1.6">${escapeHtml(t.notes)}</p>`:''}<div class="detail-row"><span>Status</span><strong class="status-chip">${statusLabel(t.status)}</strong></div><div class="detail-row"><span>Område</span><strong>${ar?ar.icon+' '+ar.name:'Personligt'}</strong></div><div class="detail-row"><span>Projekt</span><strong>${p?p.name:'Inbox'}</strong></div><div class="detail-row"><span>Tilldelad</span><strong>${a.name}</strong></div><div class="detail-row"><span>Åtkomst</span><strong>${tm?tm.name:'Endast du'}</strong></div><div class="detail-row"><span>Deadline</span><strong>${when?escapeHtml(when):'Inget datum'}</strong></div><div class="detail-row"><span>Påminnelse</span><strong>${remind?`${isReminderDue(t)?'Nu · ':''}${escapeHtml(remind)}`:'Ingen'}</strong></div>${renderTaskEditForm(t)}${subs.length?`<div class="inspector-subtasks"><h3>Underuppgifter · ${subs.filter(s=>s.completed).length}/${subs.length}</h3>${subs.map(s=>`<div class="inspector-subtask ${s.completed?'done':''} ${!s.visible?'waiting':''}">${s.completed?'✓':s.visible?`<button class="check p${s.priority}" data-id="${s.id}"></button>`:'⚡'}<span>${escapeHtml(s.title)}</span><small>${!s.visible?'Väntar':person(s.assigneeId).initials}</small></div>`).join('')}</div>`:''}${t.trigger?`<div class="trigger-box"><strong>⚡ Aktiverad av villkor</strong>${escapeHtml(t.trigger.label||'Ett externt villkor')}</div>`:''}${renderCalendarSync(t)}${renderTaskLinks(t)}<div class="comment-section"><h3>Kommentarer · ${comments.length}</h3>${comments.map(c=>`<div class="comment">${avatarHtml(person(c.authorId))}<div><p>${escapeHtml(c.body)}</p><time>${new Date(c.createdAt).toLocaleString('sv-SE')}</time></div></div>`).join('')}<form class="comment-form" id="commentForm"><input name="comment" placeholder="Skriv en kommentar eller @nämn någon…" required><button>Skicka</button></form></div>`;
   $('#detailCheck').onclick=()=>{complete(id);if(!subs.length)$('#inspector').classList.remove('open')};
   document.querySelectorAll('.inspector-subtask .check').forEach(b=>b.onclick=async()=>{await complete(b.dataset.id);openInspector(id)});
   bindTaskEditForm(id);
+  bindCalendarSync(id);
   $('#taskLinkForm').onsubmit=async e=>{e.preventDefault();const f=new FormData(e.target);await addTaskLink(id,{kind:f.get('kind'),title:f.get('title'),url:f.get('url')});await load();openInspector(id);toast('Länken är tillagd.')};
   $('#commentForm').onsubmit=async e=>{e.preventDefault();const body=new FormData(e.target).get('comment');await addComment(id,body);await load();openInspector(id)};
   $('#inspector').classList.add('open')

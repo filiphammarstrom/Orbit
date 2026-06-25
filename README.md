@@ -14,6 +14,7 @@ Orbit är en molnbaserad fleranvändarapp för områden, projekt, team och villk
 - Kontextlänkar från andra appar, t.ex. mail, dokument, chattar och kalenderposter
 - “Tilldelat till mig”-vy med separering mellan uppgifter från andra och egna uppgifter
 - Team & delning-vy för att skapa team, bjuda in via e-post och dela områden med rätt team
+- Google Calendar-sektion på uppgifter: manuell “öppna i Google Calendar”-länk, kalenderkopplingar och köad sync-status
 - Integrationsgrund för Google Calendar och Slack
 - Daglig Orbit-brief från MCP/AI samt sparade agentförslag
 - AI-control via MCP: externa AI-klienter kan läsa workspace, skapa projekt, masskapa tasks, tilldela personer och uppdatera status
@@ -81,14 +82,15 @@ Rekommenderat flöde för ChatGPT/Claude:
 
 ## Google Calendar och Slack
 
-Orbit har nu databas- och MCP-stöd för integrationer, men själva OAuth-callbacken/worker-processen behöver köras server-side med hemliga nycklar. Lägg aldrig Google/Slack secrets i frontend eller i GitHub.
+Orbit har nu databas-, UI- och MCP-stöd för integrationer. Uppgifter kan köas för Google Calendar-sync och öppnas manuellt i Google Calendar med förifyllda datum. Själva OAuth-callbacken/worker-processen behöver fortfarande köras server-side med hemliga nycklar. Lägg aldrig Google/Slack secrets i frontend eller i GitHub.
 
 Google Calendar-flödet:
 
-1. Kör OAuth och spara token säkert i en secret/vault.
-2. Registrera kopplingen i Orbit med `register_integration` och en `tokenRef`, inte själva token.
-3. Använd `schedule_task_on_calendar` när en task ska bli ett kalenderblock.
-4. En integrations-worker läser pending `task_calendar_links`, skapar/uppdaterar event i Google Calendar och sparar `providerEventId` + `eventUrl`.
+1. Lägg deadline på uppgiften.
+2. Öppna uppgiftens Google Calendar-sektion och använd “Öppna i Google Calendar” för manuell kalenderpost, eller skapa en kalenderkoppling och köa sync.
+3. Kör OAuth server-side och spara token säkert i en secret/vault.
+4. Registrera/uppdatera kopplingen i Orbit med `register_integration` och en `tokenRef`, inte själva token.
+5. En integrations-worker läser pending `task_calendar_links`, skapar/uppdaterar event i Google Calendar och sparar `providerEventId` + `eventUrl`.
 
 Slack-flödet:
 

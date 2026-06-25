@@ -73,6 +73,23 @@
 .reminder.due-now{color:#c8722a;font-weight:700}
 .reminder-alert strong{color:#6f4cdb}
 .schedule-grid{grid-template-columns:1.4fr 1fr 1fr}
+.calendar-sync-section{margin-top:27px;padding:15px;border:1px solid #e9e4f3;background:#fbfafc;border-radius:13px}
+.calendar-sync-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:10px}
+.calendar-sync-head h3{font:700 13px Manrope;margin:0 0 3px}
+.calendar-sync-head p{font-size:10px;color:#918b99;margin:0}
+.small-link{display:inline-flex;align-items:center;text-decoration:none;font-size:10px;white-space:nowrap;padding:8px 10px}
+.calendar-sync-list{display:grid;gap:8px;margin:10px 0 12px}
+.calendar-sync-row{display:grid;grid-template-columns:64px 1fr auto;gap:8px;align-items:center;background:#fff;border:1px solid var(--line);border-radius:10px;padding:9px}
+.calendar-sync-row strong{display:block;font-size:11px}
+.calendar-sync-row small{display:block;color:#999;font-size:9px;margin-top:2px}
+.calendar-sync-row a{font-size:10px;color:var(--purple);text-decoration:none}
+.calendar-status{display:inline-flex;justify-content:center;border-radius:999px;padding:4px 6px;background:#eee9f8;color:#6e5ac5;font-size:9px;font-weight:700}
+.calendar-status.synced{background:#e8f5ef;color:#33866f}
+.calendar-status.failed{background:#ffeceb;color:#c6534d}
+.calendar-sync-form{display:grid;grid-template-columns:1fr 1fr;gap:9px;padding:0;margin-top:10px}
+.calendar-sync-form label,.calendar-sync-form .hint{font-size:10px}
+.calendar-sync-form .wide{grid-column:1/-1;margin:0}
+.calendar-sync-form .primary{grid-column:1/-1;justify-self:end;padding:9px 12px;font-size:11px}
 .link-section{margin-top:27px}
 .task-links{display:grid;gap:8px;margin:10px 0 12px}
 .task-link-card{display:grid;grid-template-columns:31px 1fr;gap:9px;align-items:center;padding:10px;border:1px solid var(--line);border-radius:11px;background:#fbfafc;color:var(--ink);text-decoration:none}
@@ -95,6 +112,9 @@
   .brief-card button{width:100%}
   .link-form{grid-template-columns:1fr}
   .schedule-grid{grid-template-columns:1fr}
+  .calendar-sync-head{flex-direction:column}
+  .calendar-sync-form,.calendar-sync-row{grid-template-columns:1fr}
+  .calendar-sync-form .primary,.small-link{width:100%;justify-content:center}
   .task-link-card{grid-template-columns:34px 1fr}
   .task-edit-form .compact-grid{grid-template-columns:1fr}
   .task-edit-form .primary{width:100%}

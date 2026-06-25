@@ -48,6 +48,42 @@ const camelLink = l => ({
   createdAt: l.created_at
 });
 
+const camelIntegration = i => ({
+  id: i.id,
+  provider: i.provider,
+  ownerId: i.owner_id,
+  teamId: i.team_id,
+  areaId: i.area_id,
+  providerUserId: i.provider_user_id || '',
+  providerTeamId: i.provider_team_id || '',
+  displayName: i.display_name || '',
+  scopes: i.scopes || [],
+  tokenRef: i.token_ref || '',
+  settings: i.settings || {},
+  status: i.status || 'needs_auth',
+  lastSyncedAt: i.last_synced_at,
+  createdAt: i.created_at,
+  updatedAt: i.updated_at
+});
+
+const camelCalendarLink = l => ({
+  id: l.id,
+  taskId: l.task_id,
+  integrationAccountId: l.integration_account_id,
+  calendarId: l.calendar_id || 'primary',
+  providerEventId: l.provider_event_id || '',
+  eventUrl: l.event_url || '',
+  syncDirection: l.sync_direction || 'orbit_to_calendar',
+  status: l.status || 'pending',
+  startAt: l.start_at,
+  endAt: l.end_at,
+  timeZone: l.time_zone || 'Europe/Stockholm',
+  payload: l.payload || {},
+  lastSyncedAt: l.last_synced_at,
+  createdAt: l.created_at,
+  updatedAt: l.updated_at
+});
+
 const cleanLinks = links => (Array.isArray(links) ? links : [])
   .map(link => ({
     kind: link.kind || 'other',
@@ -100,7 +136,9 @@ export async function loadCloudState() {
     taskLinks,
     dailyBriefs,
     agentRuns,
-    invitations
+    invitations,
+    integrations,
+    calendarLinks
   ] = await Promise.all([
     supabase.from('profiles').select('*'),
     supabase.from('teams').select('*'),
@@ -116,10 +154,12 @@ export async function loadCloudState() {
     supabase.from('task_links').select('*').order('created_at', { ascending: false }),
     supabase.from('daily_briefs').select('*').order('created_at', { ascending: false }).limit(30),
     supabase.from('agent_runs').select('*').order('created_at', { ascending: false }).limit(30),
-    supabase.from('invitations').select('*').order('expires_at', { ascending: false })
+    supabase.from('invitations').select('*').order('expires_at', { ascending: false }),
+    supabase.from('integration_accounts').select('*').order('created_at', { ascending: false }),
+    supabase.from('task_calendar_links').select('*').order('created_at', { ascending: false })
   ]);
 
-  const failed = [profiles, teams, members, areas, projects, tasks, dependencies, comments, notifications, activity, approvals, taskLinks, dailyBriefs, agentRuns, invitations].find(r => r.error);
+  const failed = [profiles, teams, members, areas, projects, tasks, dependencies, comments, notifications, activity, approvals, taskLinks, dailyBriefs, agentRuns, invitations, integrations, calendarLinks].find(r => r.error);
   if (failed) throw failed.error;
 
   return {
@@ -151,6 +191,8 @@ export async function loadCloudState() {
     activity: activity.data.map(a => ({ id: a.id, taskId: a.task_id, actorId: a.actor_id, action: a.action, details: a.details, createdAt: a.created_at })),
     approvals: approvals.data.map(a => ({ id: a.id, taskId: a.task_id, requestedFrom: a.requested_from, requestedBy: a.requested_by, status: a.status, note: a.note })),
     taskLinks: taskLinks.data.map(camelLink),
+    integrations: integrations.data.map(camelIntegration),
+    calendarLinks: calendarLinks.data.map(camelCalendarLink),
     dailyBriefs: dailyBriefs.data.map(b => ({
       id: b.id,
       userId: b.user_id,
@@ -268,6 +310,8 @@ export function subscribeToChanges(onChange) {
     .on('postgres_changes', { event: '*', schema: 'public', table: 'notifications' }, onChange)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'task_links' }, onChange)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'daily_briefs' }, onChange)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'integration_accounts' }, onChange)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'task_calendar_links' }, onChange)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'teams' }, onChange)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'team_members' }, onChange)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'areas' }, onChange)
@@ -289,6 +333,54 @@ export async function addTaskLink(taskId, input) {
   const { data, error } = await supabase.from('task_links').insert({ ...link, task_id: taskId, created_by: user.id }).select().single();
   if (error) throw error;
   return camelLink(data);
+}
+
+export async function createCalendarIntegration(input = {}) {
+  const user = (await session())?.user;
+  if (!user) throw new Error('Du är inte inloggad.');
+  const displayName = (input.displayName || 'Google Calendar').trim();
+  const calendarId = (input.calendarId || 'primary').trim() || 'primary';
+
+  const { data, error } = await supabase.from('integration_accounts').insert({
+    provider: 'google_calendar',
+    owner_id: user.id,
+    display_name: displayName,
+    scopes: ['https://www.googleapis.com/auth/calendar.events'],
+    token_ref: '',
+    settings: {
+      calendarId,
+      setup: 'pending_oauth',
+      note: 'Kopplingen är skapad i Orbit. Google OAuth/worker behöver aktiveras server-side innan automatisk sync körs.'
+    },
+    status: 'needs_auth'
+  }).select().single();
+  if (error) throw error;
+  return camelIntegration(data);
+}
+
+export async function queueCalendarSync(taskId, input = {}) {
+  const startAt = nullableIso(input.startAt);
+  const endAt = nullableIso(input.endAt);
+  if (!input.integrationAccountId) throw new Error('Välj en kalenderkoppling.');
+  if (!startAt || !endAt) throw new Error('Kalendersync kräver start- och sluttid.');
+
+  const { data, error } = await supabase.from('task_calendar_links').insert({
+    task_id: taskId,
+    integration_account_id: input.integrationAccountId,
+    calendar_id: input.calendarId || 'primary',
+    sync_direction: 'orbit_to_calendar',
+    status: 'pending',
+    start_at: startAt,
+    end_at: endAt,
+    time_zone: input.timeZone || 'Europe/Stockholm',
+    payload: {
+      title: input.title || '',
+      description: input.description || '',
+      source: 'orbit-web'
+    }
+  }).select().single();
+  if (error) throw error;
+  return camelCalendarLink(data);
 }
 
 export async function saveDailyBrief(input) {
