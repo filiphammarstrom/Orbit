@@ -235,8 +235,14 @@ export async function updateCloudTask(id, patch) {
     row.status = patch.completed ? 'done' : 'todo';
   }
   if ('title' in patch) row.title = patch.title;
+  if ('notes' in patch) row.notes = patch.notes || '';
+  if ('projectId' in patch) row.project_id = patch.projectId || null;
   if ('assigneeId' in patch) row.assignee_id = patch.assigneeId;
+  if ('bucket' in patch) row.bucket = patch.bucket || 'inbox';
+  if ('priority' in patch) row.priority = Number(patch.priority || 3);
+  if ('due' in patch) row.due_text = patch.due || '';
   if ('status' in patch) row.status = patch.status;
+  row.updated_at = new Date().toISOString();
 
   const { data, error } = await supabase.from('tasks').update(row).eq('id', id).select().single();
   if (error) throw error;

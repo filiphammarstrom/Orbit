@@ -50,6 +50,14 @@
 .activation-explain{margin-top:20px;padding:13px;border:1px solid #ded6ff;background:#f6f3ff;border-radius:10px;font-size:10px;color:#6253a4}
 .activation-explain strong{display:block;margin-bottom:4px}
 
+.task-edit-card{margin-top:24px;border:1px solid #e8e1f7;background:#fffdfd;border-radius:13px;padding:0}
+.task-edit-card summary{padding:13px 14px;color:var(--purple);font-size:12px;font-weight:800;list-style:none}
+.task-edit-card summary::-webkit-details-marker{display:none}
+.task-edit-form{padding:0 14px 15px;display:grid;gap:11px}
+.task-edit-form textarea{height:78px;margin-top:6px;background:#fbfafc}
+.task-edit-form .compact-grid{grid-template-columns:1fr 1fr;gap:10px;margin:0}
+.task-edit-form .primary{justify-self:end;padding:10px 14px;font-size:12px}
+
 .brief-card{display:none;align-items:flex-start;justify-content:space-between;gap:18px;margin:-16px 0 28px;padding:18px;border:1px solid #e5defb;background:linear-gradient(135deg,#fff,#f7f3ff);border-radius:16px;box-shadow:0 10px 35px #4932780a}
 .brief-card h2{font:750 17px Manrope;margin:0 0 6px}
 .brief-card p{margin:0;color:#756f80;font-size:12px;line-height:1.5}
@@ -80,4 +88,6 @@
   .brief-card button{width:100%}
   .link-form{grid-template-columns:1fr}
   .task-link-card{grid-template-columns:34px 1fr}
+  .task-edit-form .compact-grid{grid-template-columns:1fr}
+  .task-edit-form .primary{width:100%}
 }

@@ -24,7 +24,7 @@ const area=id=>state.areas.find(a=>a.id===id);
 const team=id=>state.teams.find(t=>t.id===id);
 const areaForProject=id=>area(project(id)?.areaId);
 const membersForArea=a=>a?.teamId?team(a.teamId)?.memberIds.map(person).filter(Boolean):[person(a?.ownerId||'me')];
-const escapeHtml=(s='')=>s.replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
+const escapeHtml=(s='')=>String(s).replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
 const toast=text=>{$('#toast').textContent=text;$('#toast').classList.add('show');setTimeout(()=>$('#toast').classList.remove('show'),2200)};
 const avatarHtml=p=>`<span class="mini-avatar" title="${p.name}" style="background:${p.color}">${p.initials}</span>`;
 const linksForTask=id=>(state.taskLinks||[]).filter(l=>l.taskId===id);
@@ -33,6 +33,11 @@ const safeHref=url=>{const value=(url||'').trim();return !value||/^(javascript|d
 const linkKindLabel=kind=>({email:'Mail',calendar:'Kalender',document:'Dokument',chat:'Chatt',web:'Webb',file:'Fil',mcp:'MCP',other:'Länk'})[kind]||'Länk';
 const linkKindIcon=kind=>({email:'✉',calendar:'◷',document:'▤',chat:'☵',web:'↗',file:'▣',mcp:'✦',other:'↗'})[kind]||'↗';
 const navCount=id=>id==='assigned'?assignedToMe().length:id==='team'?(state.invitations||[]).filter(i=>!i.acceptedAt).length:bucketViews.includes(id)?visible().filter(t=>t.bucket===id).length:0;
+const option=(value,label,selected)=>`<option value="${escapeHtml(value)}" ${String(value)===String(selected||'')?'selected':''}>${escapeHtml(label)}</option>`;
+const projectOptionsHtml=selected=>'<option value="">Personligt / Inbox</option>'+state.areas.map(a=>`<optgroup label="${escapeHtml(a.name)}">${state.projects.filter(p=>p.areaId===a.id).map(p=>option(p.id,p.name,selected)).join('')}</optgroup>`).join('');
+const assigneesForProject=projectId=>{const p=project(projectId);return p?membersForArea(area(p.areaId)):[person(state.currentUserId)]};
+const assigneeOptionsHtml=(projectId,selected)=>{const list=assigneesForProject(projectId);if(selected&&!list.some(p=>p.id===selected))list.push(person(selected));return list.map(p=>option(p.id,p.name,selected||list[0]?.id)).join('')};
+const defaultAssigneeForProject=projectId=>assigneesForProject(projectId)[0]?.id||state.currentUserId;
 
 function renderNav(){
   $('#mainNav').innerHTML=navItems.map(([id,ico,label])=>`<button class="nav-item ${view===id?'active':''}" data-view="${id}"><span class="ico">${ico}</span><span>${label}</span><span class="count">${navCount(id)||''}</span></button>`).join('');
@@ -130,12 +135,58 @@ function renderTaskLinks(t){
   return `<div class="link-section"><h3>Länkar från andra appar · ${links.length}</h3>${links.length?`<div class="task-links">${links.map(l=>`<a class="task-link-card" href="${escapeHtml(safeHref(l.url))}" target="_blank" rel="noreferrer"><span>${linkKindIcon(l.kind)}</span><div><strong>${escapeHtml(l.title||l.url||linkKindLabel(l.kind))}</strong><small>${escapeHtml([l.provider,linkKindLabel(l.kind)].filter(Boolean).join(' · '))}</small></div></a>`).join('')}</div>`:'<p class="hint">Inga länkar ännu. Lägg till mail, dokument, chatt eller annat som hör till uppgiften.</p>'}<form class="link-form" id="taskLinkForm"><select name="kind"><option value="email">Mail</option><option value="calendar">Kalender</option><option value="document">Dokument</option><option value="chat">Chatt</option><option value="web">Webb</option><option value="other">Annat</option></select><input name="title" placeholder="Titel"><input name="url" placeholder="Länk / deep link" required><button>＋</button></form></div>`
 }
 
+function renderTaskEditForm(t){
+  return `<details class="task-edit-card" open>
+    <summary>✎ Redigera uppgift</summary>
+    <form id="taskEditForm" class="task-edit-form">
+      <label>Titel<input name="title" value="${escapeHtml(t.title)}" required></label>
+      <label>Anteckningar<textarea name="notes" placeholder="Lägg till mer kontext…">${escapeHtml(t.notes||'')}</textarea></label>
+      <div class="form-grid compact-grid">
+        <label>Var<select name="bucket">${[['inbox','Inbox'],['today','Gör idag'],['later','Gör sen'],['someday','Gör nån gång']].map(([id,label])=>option(id,label,t.bucket)).join('')}</select></label>
+        <label>Status<select name="status">${[['todo','Att göra'],['planned','Planerad'],['doing','Pågår'],['waiting','Väntar'],['review','Granskning']].map(([id,label])=>option(id,label,t.status)).join('')}</select></label>
+        <label>Projekt<select name="projectId" id="editProjectSelect">${projectOptionsHtml(t.projectId||'')}</select></label>
+        <label>Tilldelad<select name="assigneeId" id="editAssigneeSelect">${assigneeOptionsHtml(t.projectId,t.assigneeId)}</select></label>
+        <label>Prioritet<select name="priority">${[[1,'P1 — Hög'],[2,'P2 — Medium'],[3,'P3 — Låg']].map(([id,label])=>option(id,label,t.priority)).join('')}</select></label>
+        <label>Datum / påminnelse<input name="due" value="${escapeHtml(t.due||'')}" placeholder="T.ex. fredag 14:00"></label>
+      </div>
+      <button class="primary" type="submit">Spara ändringar</button>
+    </form>
+  </details>`;
+}
+
+function bindTaskEditForm(id){
+  const form=$('#taskEditForm');if(!form)return;
+  const projectSelect=$('#editProjectSelect'),assigneeSelect=$('#editAssigneeSelect');
+  projectSelect.onchange=()=>{assigneeSelect.innerHTML=assigneeOptionsHtml(projectSelect.value,defaultAssigneeForProject(projectSelect.value))};
+  form.onsubmit=async e=>{
+    e.preventDefault();
+    const data=Object.fromEntries(new FormData(form));
+    if(!data.title.trim()){toast('Titel saknas.');return}
+    const projectId=data.projectId||null;
+    const assigneeId=projectId?data.assigneeId:state.currentUserId;
+    await api('/tasks/'+id,{method:'PATCH',body:JSON.stringify({
+      title:data.title.trim(),
+      notes:data.notes||'',
+      bucket:data.bucket,
+      status:data.status,
+      projectId,
+      assigneeId,
+      priority:Number(data.priority||3),
+      due:data.due||''
+    })});
+    await load();
+    openInspector(id);
+    toast('Uppgiften är uppdaterad.');
+  };
+}
+
 function openInspector(id){
   const t=state.tasks.find(x=>x.id===id);if(!t)return;
   const p=project(t.projectId),a=person(t.assigneeId),ar=areaForProject(t.projectId),tm=team(ar?.teamId),subs=childrenOf(t.id),comments=(state.comments||[]).filter(c=>c.taskId===id);
-  $('#inspectorContent').innerHTML=`<p class="eyebrow">${ar?escapeHtml(ar.name).toUpperCase():'UPPGIFT'}</p><button class="check big-check p${t.priority}" id="detailCheck"></button><h2>${escapeHtml(t.title)}</h2>${subs.length?`<div class="parent-lock">Huvuduppgiften blir klar automatiskt när alla ${subs.length} delsteg är klara.</div>`:''}${t.activationReason?`<div class="activation-explain"><strong>✦ Varför ser jag detta nu?</strong>${escapeHtml(t.activationReason)}${t.activatedAt?` · ${new Date(t.activatedAt).toLocaleString('sv-SE')}`:''}</div>`:''}${t.notes?`<p style="color:#777;font-size:13px;line-height:1.6">${escapeHtml(t.notes)}</p>`:''}<div class="detail-row"><span>Status</span><strong class="status-chip">${statusLabel(t.status)}</strong></div><div class="detail-row"><span>Område</span><strong>${ar?ar.icon+' '+ar.name:'Personligt'}</strong></div><div class="detail-row"><span>Projekt</span><strong>${p?p.name:'Inbox'}</strong></div><div class="detail-row"><span>Tilldelad</span><strong>${a.name}</strong></div><div class="detail-row"><span>Åtkomst</span><strong>${tm?tm.name:'Endast du'}</strong></div><div class="detail-row"><span>När</span><strong>${t.due||'Inget datum'}</strong></div>${subs.length?`<div class="inspector-subtasks"><h3>Underuppgifter · ${subs.filter(s=>s.completed).length}/${subs.length}</h3>${subs.map(s=>`<div class="inspector-subtask ${s.completed?'done':''} ${!s.visible?'waiting':''}">${s.completed?'✓':s.visible?`<button class="check p${s.priority}" data-id="${s.id}"></button>`:'⚡'}<span>${escapeHtml(s.title)}</span><small>${!s.visible?'Väntar':person(s.assigneeId).initials}</small></div>`).join('')}</div>`:''}${t.trigger?`<div class="trigger-box"><strong>⚡ Aktiverad av villkor</strong>${escapeHtml(t.trigger.label||'Ett externt villkor')}</div>`:''}${renderTaskLinks(t)}<div class="comment-section"><h3>Kommentarer · ${comments.length}</h3>${comments.map(c=>`<div class="comment">${avatarHtml(person(c.authorId))}<div><p>${escapeHtml(c.body)}</p><time>${new Date(c.createdAt).toLocaleString('sv-SE')}</time></div></div>`).join('')}<form class="comment-form" id="commentForm"><input name="comment" placeholder="Skriv en kommentar eller @nämn någon…" required><button>Skicka</button></form></div>`;
+  $('#inspectorContent').innerHTML=`<p class="eyebrow">${ar?escapeHtml(ar.name).toUpperCase():'UPPGIFT'}</p><button class="check big-check p${t.priority}" id="detailCheck"></button><h2>${escapeHtml(t.title)}</h2>${subs.length?`<div class="parent-lock">Huvuduppgiften blir klar automatiskt när alla ${subs.length} delsteg är klara.</div>`:''}${t.activationReason?`<div class="activation-explain"><strong>✦ Varför ser jag detta nu?</strong>${escapeHtml(t.activationReason)}${t.activatedAt?` · ${new Date(t.activatedAt).toLocaleString('sv-SE')}`:''}</div>`:''}${t.notes?`<p style="color:#777;font-size:13px;line-height:1.6">${escapeHtml(t.notes)}</p>`:''}<div class="detail-row"><span>Status</span><strong class="status-chip">${statusLabel(t.status)}</strong></div><div class="detail-row"><span>Område</span><strong>${ar?ar.icon+' '+ar.name:'Personligt'}</strong></div><div class="detail-row"><span>Projekt</span><strong>${p?p.name:'Inbox'}</strong></div><div class="detail-row"><span>Tilldelad</span><strong>${a.name}</strong></div><div class="detail-row"><span>Åtkomst</span><strong>${tm?tm.name:'Endast du'}</strong></div><div class="detail-row"><span>När</span><strong>${t.due||'Inget datum'}</strong></div>${renderTaskEditForm(t)}${subs.length?`<div class="inspector-subtasks"><h3>Underuppgifter · ${subs.filter(s=>s.completed).length}/${subs.length}</h3>${subs.map(s=>`<div class="inspector-subtask ${s.completed?'done':''} ${!s.visible?'waiting':''}">${s.completed?'✓':s.visible?`<button class="check p${s.priority}" data-id="${s.id}"></button>`:'⚡'}<span>${escapeHtml(s.title)}</span><small>${!s.visible?'Väntar':person(s.assigneeId).initials}</small></div>`).join('')}</div>`:''}${t.trigger?`<div class="trigger-box"><strong>⚡ Aktiverad av villkor</strong>${escapeHtml(t.trigger.label||'Ett externt villkor')}</div>`:''}${renderTaskLinks(t)}<div class="comment-section"><h3>Kommentarer · ${comments.length}</h3>${comments.map(c=>`<div class="comment">${avatarHtml(person(c.authorId))}<div><p>${escapeHtml(c.body)}</p><time>${new Date(c.createdAt).toLocaleString('sv-SE')}</time></div></div>`).join('')}<form class="comment-form" id="commentForm"><input name="comment" placeholder="Skriv en kommentar eller @nämn någon…" required><button>Skicka</button></form></div>`;
   $('#detailCheck').onclick=()=>{complete(id);if(!subs.length)$('#inspector').classList.remove('open')};
   document.querySelectorAll('.inspector-subtask .check').forEach(b=>b.onclick=async()=>{await complete(b.dataset.id);openInspector(id)});
+  bindTaskEditForm(id);
   $('#taskLinkForm').onsubmit=async e=>{e.preventDefault();const f=new FormData(e.target);await addTaskLink(id,{kind:f.get('kind'),title:f.get('title'),url:f.get('url')});await load();openInspector(id);toast('Länken är tillagd.')};
   $('#commentForm').onsubmit=async e=>{e.preventDefault();const body=new FormData(e.target).get('comment');await addComment(id,body);await load();openInspector(id)};
   $('#inspector').classList.add('open')
@@ -162,9 +213,9 @@ function renderDailyBrief(){
   $('#briefFocusTasks').querySelectorAll('button').forEach(b=>b.onclick=()=>openInspector(b.dataset.id));
   $('#generateBrief').onclick=async()=>{const generated=buildDailyBrief();await saveDailyBrief(generated);await load();toast('Dagens brief är uppdaterad.')};
 }
-function refreshAssignees(){const p=project($('#projectSelect').value),members=p?membersForArea(area(p.areaId)):[person(state.currentUserId)];$('#assigneeSelect').innerHTML=members.map(p=>`<option value="${p.id}">${p.name}</option>`).join('')}
+function refreshAssignees(){const projectId=$('#projectSelect').value;$('#assigneeSelect').innerHTML=assigneeOptionsHtml(projectId,defaultAssigneeForProject(projectId))}
 function openDialog(){
-  $('#projectSelect').innerHTML='<option value="">Personligt / Inbox</option>'+state.areas.map(a=>`<optgroup label="${a.name}">${state.projects.filter(p=>p.areaId===a.id).map(p=>`<option value="${p.id}">${p.name}</option>`).join('')}</optgroup>`).join('');
+  $('#projectSelect').innerHTML=projectOptionsHtml('');
   if(view.startsWith('project:'))$('#projectSelect').value=view.split(':')[1]; else if(bucketViews.includes(view))$('#taskForm').elements.bucket.value=view;
   const candidates=state.tasks.filter(t=>!t.completed&&t.visible);
   $('#parentTaskSelect').innerHTML='<option value="">Ingen — fristående uppgift</option>'+candidates.map(t=>`<option value="${t.id}">${escapeHtml(t.title)}</option>`).join('');
