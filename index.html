@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="sv">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Orbit — din dag, i rätt ordning</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="mobile.css">
+  <link rel="stylesheet" href="areas.css">
+  <link rel="stylesheet" href="subtasks.css">
+  <link rel="stylesheet" href="auth.css">
+  <link rel="stylesheet" href="project-management.css">
+</head>
+<body>
+  <section class="auth-screen" id="authScreen">
+    <div class="auth-brand"><span class="brandmark">O</span><span>orbit</span></div>
+    <div class="auth-card"><p class="eyebrow">DIN GEMENSAMMA ARBETSYTA</p><h1 id="authTitle">Välkommen tillbaka</h1><p class="auth-copy">Logga in för att se dina områden, team och uppgifter.</p><form id="authForm"><label id="nameLabel">Namn<input name="name" autocomplete="name" placeholder="Ditt namn"></label><label>E-post<input name="email" type="email" autocomplete="email" required placeholder="du@exempel.se"></label><label>Lösenord<input name="password" type="password" autocomplete="current-password" minlength="8" required placeholder="Minst 8 tecken"></label><button class="primary" id="authSubmit">Logga in</button></form><button class="auth-switch" id="authSwitch">Inget konto? Skapa ett</button><p class="auth-error" id="authError"></p><div class="config-help" id="configHelp">Molnanslutningen saknas. Kopiera <code>.env.example</code> till <code>.env</code> och fyll i Supabase-adressen och den publika nyckeln.</div></div>
+  </section>
+  <aside class="sidebar">
+    <div class="brand"><span class="brandmark">O</span><span>orbit</span><button class="collapse">‹</button></div>
+    <button class="quick-add" id="quickAdd"><span>＋</span> Ny uppgift <kbd>N</kbd></button>
+    <nav id="mainNav"></nav>
+    <div class="nav-section"><div class="nav-label"><span>OMRÅDEN</span><button title="Nytt område">＋</button></div><div id="projectNav"></div></div>
+    <div class="sidebar-foot"><div class="avatar">FH</div><div><strong id="currentUserName">Mitt konto</strong><small>Min arbetsyta</small></div><button id="logoutButton" title="Logga ut">↪</button></div>
+  </aside>
+  <main>
+    <header><div><p class="eyebrow" id="eyebrow">MIN DAG</p><h1 id="pageTitle">Gör idag</h1><p id="subtitle"></p></div><div class="header-actions"><button class="icon-btn" title="Sök">⌕</button><button class="icon-btn" id="notificationButton" title="Notiser">♢<i id="notificationDot"></i><b id="notificationCount"></b></button></div></header>
+    <section class="project-toolbar" id="projectToolbar"><div id="projectHealth"></div><div class="view-switcher"><button data-project-view="list" class="active">☷ Lista</button><button data-project-view="board">▦ Tavla</button><button data-project-view="calendar">□ Kalender</button><button data-project-view="flow">⌁ Flöde</button></div></section>
+    <section class="focus-card" id="focusCard"><div class="focus-icon">✦</div><div><strong>Du har <span id="todayCount">0</span> saker framför dig</strong><p>Ett tydligt nästa steg i taget.</p></div><div class="progress"><svg viewBox="0 0 42 42"><circle cx="21" cy="21" r="16"></circle><circle class="done-ring" cx="21" cy="21" r="16"></circle></svg><span id="progressText">0%</span></div></section>
+    <section class="brief-card" id="briefCard"><div><p class="eyebrow">DAGLIG AI</p><h2>Dagens sammanfattning</h2><p id="briefSummary">Skapa en kort MCP/AI-brief av dagens uppgifter.</p><div id="briefFocusTasks"></div></div><button class="secondary" id="generateBrief">Uppdatera brief</button></section>
+    <section class="task-section"><div class="section-head"><h2 id="sectionTitle">Att göra</h2><div><button class="filter">☷ Visa</button><button class="filter">↕ Sortera</button></div></div><div id="taskList"></div><button class="add-row" id="addRow">＋ Lägg till uppgift</button></section>
+  </main>
+  <aside class="inspector" id="inspector"><button class="close" id="closeInspector">×</button><div id="inspectorContent"></div></aside>
+  <aside class="notification-panel" id="notificationPanel"><div class="notification-head"><div><p class="eyebrow">UPPDATERINGAR</p><h2>Notiser</h2></div><button class="close" id="closeNotifications">×</button></div><div id="notificationList"></div></aside>
+  <button class="mobile-fab" id="mobileAdd" aria-label="Ny uppgift">＋</button>
+  <nav class="mobile-nav" id="mobileNav" aria-label="Huvudnavigation"></nav>
+  <dialog id="taskDialog">
+    <form method="dialog" id="taskForm">
+      <div class="dialog-head"><div><p class="eyebrow">NY UPPGIFT</p><h2>Fånga nästa steg</h2></div><button value="cancel" class="close">×</button></div>
+      <input id="newTitle" name="title" placeholder="Vad behöver göras?" autocomplete="off" required>
+      <textarea name="notes" placeholder="Anteckningar (valfritt)"></textarea>
+      <div class="form-grid">
+        <label>Var<select name="bucket"><option value="inbox">Inbox</option><option value="today">Gör idag</option><option value="later">Gör sen</option><option value="someday">Gör nån gång</option></select></label>
+        <label>Projekt<select name="projectId" id="projectSelect"></select></label>
+        <label>Tilldelad<select name="assigneeId" id="assigneeSelect"></select></label>
+        <label>Prioritet<select name="priority"><option value="1">P1 — Hög</option><option value="2">P2 — Medium</option><option value="3" selected>P3 — Låg</option></select></label>
+        <label>Status<select name="status"><option value="todo">Att göra</option><option value="planned">Planerad</option><option value="doing">Pågår</option><option value="waiting">Väntar</option><option value="review">Granskning</option></select></label>
+        <label>Typ<select name="taskType"><option value="task">Uppgift</option><option value="milestone">Milstolpe</option><option value="approval">Godkännande</option></select></label>
+        <label>Underuppgift till<select name="parentTaskId" id="parentTaskSelect"><option value="">Ingen — fristående uppgift</option></select></label>
+        <label>Återkommer<select name="recurrenceRule"><option value="">Nej</option><option value="daily">Dagligen</option><option value="weekly">Varje vecka</option><option value="monthly">Varje månad</option></select></label>
+      </div>
+      <label>Datum, tid eller påminnelse<input name="due" placeholder="T.ex. fredag 14:00"></label>
+      <details>
+        <summary>↗ Lägg till länk från annan app</summary>
+        <div class="form-grid link-grid">
+          <label>Typ<select name="linkKind"><option value="email">Mail</option><option value="calendar">Kalender</option><option value="document">Dokument</option><option value="chat">Chatt</option><option value="web">Webb</option><option value="other">Annat</option></select></label>
+          <label>App<input name="linkProvider" placeholder="Gmail, Outlook, Slack…"></label>
+          <label>Titel<input name="linkTitle" placeholder="T.ex. Mailet från Pelle"></label>
+          <label>Länk / deep link<input name="linkUrl" placeholder="https://mail.google.com/…"></label>
+        </div>
+        <p class="hint">Perfekt för “svara på det här mailet”, “läs det här dokumentet” eller “följ upp den här chatten”.</p>
+      </details>
+      <details>
+        <summary>＋ Lägg till villkor eller kedja</summary>
+        <div class="form-grid trigger-grid">
+          <label>Typ<select name="triggerType" id="triggerType"><option value="">Ingen trigger</option><option value="task_completed">När uppgifter är klara</option><option value="external_event">När en extern händelse sker</option></select></label>
+          <label>Villkorslogik<select name="activationMode"><option value="all">Alla valda måste vara klara</option><option value="any">Minst en måste vara klar</option></select></label>
+          <label>Föregående uppgifter<select name="dependencyTaskIds" id="dependencyTaskSelect" multiple size="4"></select></label>
+          <label>Extern händelse<input name="triggerValue" id="externalTriggerValue" placeholder="T.ex. pelle_replied_email"></label>
+        </div>
+        <p class="hint">Uppgiften förblir helt dold tills villkoret uppfylls. Håll Ctrl/⌘ för att välja flera uppgifter.</p>
+      </details>
+      <div class="dialog-actions"><button value="cancel" class="secondary">Avbryt</button><button value="default" id="saveTask" class="primary">Skapa uppgift <span>↵</span></button></div>
+    </form>
+  </dialog>
+  <div class="toast" id="toast"></div>
+  <script type="module" src="app.js"></script>
+</body></html>

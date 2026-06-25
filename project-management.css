@@ -1,0 +1,83 @@
+.project-toolbar{display:none;align-items:center;justify-content:space-between;margin:-12px 0 24px;padding:12px 14px;background:#fff;border:1px solid var(--line);border-radius:12px}
+.project-toolbar.open{display:flex}
+.health-pill{display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:600}
+.health-pill i{width:8px;height:8px;border-radius:50%}
+.view-switcher{display:flex;background:#f4f2f6;padding:3px;border-radius:8px}
+.view-switcher button{border:0;background:transparent;color:#88828f;border-radius:6px;padding:6px 9px;font-size:10px}
+.view-switcher button.active{background:#fff;color:var(--ink);box-shadow:0 1px 5px #33234f15}
+
+.board{display:grid;grid-template-columns:repeat(4,minmax(180px,1fr));gap:12px;overflow:auto;padding-bottom:15px}
+.board-column{background:#f4f2f5;border-radius:12px;padding:11px;min-height:220px}
+.board-column h3{font:700 10px Manrope;letter-spacing:.06em;color:#8a8590;margin:2px 3px 11px}
+.board-card{display:block;width:100%;border:1px solid #e9e5ec;background:#fff;border-radius:9px;padding:11px;text-align:left;margin-bottom:8px;box-shadow:0 2px 8px #3c2b5c0a}
+.board-card strong{display:block;font-size:11px;line-height:1.4;margin-bottom:9px}
+
+.calendar-view{display:grid;grid-template-columns:repeat(7,1fr);border:1px solid var(--line);border-radius:12px;overflow:hidden;background:#fff}
+.calendar-day{min-height:125px;border-right:1px solid var(--line);padding:10px}
+.calendar-day:last-child{border:0}
+.calendar-day h3{font-size:10px;color:#999;margin:0 0 9px}
+.calendar-task{font-size:9px;background:var(--purple-soft);color:#5947a4;padding:6px;border-radius:6px;margin-bottom:5px}
+
+.flow-view{display:flex;align-items:flex-start;gap:36px;overflow:auto;padding:30px 10px;min-height:260px}
+.flow-node{position:relative;min-width:170px;max-width:190px;border:1px solid var(--line);background:#fff;border-radius:12px;padding:13px;box-shadow:0 5px 18px #3424500d}
+.flow-node:not(:last-child):after{content:'→';position:absolute;right:-26px;top:50%;color:#aaa}
+.flow-node.waiting{border-style:dashed;opacity:.65}
+.flow-node small{display:block;color:#999;margin-top:7px}
+
+.status-chip{display:inline-flex!important;padding:3px 6px;border-radius:5px;background:#f0edf3;color:#776f7e;font-size:9px!important}
+
+.notification-panel{position:fixed;right:18px;top:18px;bottom:18px;width:370px;background:#fff;border-radius:18px;box-shadow:var(--shadow);z-index:40;padding:25px;transform:translateX(calc(100% + 40px));transition:.25s;overflow:auto}
+.notification-panel.open{transform:none}
+.notification-head{display:flex;justify-content:space-between}
+.notification-head h2{font:750 22px Manrope;margin:0 0 20px}
+.notification-item{width:100%;border:0;border-bottom:1px solid var(--line);background:transparent;text-align:left;padding:13px 5px;display:grid;grid-template-columns:9px 1fr;gap:8px}
+.notification-item.unread:before{content:'';width:7px;height:7px;background:var(--purple);border-radius:50%;margin-top:5px}
+.notification-item:not(.unread):before{content:''}
+.notification-item strong{display:block;font-size:12px}
+.notification-item p{font-size:10px;color:#888;margin:4px 0}
+.notification-item time{font-size:9px;color:#aaa}
+.icon-btn b{position:absolute;right:-5px;top:-6px;background:var(--purple);color:#fff;border-radius:9px;min-width:17px;height:17px;padding:2px;font:700 8px DM Sans;display:none}
+
+.comment-section{margin-top:28px}
+.comment-section h3,.link-section h3{font:700 13px Manrope}
+.comment{display:grid;grid-template-columns:27px 1fr;gap:8px;margin:13px 0}
+.comment p{margin:0;font-size:11px;line-height:1.5}
+.comment time{font-size:8px;color:#aaa}
+.comment-form{display:flex;gap:7px;margin-top:13px}
+.comment-form input{font-size:12px}
+.comment-form button{border:0;background:var(--purple);color:#fff;border-radius:8px;padding:0 12px}
+
+.activation-explain{margin-top:20px;padding:13px;border:1px solid #ded6ff;background:#f6f3ff;border-radius:10px;font-size:10px;color:#6253a4}
+.activation-explain strong{display:block;margin-bottom:4px}
+
+.brief-card{display:none;align-items:flex-start;justify-content:space-between;gap:18px;margin:-16px 0 28px;padding:18px;border:1px solid #e5defb;background:linear-gradient(135deg,#fff,#f7f3ff);border-radius:16px;box-shadow:0 10px 35px #4932780a}
+.brief-card h2{font:750 17px Manrope;margin:0 0 6px}
+.brief-card p{margin:0;color:#756f80;font-size:12px;line-height:1.5}
+.brief-card button{white-space:nowrap}
+.brief-tags{display:flex;flex-wrap:wrap;gap:7px;margin-top:12px}
+.brief-tags button,.brief-tags span{border:0;background:#fff;border-radius:999px;padding:6px 9px;color:#675c78;font-size:10px;box-shadow:0 1px 7px #33234f0d}
+
+.context-count{color:#6f58d9}
+.link-section{margin-top:27px}
+.task-links{display:grid;gap:8px;margin:10px 0 12px}
+.task-link-card{display:grid;grid-template-columns:31px 1fr;gap:9px;align-items:center;padding:10px;border:1px solid var(--line);border-radius:11px;background:#fbfafc;color:var(--ink);text-decoration:none}
+.task-link-card:hover{border-color:#cfc5ff;background:#f7f3ff}
+.task-link-card>span{width:31px;height:31px;border-radius:9px;background:var(--purple-soft);color:var(--purple);display:grid;place-items:center}
+.task-link-card strong{display:block;font-size:11px}
+.task-link-card small{display:block;color:#999;font-size:9px;margin-top:2px}
+.link-form{display:grid;grid-template-columns:88px 1fr 1fr 34px;gap:6px;padding:0;margin-top:9px}
+.link-form input,.link-form select{font-size:11px;padding:9px}
+.link-form button{border:0;border-radius:8px;background:var(--purple);color:#fff}
+.link-grid{align-items:end}
+
+@media(max-width:800px){
+  .project-toolbar{display:none!important}
+  .notification-panel{inset:18px 0 0;width:100%;border-radius:22px 22px 0 0}
+  .board{grid-template-columns:repeat(4,78vw)}
+  .calendar-view{grid-template-columns:repeat(7,65vw);overflow:auto}
+  .flow-view{padding-bottom:100px}
+  .brief-card{flex-direction:column;margin:-3px 0 18px}
+  .brief-card button{width:100%}
+  .link-form{grid-template-columns:1fr}
+  .task-link-card{grid-template-columns:34px 1fr}
+}
