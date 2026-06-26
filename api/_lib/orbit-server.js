@@ -2,6 +2,15 @@ import { createCipheriv, createDecipheriv, createHash, createHmac, randomBytes, 
 import { createClient } from '@supabase/supabase-js';
 
 const GOOGLE_SCOPES = ['https://www.googleapis.com/auth/calendar.events'];
+const DEFAULT_SLACK_SCOPES = [
+  'channels:history',
+  'groups:history',
+  'im:history',
+  'mpim:history',
+  'reactions:read',
+  'team:read',
+  'chat:write'
+];
 let cachedAdmin;
 let cachedUserKey;
 
@@ -18,7 +27,7 @@ export function requireEnv(name) {
   return value;
 }
 
-function requireAnyEnv(names) {
+export function requireAnyEnv(names) {
   const entry = names.find(name => process.env[name]);
   if (!entry) throw new HttpError(500, `Saknar serverkonfiguration: ${names.join(' eller ')}`);
   return process.env[entry];
@@ -75,6 +84,10 @@ export function googleRedirectUri(req) {
   return process.env.GOOGLE_REDIRECT_URI || `${appUrl(req)}/api/google-auth-callback`;
 }
 
+export function slackRedirectUri(req) {
+  return process.env.SLACK_REDIRECT_URI || `${appUrl(req)}/api/slack-auth-callback`;
+}
+
 export async function authenticatedUser(req) {
   const token = bearerToken(req);
   if (!token) throw new HttpError(401, 'Saknar inloggnings-token.');
@@ -129,6 +142,29 @@ export function googleAuthUrl(req, user) {
   return `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
 }
 
+function slackScopes() {
+  return (process.env.SLACK_SCOPES || DEFAULT_SLACK_SCOPES.join(','))
+    .split(',')
+    .map(scope => scope.trim())
+    .filter(Boolean);
+}
+
+export function slackAuthUrl(req, user) {
+  const state = signOAuthState({
+    provider: 'slack',
+    userId: user.id,
+    returnTo: appUrl(req),
+    exp: Date.now() + 10 * 60 * 1000
+  });
+  const params = new URLSearchParams({
+    client_id: requireEnv('SLACK_CLIENT_ID'),
+    redirect_uri: slackRedirectUri(req),
+    scope: slackScopes().join(','),
+    state
+  });
+  return `https://slack.com/oauth/v2/authorize?${params.toString()}`;
+}
+
 export async function exchangeGoogleCode(req, code) {
   const response = await fetch('https://oauth2.googleapis.com/token', {
     method: 'POST',
@@ -145,6 +181,23 @@ export async function exchangeGoogleCode(req, code) {
   const token = await response.json();
   if (!response.ok) throw new HttpError(400, token.error_description || token.error || 'Google OAuth misslyckades.');
   return normalizeGoogleToken(token);
+}
+
+export async function exchangeSlackCode(req, code) {
+  const response = await fetch('https://slack.com/api/oauth.v2.access', {
+    method: 'POST',
+    headers: { 'content-type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      client_id: requireEnv('SLACK_CLIENT_ID'),
+      client_secret: requireEnv('SLACK_CLIENT_SECRET'),
+      code,
+      redirect_uri: slackRedirectUri(req)
+    })
+  });
+
+  const token = await response.json();
+  if (!response.ok || !token.ok) throw new HttpError(400, token.error || 'Slack OAuth misslyckades.');
+  return token;
 }
 
 export async function refreshGoogleToken(integration, token) {
@@ -181,7 +234,7 @@ function normalizeGoogleToken(token) {
 }
 
 function encryptionKey() {
-  return createHash('sha256').update(requireEnv('GOOGLE_TOKEN_ENCRYPTION_KEY')).digest();
+  return createHash('sha256').update(requireAnyEnv(['INTEGRATION_TOKEN_ENCRYPTION_KEY', 'GOOGLE_TOKEN_ENCRYPTION_KEY'])).digest();
 }
 
 export function encryptToken(payload) {
@@ -248,4 +301,27 @@ export async function createGoogleCalendarEvent({ accessToken, calendarId, event
   }
   if (!response.ok) throw new HttpError(response.status, data.error?.message || 'Kunde inte skapa Google Calendar-event.');
   return data;
+}
+
+export async function rawBody(req) {
+  if (typeof req.body === 'string') return req.body;
+  if (Buffer.isBuffer(req.body)) return req.body.toString('utf8');
+  const chunks = [];
+  for await (const chunk of req) chunks.push(Buffer.from(chunk));
+  if (chunks.length) return Buffer.concat(chunks).toString('utf8');
+  return req.body ? JSON.stringify(req.body) : '';
+}
+
+export function verifySlackSignature(req, body) {
+  const timestamp = req.headers['x-slack-request-timestamp'];
+  const signature = req.headers['x-slack-signature'];
+  if (!timestamp || !signature) throw new HttpError(401, 'Slack-signatur saknas.');
+  if (Math.abs(Date.now() / 1000 - Number(timestamp)) > 60 * 5) throw new HttpError(401, 'Slack-signaturen är för gammal.');
+
+  const base = `v0:${timestamp}:${body}`;
+  const expected = `v0=${createHmac('sha256', requireEnv('SLACK_SIGNING_SECRET')).update(base).digest('hex')}`;
+  const signatureBuffer = Buffer.from(String(signature));
+  const expectedBuffer = Buffer.from(expected);
+  const valid = signatureBuffer.length === expectedBuffer.length && timingSafeEqual(signatureBuffer, expectedBuffer);
+  if (!valid) throw new HttpError(401, 'Slack-signaturen kunde inte verifieras.');
 }

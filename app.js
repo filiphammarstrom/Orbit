@@ -1,4 +1,4 @@
-import { configured, session, signIn, signUp, signOut, loadCloudState, createCloudTask, updateCloudTask, subscribeToChanges, addComment, addTaskLink, startGoogleCalendarOAuth, syncCalendarLinkNow, queueCalendarSync, saveDailyBrief, markNotificationRead, decideApproval, createTeam, createInvitation, shareAreaWithTeam } from './cloud.js';
+import { configured, session, signIn, signUp, signOut, loadCloudState, createCloudTask, updateCloudTask, subscribeToChanges, addComment, addTaskLink, startGoogleCalendarOAuth, startSlackOAuth, syncCalendarLinkNow, queueCalendarSync, saveDailyBrief, markNotificationRead, decideApproval, createTeam, createInvitation, shareAreaWithTeam } from './cloud.js';
 
 let state, view = 'today', projectView='list', liveChannel;
 const $ = s => document.querySelector(s);
@@ -30,6 +30,7 @@ const avatarHtml=p=>`<span class="mini-avatar" title="${p.name}" style="backgrou
 const linksForTask=id=>(state.taskLinks||[]).filter(l=>l.taskId===id);
 const calendarLinksForTask=id=>(state.calendarLinks||[]).filter(l=>l.taskId===id);
 const googleCalendarIntegrations=()=>(state.integrations||[]).filter(i=>i.provider==='google_calendar');
+const slackIntegrations=()=>(state.integrations||[]).filter(i=>i.provider==='slack');
 const localDateISO=(date=new Date())=>new Date(date.getTime()-date.getTimezoneOffset()*60000).toISOString().slice(0,10);
 const startOfLocalDay=(date=new Date())=>{const d=new Date(date);d.setHours(0,0,0,0);return d};
 const toDateTimeLocalValue=iso=>{if(!iso)return'';const d=new Date(iso);return Number.isNaN(d.getTime())?'':new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,16)};
@@ -148,6 +149,10 @@ function teamSharingContent(){
       <div><p class="eyebrow">NYTT TEAM</p><h3>Skapa en grupp för jobb, privat eller båt</h3><p>Team styr vilka personer som får se områden och projekt.</p></div>
       <form id="createTeamForm" class="inline-form"><input name="name" placeholder="T.ex. Jobbteamet" required><button class="primary">Skapa team</button></form>
     </section>
+    <section class="integration-card">
+      <div><p class="eyebrow">INTEGRATIONER</p><h3>Slack</h3><p>${slackIntegrations().length?`${slackIntegrations().length} Slack-workspace är ansluten.`:'Koppla Slack för att Orbit ska kunna ta emot meddelandehändelser och länka Slack-trådar till uppgifter.'}</p></div>
+      <button class="secondary" id="slackOAuthButton">${slackIntegrations().length?'Anslut igen':'Anslut Slack'}</button>
+    </section>
     <section class="team-grid">${state.teams.length?state.teams.map(teamCard).join(''):'<div class="empty card-empty">Inga team ännu. Skapa ditt första ovan.</div>'}</section>
     <section class="share-areas-card">
       <div class="share-head"><div><p class="eyebrow">OMRÅDESÅTKOMST</p><h3>Dela områden med rätt team</h3></div><span>${state.areas.length} områden</span></div>
@@ -173,6 +178,7 @@ function areaShareRow(a){
 
 function bindTeamSharing(){
   $('#createTeamForm')?.addEventListener('submit',async e=>{e.preventDefault();const name=new FormData(e.target).get('name').trim();if(!name)return;await createTeam(name);await load();toast('Teamet är skapat.')});
+  $('#slackOAuthButton')?.addEventListener('click',async e=>{try{e.currentTarget.disabled=true;const url=await startSlackOAuth();window.location.href=url}catch(error){e.currentTarget.disabled=false;toast(error.message)}});
   document.querySelectorAll('.invite-form').forEach(f=>f.onsubmit=async e=>{e.preventDefault();const data=new FormData(e.target),email=data.get('email').trim().toLowerCase();if(!email)return;const invite=await createInvitation(e.target.dataset.team,email,data.get('role'));await load();toast(invite.acceptedAt?'Personen är redan medlem nu.':'Inbjudan är skapad.')});
   document.querySelectorAll('[data-area-share]').forEach(s=>s.onchange=async()=>{await shareAreaWithTeam(s.dataset.areaShare,s.value||null);await load();toast(s.value?'Området är delat med teamet.':'Området är privat igen.')});
 }

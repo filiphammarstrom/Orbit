@@ -95,6 +95,11 @@ Google Calendar kräver dessa Vercel environment variables:
 - `OAUTH_STATE_SECRET`
 - `CRON_SECRET`
 - `APP_URL`, t.ex. `https://orbit-iota-sage.vercel.app`
+- `SLACK_CLIENT_ID`
+- `SLACK_CLIENT_SECRET`
+- `SLACK_SIGNING_SECRET`
+- `SLACK_REDIRECT_URI`, t.ex. `https://orbit-iota-sage.vercel.app/api/slack-auth-callback`
+- `SLACK_SCOPES`, valfritt om du vill justera scopes
 
 Google Calendar-flödet:
 
@@ -113,7 +118,12 @@ Cron-schemat i `vercel.json` är satt till dagligen (`0 6 * * *`) för att funge
 
 Slack-flödet:
 
-1. Installera Slack-appen med rätt scopes och Events API.
-2. Registrera workspace-kopplingen med `register_integration`.
-3. Använd `create_task_from_slack` för att skapa task från ett meddelande, eller `link_slack_message` för att koppla en tråd till en befintlig task.
-4. `ingest_integration_event` kan spara inkommande Slack-events och samtidigt aktivera dolda tasks via ett triggernamn.
+1. Skapa en Slack-app och lägg redirect URL: `https://orbit-iota-sage.vercel.app/api/slack-auth-callback`.
+2. Lägg Events API Request URL: `https://orbit-iota-sage.vercel.app/api/slack-events`.
+3. Lägg minst dessa bot scopes: `channels:history`, `groups:history`, `im:history`, `mpim:history`, `reactions:read`, `team:read`, `chat:write`.
+4. Lägg Vercel-miljövariablerna `SLACK_CLIENT_ID`, `SLACK_CLIENT_SECRET`, `SLACK_SIGNING_SECRET` och `SLACK_REDIRECT_URI`.
+5. Öppna Team-vyn i Orbit och klicka “Anslut Slack”.
+6. Slack OAuth-callbacken sparar bot token krypterat i `private.integration_tokens`.
+7. Slack Events API verifierar `X-Slack-Signature`, deduplicerar `event_id` och sparar inkommande events i `integration_events`.
+8. Använd `create_task_from_slack` för att skapa task från ett meddelande, eller `link_slack_message` för att koppla en tråd till en befintlig task.
+9. `ingest_integration_event` kan spara inkommande Slack-events och samtidigt aktivera dolda tasks via ett triggernamn.

@@ -346,6 +346,17 @@ export async function startGoogleCalendarOAuth() {
   return data.url;
 }
 
+export async function startSlackOAuth() {
+  const current = await session();
+  if (!current?.access_token) throw new Error('Du är inte inloggad.');
+  const response = await fetch('/api/slack-auth-start', {
+    headers: { authorization: `Bearer ${current.access_token}` }
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error || 'Kunde inte starta Slack OAuth.');
+  return data.url;
+}
+
 export async function syncCalendarLinkNow(calendarLinkId) {
   const current = await session();
   if (!current?.access_token) throw new Error('Du är inte inloggad.');
