@@ -81,6 +81,13 @@ Rekommenderat flöde för ChatGPT/Claude:
 4. Använd `assign_task` eller `update_task` för att ge uppgifter till personer. MCP:n stoppar tilldelning om personen inte har åtkomst till området.
 5. Använd `add_task_link` för att koppla mail, dokument, kalenderhändelser eller chattar till uppgiften.
 
+Länkar från andra appar:
+
+- Orbit är förberedd som PWA med Web Share Target. När appen installeras på en enhet som stödjer detta kan användaren dela en webbsida/länk till Orbit och få “Ny uppgift”-dialogen förifylld.
+- Samma flöde kan öppnas manuellt med query-parametrar, t.ex. `https://orbit-iota-sage.vercel.app/?capture=1&title=Svara%20Pelle&url=https%3A%2F%2Fmail.google.com%2F...`
+- Stödda parametrar: `title`, `text`, `url`, eller `captureTitle`, `captureText`, `captureUrl`.
+- Orbit försöker känna igen Gmail, Outlook, Google Docs, Google Calendar och Slack-länkar och sätter rätt länktyp/app i uppgiften.
+
 ## Google Calendar och Slack
 
 Orbit har nu databas-, UI-, MCP- och Vercel Function-stöd för Google Calendar. Uppgifter kan köas för Google Calendar-sync och öppnas manuellt i Google Calendar med förifyllda datum. Lägg aldrig Google/Slack secrets i frontend eller i GitHub.

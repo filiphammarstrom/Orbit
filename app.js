@@ -5,6 +5,7 @@ const $ = s => document.querySelector(s);
 const bucketViews = ['inbox','today','later','someday'];
 const navItems = [['inbox','⌄','Inbox'],['today','☀','Gör idag'],['assigned','◎','Tilldelat'],['later','◷','Gör sen'],['someday','◇','Gör nån gång'],['team','⚭','Team']];
 const mobileItems = [['inbox','⌄','Inbox'],['today','☀','Idag'],['assigned','◎','Tilldelat'],['later','◷','Sen'],['someday','◇','Nån gång'],['areas','▦','Områden']];
+let pendingCapture = readCaptureIntent();
 
 async function api(path, options={}) {
   if(path==='/state') return loadCloudState();
@@ -88,6 +89,49 @@ const projectOptionsHtml=selected=>'<option value="">Personligt / Inbox</option>
 const assigneesForProject=projectId=>{const p=project(projectId);return p?membersForArea(area(p.areaId)):[person(state.currentUserId)]};
 const assigneeOptionsHtml=(projectId,selected)=>{const list=assigneesForProject(projectId);if(selected&&!list.some(p=>p.id===selected))list.push(person(selected));return list.map(p=>option(p.id,p.name,selected||list[0]?.id)).join('')};
 const defaultAssigneeForProject=projectId=>assigneesForProject(projectId)[0]?.id||state.currentUserId;
+const firstParam=(params,names)=>names.map(name=>params.get(name)).find(Boolean)||'';
+const firstUrl=text=>String(text||'').match(/\b(?:https?:\/\/|mailto:|message:|slack:\/\/|googlegmail:\/\/|ms-outlook:\/\/)[^\s<>"']+/i)?.[0]||'';
+const withoutUrl=(text,url)=>url?String(text||'').replace(url,'').trim():String(text||'').trim();
+function linkMeta(url='',fallbackProvider=''){
+  const value=url.trim(),lower=value.toLowerCase();
+  if(!value)return{kind:'other',provider:fallbackProvider};
+  if(lower.startsWith('mailto:')||lower.includes('mail.google.com')||lower.includes('gmail.google')||lower.startsWith('googlegmail://'))return{kind:'email',provider:lower.includes('outlook')?'Outlook':'Gmail'};
+  if(lower.includes('outlook.')||lower.startsWith('ms-outlook://')||lower.includes('office.com/mail'))return{kind:'email',provider:'Outlook'};
+  if(lower.includes('calendar.google.com'))return{kind:'calendar',provider:'Google Calendar'};
+  if(lower.includes('docs.google.com'))return{kind:'document',provider:'Google Docs'};
+  if(lower.startsWith('slack://')||lower.includes('slack.com/archives/'))return{kind:'chat',provider:'Slack'};
+  if(/^https?:\/\//i.test(value)){
+    let host=fallbackProvider;
+    try{host=new URL(value).hostname.replace(/^www\./,'')}catch{host=fallbackProvider}
+    return{kind:'web',provider:host};
+  }
+  return{kind:'other',provider:fallbackProvider};
+}
+function readCaptureIntent(){
+  const params=new URLSearchParams(window.location.search);
+  const hasCapture=params.has('capture')||params.has('quick')||params.has('url')||params.has('text')||params.has('captureUrl');
+  if(!hasCapture)return null;
+  const sharedUrl=firstParam(params,['url','captureUrl','link','u']);
+  const sharedText=firstParam(params,['text','captureText','body','note']);
+  const titleParam=firstParam(params,['title','captureTitle','name']);
+  const url=sharedUrl||firstUrl(sharedText);
+  const text=withoutUrl(sharedText,url);
+  const meta=linkMeta(url,firstParam(params,['provider','app']));
+  const title=(titleParam||text||url||'Ny uppgift från annan app').trim();
+  return {
+    title:title.length>100?`${title.slice(0,97)}…`:title,
+    notes:text&&text!==title?`Delad text:\n${text}`:'',
+    link:url?{...meta,title:titleParam||text||url,url}:null
+  };
+}
+function clearCaptureUrl(){
+  if(!window.location.search)return;
+  window.history.replaceState({},'',`${window.location.origin}${window.location.pathname}${window.location.hash}`);
+}
+function registerServiceWorker(){
+  if(!('serviceWorker' in navigator))return;
+  window.addEventListener('load',()=>navigator.serviceWorker.register('/service-worker.js').catch(()=>{}));
+}
 
 function renderNav(){
   $('#mainNav').innerHTML=navItems.map(([id,ico,label])=>`<button class="nav-item ${view===id?'active':''}" data-view="${id}"><span class="ico">${ico}</span><span>${label}</span><span class="count">${navCount(id)||''}</span></button>`).join('');
@@ -341,15 +385,27 @@ function renderDailyBrief(){
   $('#generateBrief').onclick=async()=>{const generated=buildDailyBrief();await saveDailyBrief(generated);await load();toast('Dagens brief är uppdaterad.')};
 }
 function refreshAssignees(){const projectId=$('#projectSelect').value;$('#assigneeSelect').innerHTML=assigneeOptionsHtml(projectId,defaultAssigneeForProject(projectId))}
-function openDialog(){
+function openDialog(prefill={}){
   $('#taskForm').reset();
+  $('#linkDetails').open=false;
   $('#projectSelect').innerHTML=projectOptionsHtml('');
   if(view.startsWith('project:'))$('#projectSelect').value=view.split(':')[1]; else if(bucketViews.includes(view))$('#taskForm').elements.bucket.value=view;
   const candidates=state.tasks.filter(t=>!t.completed&&t.visible);
   $('#parentTaskSelect').innerHTML='<option value="">Ingen — fristående uppgift</option>'+candidates.map(t=>`<option value="${t.id}">${escapeHtml(t.title)}</option>`).join('');
   $('#dependencyTaskSelect').innerHTML=candidates.map(t=>`<option value="${t.id}">${escapeHtml(t.title)}</option>`).join('');
   bindScheduleAssist($('#taskForm'));
-  refreshAssignees();$('#taskDialog').showModal();setTimeout(()=>$('#newTitle').focus(),50)
+  refreshAssignees();
+  if(prefill.title)$('#taskForm').elements.title.value=prefill.title;
+  if(prefill.notes)$('#taskForm').elements.notes.value=prefill.notes;
+  if(prefill.bucket)$('#taskForm').elements.bucket.value=prefill.bucket;
+  if(prefill.link){
+    $('#linkDetails').open=true;
+    $('#taskForm').elements.linkKind.value=prefill.link.kind||'other';
+    $('#taskForm').elements.linkProvider.value=prefill.link.provider||'';
+    $('#taskForm').elements.linkTitle.value=prefill.link.title||prefill.title||'';
+    $('#taskForm').elements.linkUrl.value=prefill.link.url||'';
+  }
+  $('#taskDialog').showModal();setTimeout(()=>$('#newTitle').focus(),50)
 }
 $('#projectSelect').onchange=refreshAssignees;
 $('#quickAdd').onclick=$('#addRow').onclick=$('#mobileAdd').onclick=openDialog;$('#closeInspector').onclick=()=>$('#inspector').classList.remove('open');
@@ -378,5 +434,6 @@ function hideAuth(){ $('#authScreen').classList.remove('open') }
 $('#authSwitch').onclick=()=>{authMode=authMode==='signin'?'signup':'signin';const signup=authMode==='signup';$('#nameLabel').classList.toggle('show',signup);$('#authTitle').textContent=signup?'Skapa ditt konto':'Välkommen tillbaka';$('#authSubmit').textContent=signup?'Skapa konto':'Logga in';$('#authSwitch').textContent=signup?'Har du redan ett konto? Logga in':'Inget konto? Skapa ett';$('#authError').textContent=''};
 $('#authForm').onsubmit=async e=>{e.preventDefault();const f=new FormData(e.target);$('#authError').textContent='';$('#authSubmit').disabled=true;try{if(authMode==='signup')await signUp(f.get('name'),f.get('email'),f.get('password'));else await signIn(f.get('email'),f.get('password'));await boot()}catch(err){$('#authError').textContent=err.message}finally{$('#authSubmit').disabled=false}};
 $('#logoutButton').onclick=async()=>{if(liveChannel)await liveChannel.unsubscribe();await signOut();showAuth()};
-async function boot(){if(!configured){showAuth();return}const current=await session();if(!current){showAuth();return}hideAuth();$('#currentUserName').textContent=current.user.user_metadata?.name||current.user.email.split('@')[0];await load();state.currentUserId=current.user.id;render();if(liveChannel)await liveChannel.unsubscribe();liveChannel=subscribeToChanges(()=>load())}
+async function boot(){if(!configured){showAuth();return}const current=await session();if(!current){showAuth();return}hideAuth();$('#currentUserName').textContent=current.user.user_metadata?.name||current.user.email.split('@')[0];await load();state.currentUserId=current.user.id;render();if(pendingCapture){const capture=pendingCapture;pendingCapture=null;openDialog(capture);clearCaptureUrl();toast('Länken är fångad. Spara för att skapa uppgiften.')}if(liveChannel)await liveChannel.unsubscribe();liveChannel=subscribeToChanges(()=>load())}
+registerServiceWorker();
 boot();

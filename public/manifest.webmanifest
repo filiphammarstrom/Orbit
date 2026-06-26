@@ -1,0 +1,27 @@
+{
+  "name": "Orbit",
+  "short_name": "Orbit",
+  "description": "Fånga uppgifter, länkar och nästa steg i rätt ordning.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#faf9f7",
+  "theme_color": "#7659ef",
+  "icons": [
+    {
+      "src": "/orbit-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "share_target": {
+    "action": "/?capture=share",
+    "method": "GET",
+    "params": {
+      "title": "title",
+      "text": "text",
+      "url": "url"
+    }
+  }
+}
