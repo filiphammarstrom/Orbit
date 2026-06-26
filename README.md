@@ -15,7 +15,7 @@ Orbit är en molnbaserad fleranvändarapp för områden, projekt, team och villk
 - “Tilldelat till mig”-vy med separering mellan uppgifter från andra och egna uppgifter
 - Team & delning-vy för att skapa team, bjuda in via e-post och dela områden med rätt team
 - Google Calendar-sektion på uppgifter: manuell “öppna i Google Calendar”-länk, direkt-sync, retry och köad sync-status
-- Integrationsgrund för Google Calendar och Slack
+- Integrationsgrund för Google Calendar och Slack, inklusive Slack-inbox för att göra events till uppgifter
 - Daglig Orbit-brief från MCP/AI samt sparade agentförslag
 - AI-control via MCP: externa AI-klienter kan läsa workspace, skapa projekt, masskapa tasks, tilldela personer och uppdatera status
 - Kommentarer, aktivitetshistorik och separat notis-inbox
@@ -125,5 +125,7 @@ Slack-flödet:
 5. Öppna Team-vyn i Orbit och klicka “Anslut Slack”.
 6. Slack OAuth-callbacken sparar bot token krypterat i `private.integration_tokens`.
 7. Slack Events API verifierar `X-Slack-Signature`, deduplicerar `event_id` och sparar inkommande events i `integration_events`.
-8. Använd `create_task_from_slack` för att skapa task från ett meddelande, eller `link_slack_message` för att koppla en tråd till en befintlig task.
-9. `ingest_integration_event` kan spara inkommande Slack-events och samtidigt aktivera dolda tasks via ett triggernamn.
+8. Öppna Team-vyns Slack-inbox för att granska nya Slack-events och skapa Orbit-uppgifter med titel, projekt, tilldelad och prioritet.
+9. När en Slack-händelse blir en uppgift markeras den som hanterad, länkas till tasken och sparas även i `slack_message_links`.
+10. Använd MCP-verktygen `create_task_from_slack` eller `link_slack_message` för samma flöde från en AI-klient.
+11. `ingest_integration_event` kan spara inkommande Slack-events och samtidigt aktivera dolda tasks via ett triggernamn.

@@ -84,6 +84,18 @@ const camelCalendarLink = l => ({
   updatedAt: l.updated_at
 });
 
+const camelIntegrationEvent = e => ({
+  id: e.id,
+  provider: e.provider,
+  integrationAccountId: e.integration_account_id,
+  areaId: e.area_id,
+  eventType: e.event_type,
+  externalId: e.external_id || '',
+  payload: e.payload || {},
+  processedAt: e.processed_at,
+  createdAt: e.created_at
+});
+
 const cleanLinks = links => (Array.isArray(links) ? links : [])
   .map(link => ({
     kind: link.kind || 'other',
@@ -138,7 +150,8 @@ export async function loadCloudState() {
     agentRuns,
     invitations,
     integrations,
-    calendarLinks
+    calendarLinks,
+    integrationEvents
   ] = await Promise.all([
     supabase.from('profiles').select('*'),
     supabase.from('teams').select('*'),
@@ -156,10 +169,11 @@ export async function loadCloudState() {
     supabase.from('agent_runs').select('*').order('created_at', { ascending: false }).limit(30),
     supabase.from('invitations').select('*').order('expires_at', { ascending: false }),
     supabase.from('integration_accounts').select('*').order('created_at', { ascending: false }),
-    supabase.from('task_calendar_links').select('*').order('created_at', { ascending: false })
+    supabase.from('task_calendar_links').select('*').order('created_at', { ascending: false }),
+    supabase.from('integration_events').select('*').order('created_at', { ascending: false }).limit(100)
   ]);
 
-  const failed = [profiles, teams, members, areas, projects, tasks, dependencies, comments, notifications, activity, approvals, taskLinks, dailyBriefs, agentRuns, invitations, integrations, calendarLinks].find(r => r.error);
+  const failed = [profiles, teams, members, areas, projects, tasks, dependencies, comments, notifications, activity, approvals, taskLinks, dailyBriefs, agentRuns, invitations, integrations, calendarLinks, integrationEvents].find(r => r.error);
   if (failed) throw failed.error;
 
   return {
@@ -193,6 +207,7 @@ export async function loadCloudState() {
     taskLinks: taskLinks.data.map(camelLink),
     integrations: integrations.data.map(camelIntegration),
     calendarLinks: calendarLinks.data.map(camelCalendarLink),
+    integrationEvents: integrationEvents.data.map(camelIntegrationEvent),
     dailyBriefs: dailyBriefs.data.map(b => ({
       id: b.id,
       userId: b.user_id,
@@ -311,6 +326,7 @@ export function subscribeToChanges(onChange) {
     .on('postgres_changes', { event: '*', schema: 'public', table: 'task_links' }, onChange)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'daily_briefs' }, onChange)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'integration_accounts' }, onChange)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'integration_events' }, onChange)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'task_calendar_links' }, onChange)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'teams' }, onChange)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'team_members' }, onChange)
@@ -355,6 +371,108 @@ export async function startSlackOAuth() {
   const data = await response.json();
   if (!response.ok) throw new Error(data.error || 'Kunde inte starta Slack OAuth.');
   return data.url;
+}
+
+export function slackEventSummary(eventRow = {}) {
+  const payload = eventRow.payload || {};
+  const event = payload.event || {};
+  const teamId = payload.team_id || payload.authorizations?.[0]?.team_id || '';
+  const channelId = event.channel || event.item?.channel || event.message?.channel || '';
+  const messageTs = event.ts || event.message?.ts || event.item?.ts || event.event_ts || '';
+  const threadTs = event.thread_ts || event.message?.thread_ts || messageTs || '';
+  const authorExternalId = event.user || event.item_user || event.message?.user || '';
+  const text = (event.text || event.message?.text || '').trim();
+  const fallback = event.type === 'reaction_added'
+    ? `Reaktion :${event.reaction || ''}: i Slack`
+    : `Slack-event: ${event.type || eventRow.eventType || 'okänt'}`;
+  const titleText = text || fallback;
+  const title = titleText.length > 80 ? `${titleText.slice(0, 77)}…` : titleText;
+  const url = event.permalink || (teamId && channelId && messageTs ? `slack://channel?team=${encodeURIComponent(teamId)}&id=${encodeURIComponent(channelId)}&message=${encodeURIComponent(messageTs)}` : '');
+
+  return {
+    teamId,
+    channelId,
+    messageTs,
+    threadTs,
+    authorExternalId,
+    text,
+    title,
+    url,
+    eventType: event.type || eventRow.eventType || 'unknown'
+  };
+}
+
+export async function createTaskFromSlackEvent(eventId, input = {}) {
+  const user = (await session())?.user;
+  if (!user) throw new Error('Du är inte inloggad.');
+
+  const { data: rawEvent, error } = await supabase.from('integration_events').select('*').eq('id', eventId).single();
+  if (error) throw error;
+  const event = camelIntegrationEvent(rawEvent);
+  const summary = slackEventSummary(event);
+  const title = (input.title || summary.title || 'Slack-uppgift').trim();
+  const projectId = input.projectId || null;
+  const assigneeId = projectId ? (input.assigneeId || user.id) : user.id;
+  const now = new Date().toISOString();
+  const notes = [
+    input.notes || '',
+    summary.text && summary.text !== title ? summary.text : '',
+    `Källa: Slack ${summary.eventType}${summary.channelId ? ` · kanal ${summary.channelId}` : ''}`,
+    event.externalId ? `Slack event-id: ${event.externalId}` : ''
+  ].filter(Boolean).join('\n\n');
+
+  const task = await createCloudTask({
+    title,
+    notes,
+    projectId,
+    assigneeId,
+    bucket: input.bucket || 'inbox',
+    priority: Number(input.priority || 3),
+    links: summary.url ? [{
+      kind: 'chat',
+      provider: 'Slack',
+      title: 'Slack-meddelande',
+      url: summary.url,
+      externalId: summary.messageTs || event.externalId,
+      metadata: {
+        integrationEventId: event.id,
+        channelId: summary.channelId,
+        threadTs: summary.threadTs,
+        teamId: summary.teamId
+      }
+    }] : []
+  });
+
+  if (event.integrationAccountId && summary.channelId && summary.messageTs) {
+    const { error: linkError } = await supabase.from('slack_message_links').upsert({
+      task_id: task.id,
+      integration_account_id: event.integrationAccountId,
+      channel_id: summary.channelId,
+      message_ts: summary.messageTs,
+      thread_ts: summary.threadTs || '',
+      permalink: summary.url || '',
+      author_external_id: summary.authorExternalId || '',
+      text_snapshot: summary.text || '',
+      metadata: { integrationEventId: event.id, teamId: summary.teamId }
+    }, { onConflict: 'integration_account_id,channel_id,message_ts' });
+    if (linkError) throw linkError;
+  }
+
+  const { error: updateError } = await supabase.from('integration_events').update({
+    processed_at: now,
+    payload: {
+      ...rawEvent.payload,
+      orbit: {
+        taskId: task.id,
+        processedBy: user.id,
+        processedAt: now,
+        action: 'created_task'
+      }
+    }
+  }).eq('id', event.id);
+  if (updateError) throw updateError;
+
+  return task;
 }
 
 export async function syncCalendarLinkNow(calendarLinkId) {

@@ -1,4 +1,4 @@
-import { configured, session, signIn, signUp, signOut, loadCloudState, createCloudTask, updateCloudTask, subscribeToChanges, addComment, addTaskLink, startGoogleCalendarOAuth, startSlackOAuth, syncCalendarLinkNow, queueCalendarSync, saveDailyBrief, markNotificationRead, decideApproval, createTeam, createInvitation, shareAreaWithTeam } from './cloud.js';
+import { configured, session, signIn, signUp, signOut, loadCloudState, createCloudTask, updateCloudTask, subscribeToChanges, addComment, addTaskLink, startGoogleCalendarOAuth, startSlackOAuth, slackEventSummary, createTaskFromSlackEvent, syncCalendarLinkNow, queueCalendarSync, saveDailyBrief, markNotificationRead, decideApproval, createTeam, createInvitation, shareAreaWithTeam } from './cloud.js';
 
 let state, view = 'today', projectView='list', liveChannel;
 const $ = s => document.querySelector(s);
@@ -31,6 +31,8 @@ const linksForTask=id=>(state.taskLinks||[]).filter(l=>l.taskId===id);
 const calendarLinksForTask=id=>(state.calendarLinks||[]).filter(l=>l.taskId===id);
 const googleCalendarIntegrations=()=>(state.integrations||[]).filter(i=>i.provider==='google_calendar');
 const slackIntegrations=()=>(state.integrations||[]).filter(i=>i.provider==='slack');
+const slackEvents=()=>(state.integrationEvents||[]).filter(e=>e.provider==='slack');
+const slackInboxEvents=()=>slackEvents().filter(e=>!e.processedAt&&!e.payload?.orbit?.taskId).slice(0,12);
 const localDateISO=(date=new Date())=>new Date(date.getTime()-date.getTimezoneOffset()*60000).toISOString().slice(0,10);
 const startOfLocalDay=(date=new Date())=>{const d=new Date(date);d.setHours(0,0,0,0);return d};
 const toDateTimeLocalValue=iso=>{if(!iso)return'';const d=new Date(iso);return Number.isNaN(d.getTime())?'':new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,16)};
@@ -153,6 +155,7 @@ function teamSharingContent(){
       <div><p class="eyebrow">INTEGRATIONER</p><h3>Slack</h3><p>${slackIntegrations().length?`${slackIntegrations().length} Slack-workspace är ansluten.`:'Koppla Slack för att Orbit ska kunna ta emot meddelandehändelser och länka Slack-trådar till uppgifter.'}</p></div>
       <button class="secondary" id="slackOAuthButton">${slackIntegrations().length?'Anslut igen':'Anslut Slack'}</button>
     </section>
+    ${slackInboxContent()}
     <section class="team-grid">${state.teams.length?state.teams.map(teamCard).join(''):'<div class="empty card-empty">Inga team ännu. Skapa ditt första ovan.</div>'}</section>
     <section class="share-areas-card">
       <div class="share-head"><div><p class="eyebrow">OMRÅDESÅTKOMST</p><h3>Dela områden med rätt team</h3></div><span>${state.areas.length} områden</span></div>
@@ -160,6 +163,29 @@ function teamSharingContent(){
     </section>
     <section class="invite-summary"><strong>${pending.length}</strong> väntande inbjudningar · <strong>${accepted.length}</strong> accepterade</section>
   </div>`;
+}
+
+function slackInboxContent(){
+  const inbox=slackInboxEvents(),handled=slackEvents().filter(e=>e.processedAt||e.payload?.orbit?.taskId).length;
+  return `<section class="slack-inbox-card">
+    <div class="share-head"><div><p class="eyebrow">SLACK-INBOX</p><h3>Gör Slack-händelser till uppgifter</h3></div><span>${inbox.length} nya · ${handled} hanterade</span></div>
+    ${inbox.length?`<div class="slack-event-list">${inbox.map(slackEventCard).join('')}</div>`:'<p class="muted-line">Inga nya Slack-händelser väntar. När Slack skickar events till Orbit dyker de upp här.</p>'}
+  </section>`;
+}
+
+function slackEventCard(eventRow){
+  const summary=slackEventSummary(eventRow),integration=state.integrations.find(i=>i.id===eventRow.integrationAccountId),title=`Slack: ${summary.title}`;
+  const text=summary.text||`${summary.eventType}${eventRow.externalId?` · ${eventRow.externalId}`:''}`;
+  return `<article class="slack-event-card">
+    <div class="slack-event-main"><div><strong>${escapeHtml(summary.title)}</strong><p>${escapeHtml(text)}</p><small>${escapeHtml([integration?.displayName||'Slack',summary.channelId,formatDateTime(eventRow.createdAt)].filter(Boolean).join(' · '))}</small></div><span>${escapeHtml(summary.eventType)}</span></div>
+    <form class="slack-event-form" data-slack-event="${eventRow.id}">
+      <input name="title" value="${escapeHtml(title)}" required>
+      <select name="projectId" class="slack-project-select">${projectOptionsHtml('')}</select>
+      <select name="assigneeId" class="slack-assignee-select">${assigneeOptionsHtml('',state.currentUserId)}</select>
+      <select name="priority">${[[1,'P1'],[2,'P2'],[3,'P3']].map(([id,label])=>option(id,label,3)).join('')}</select>
+      <button class="primary" type="submit">Skapa uppgift</button>
+    </form>
+  </article>`;
 }
 
 function teamCard(tm){
@@ -179,6 +205,8 @@ function areaShareRow(a){
 function bindTeamSharing(){
   $('#createTeamForm')?.addEventListener('submit',async e=>{e.preventDefault();const name=new FormData(e.target).get('name').trim();if(!name)return;await createTeam(name);await load();toast('Teamet är skapat.')});
   $('#slackOAuthButton')?.addEventListener('click',async e=>{try{e.currentTarget.disabled=true;const url=await startSlackOAuth();window.location.href=url}catch(error){e.currentTarget.disabled=false;toast(error.message)}});
+  document.querySelectorAll('.slack-project-select').forEach(s=>s.onchange=()=>{const form=s.closest('form'),assignee=form.querySelector('.slack-assignee-select');assignee.innerHTML=assigneeOptionsHtml(s.value,defaultAssigneeForProject(s.value))});
+  document.querySelectorAll('.slack-event-form').forEach(f=>f.onsubmit=async e=>{e.preventDefault();const data=Object.fromEntries(new FormData(f));try{const task=await createTaskFromSlackEvent(f.dataset.slackEvent,{title:data.title,projectId:data.projectId||null,assigneeId:data.assigneeId,priority:Number(data.priority||3)});await load();toast('Slack-händelsen blev en uppgift.');openInspector(task.id)}catch(error){toast(error.message)}});
   document.querySelectorAll('.invite-form').forEach(f=>f.onsubmit=async e=>{e.preventDefault();const data=new FormData(e.target),email=data.get('email').trim().toLowerCase();if(!email)return;const invite=await createInvitation(e.target.dataset.team,email,data.get('role'));await load();toast(invite.acceptedAt?'Personen är redan medlem nu.':'Inbjudan är skapad.')});
   document.querySelectorAll('[data-area-share]').forEach(s=>s.onchange=async()=>{await shareAreaWithTeam(s.dataset.areaShare,s.value||null);await load();toast(s.value?'Området är delat med teamet.':'Området är privat igen.')});
 }
