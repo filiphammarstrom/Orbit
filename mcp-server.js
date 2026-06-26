@@ -340,7 +340,7 @@ function nullableIso(value) {
 }
 
 function accessFilter(ctx) {
-  const parts = [`created_by.eq.${actorId}`];
+  const parts = [`created_by.eq.${actorId}`, `assignee_id.eq.${actorId}`];
   if (ctx.projectIds.length) parts.push(`project_id.in.(${ctx.projectIds.join(',')})`);
   return parts.join(',');
 }
@@ -463,10 +463,16 @@ function ensureAreaAccess(ctx, areaId) {
   if (!ctx.areaIds.includes(areaId)) throw new Error('Ingen åtkomst till området.');
 }
 
+function sharesTeamWithActor(ctx, userId) {
+  if (!userId || userId === actorId) return Boolean(userId);
+  const actorTeams = new Set(ctx.members.filter(m => m.user_id === actorId && m.status === 'active').map(m => m.team_id));
+  return ctx.members.some(m => m.user_id === userId && m.status === 'active' && actorTeams.has(m.team_id));
+}
+
 function ensureAssignable(ctx, assigneeId, projectId) {
   if (!assigneeId) return;
   if (!projectId) {
-    if (assigneeId !== actorId) throw new Error('Uppgifter utan projekt kan bara tilldelas MCP-användaren själv. Välj ett team-projekt för att tilldela andra.');
+    if (!sharesTeamWithActor(ctx, assigneeId)) throw new Error('Uppgifter utan projekt kan bara tilldelas dig själv eller en aktiv teammedlem.');
     return;
   }
   const area = areaForProject(ctx, projectId);
@@ -505,7 +511,7 @@ async function allowedIntegration(id, ctx, provider) {
 async function allowedTask(id, ctx) {
   const { data, error } = await db.from('tasks').select('*').eq('id', id).single();
   if (error) throw error;
-  if (data.created_by !== actorId && !ctx.projectIds.includes(data.project_id)) throw new Error('Ingen åtkomst till uppgiften.');
+  if (data.created_by !== actorId && data.assignee_id !== actorId && !ctx.projectIds.includes(data.project_id)) throw new Error('Ingen åtkomst till uppgiften.');
   return data;
 }
 
@@ -757,7 +763,7 @@ async function call(name, a = {}) {
       teams: a.includeTeams === false ? undefined : ctx.teams.map(t => ({ ...t, memberIds: ctx.members.filter(m => m.team_id === t.id && m.status === 'active').map(m => m.user_id) })),
       people: a.includePeople === false ? undefined : ctx.profiles,
       integrations: await listIntegrations(ctx, {}),
-      assignmentRule: 'AI får tilldela en uppgift till en person bara om personen har åtkomst till uppgiftens område. Uppgifter utan projekt kan bara tilldelas ORBIT_USER_ID.'
+      assignmentRule: 'AI får tilldela en uppgift till en person om personen har åtkomst till uppgiftens område. Uppgifter utan projekt kan tilldelas ORBIT_USER_ID eller en aktiv teammedlem.'
     };
   }
 

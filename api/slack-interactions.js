@@ -11,6 +11,7 @@ import {
 } from './_lib/orbit-server.js';
 
 const CREATE_TASK_CALLBACKS = new Set(['orbit_create_task', 'create_orbit_task']);
+const SLASH_HELP_ALIASES = new Set(['', 'help', 'hjälp', 'hjalp', '?']);
 
 function parseInteraction(body) {
   const params = new URLSearchParams(body || '');
@@ -21,6 +22,10 @@ function parseInteraction(body) {
   } catch {
     throw new HttpError(400, 'Ogiltig Slack interaction-payload.');
   }
+}
+
+function parseFormBody(body) {
+  return Object.fromEntries(new URLSearchParams(body || '').entries());
 }
 
 function cleanText(value = '') {
@@ -40,6 +45,24 @@ function initialsFromName(name = '') {
     .map(part => part[0])
     .join('')
     .toUpperCase() || '?';
+}
+
+function slackResponse(text, extra = {}) {
+  return {
+    response_type: 'ephemeral',
+    text,
+    ...extra
+  };
+}
+
+function slashHelpText() {
+  return [
+    'Orbit slash command:',
+    '• `/orbit Svara på offerten #idag p1` skapar en task i din Orbit Inbox.',
+    '• `/orbit <@person> Följ upp avtalet #sen p2` tilldelar tasken till personen om Slack-emailen matchar en Orbit-teammedlem.',
+    '• Bucket: `#idag`, `#sen`, `#someday`.',
+    '• Prioritet: `p1`, `p2`, `p3` eller `!!!`, `!!`, `!`.'
+  ].join('\n');
 }
 
 async function postSlackResponse(responseUrl, text) {
@@ -154,20 +177,20 @@ async function sharesOrbitTeam(userId, ownerId) {
   return (data || []).some(row => row.user_id === userId && ownerTeams.has(row.team_id));
 }
 
-async function resolveShortcutUser(payload, integration, token) {
+async function resolveSlackUser({ integration, token, slackUserId, slackUserName: fallbackName = '', fallbackSource = 'integration_owner', fallbackUserId = '' }) {
   const fallback = {
-    userId: integration.owner_id,
-    source: 'integration_owner',
-    slackUserId: payload.user?.id || '',
+    userId: fallbackUserId || integration.owner_id,
+    source: fallbackSource,
+    slackUserId: slackUserId || '',
     slackUserEmail: '',
-    slackUserName: payload.user?.name || ''
+    slackUserName: fallbackName || ''
   };
-  if (!token || !payload.user?.id) return fallback;
+  if (!token || !slackUserId) return fallback;
 
   try {
-    const slackUser = await getSlackUserInfo({ token, userId: payload.user.id });
+    const slackUser = await getSlackUserInfo({ token, userId: slackUserId });
     const email = cleanText(slackUser?.profile?.email).toLowerCase();
-    const name = slackUserName(slackUser, payload.user.name || payload.user.id);
+    const name = slackUserName(slackUser, fallbackName || slackUserId);
     if (!email) return { ...fallback, source: 'slack_user_without_email', slackUserName: name };
 
     const authUser = await findAuthUserByEmail(email);
@@ -180,12 +203,209 @@ async function resolveShortcutUser(payload, integration, token) {
     return {
       userId: profile?.id || authUser.id,
       source: 'slack_email',
-      slackUserId: payload.user.id,
+      slackUserId,
       slackUserEmail: email,
       slackUserName: name
     };
   } catch (error) {
     return { ...fallback, source: 'slack_user_lookup_failed', lookupError: error.message || 'Slack user lookup misslyckades.' };
+  }
+}
+
+async function resolveShortcutUser(payload, integration, token) {
+  return resolveSlackUser({
+    integration,
+    token,
+    slackUserId: payload.user?.id || '',
+    slackUserName: payload.user?.name || '',
+    fallbackSource: 'integration_owner'
+  });
+}
+
+function parseSlashTask(text = '') {
+  const raw = cleanText(text);
+  const lower = raw.toLowerCase();
+  if (SLASH_HELP_ALIASES.has(lower)) return { help: true };
+
+  const mention = raw.match(/<@([A-Z0-9]+)(?:\|[^>]+)?>/i);
+  const assigneeSlackUserId = mention?.[1] || '';
+
+  let priority = 3;
+  if (/\bp1\b|\bprio\s*1\b|!!!|\burgent\b|\bakut\b|\bhög\b/i.test(raw)) priority = 1;
+  else if (/\bp2\b|\bprio\s*2\b|!!|\bmedium\b|\bmedel\b/i.test(raw)) priority = 2;
+  else if (/\bp3\b|\bprio\s*3\b|!|\blåg\b/i.test(raw)) priority = 3;
+
+  let bucket = 'inbox';
+  if (/(^|\s)#?(idag|today)(\s|$)/i.test(raw)) bucket = 'today';
+  if (/(^|\s)#?(sen|later)(\s|$)/i.test(raw)) bucket = 'later';
+  if (/(^|\s)#?(someday|någon-gång|nagon-gang|nån-gång|nan-gang)(\s|$)/i.test(raw)) bucket = 'someday';
+
+  const title = cleanText(raw
+    .replace(/<@[A-Z0-9]+(?:\|[^>]+)?>/ig, '')
+    .replace(/\b(p[123]|prio\s*[123])\b/ig, '')
+    .replace(/!!!|!!|!/g, '')
+    .replace(/(^|\s)#(idag|today|sen|later|someday|någon-gång|nagon-gang|nån-gång|nan-gang)(?=\s|$)/ig, ' ')
+  );
+
+  return {
+    help: false,
+    title: title || raw || 'Ny Slack-uppgift',
+    priority,
+    bucket,
+    assigneeSlackUserId
+  };
+}
+
+function slashChannelLink(command) {
+  if (!command.team_id || !command.channel_id) return '';
+  return `slack://channel?team=${encodeURIComponent(command.team_id)}&id=${encodeURIComponent(command.channel_id)}`;
+}
+
+async function createTaskFromSlashCommand(command, integration) {
+  const parsed = parseSlashTask(command.text || '');
+  if (parsed.help) return { help: true };
+
+  let token = null;
+  try {
+    token = await loadIntegrationToken(integration.id);
+  } catch {
+    token = null;
+  }
+
+  const actor = await resolveSlackUser({
+    integration,
+    token,
+    slackUserId: command.user_id || '',
+    slackUserName: command.user_name || '',
+    fallbackSource: 'integration_owner'
+  });
+  const createdBy = actor.userId || integration.owner_id;
+
+  const assignee = parsed.assigneeSlackUserId
+    ? await resolveSlackUser({
+        integration,
+        token,
+        slackUserId: parsed.assigneeSlackUserId,
+        slackUserName: parsed.assigneeSlackUserId,
+        fallbackSource: 'slash_assignee_unmatched',
+        fallbackUserId: createdBy
+      })
+    : actor;
+
+  const assigneeId = assignee.userId || createdBy;
+  const now = new Date().toISOString();
+  const channelLink = slashChannelLink(command);
+  const notes = [
+    `Skapad från Slack slash command${command.channel_name ? ` · #${command.channel_name}` : ''}`,
+    command.text ? `Slack-command:\n/orbit ${command.text}` : '',
+    command.user_id ? `Skapad från Slack av: ${command.user_name || command.user_id}` : '',
+    actor.slackUserEmail ? `Skaparens Slack-email matchad mot Orbit: ${actor.slackUserEmail}` : '',
+    assignee.slackUserEmail && assignee.slackUserEmail !== actor.slackUserEmail ? `Tilldelad via Slack-email: ${assignee.slackUserEmail}` : '',
+    `Orbit-skapare: ${actor.source}`,
+    `Orbit-tilldelning: ${assignee.source}`
+  ].filter(Boolean).join('\n\n');
+
+  const { data: task, error: taskError } = await adminClient()
+    .from('tasks')
+    .insert({
+      title: shortTitle(parsed.title, 'Slack: ny uppgift'),
+      notes,
+      project_id: null,
+      created_by: createdBy,
+      assignee_id: assigneeId,
+      bucket: parsed.bucket,
+      priority: parsed.priority,
+      status: 'todo',
+      task_type: 'task',
+      activation_mode: 'all',
+      visible: true
+    })
+    .select()
+    .single();
+  if (taskError) throw taskError;
+
+  if (channelLink) {
+    const { error: linkError } = await adminClient().from('task_links').insert({
+      task_id: task.id,
+      created_by: createdBy,
+      kind: 'chat',
+      provider: 'Slack',
+      title: command.channel_name ? `Slack #${command.channel_name}` : 'Slack-kanal',
+      url: channelLink,
+      external_id: command.channel_id || '',
+      metadata: {
+        source: 'slash_command',
+        teamId: command.team_id || '',
+        channelId: command.channel_id || '',
+        actorSlackUserId: command.user_id || '',
+        assigneeSlackUserId: parsed.assigneeSlackUserId || '',
+        orbitCreatedBy: createdBy,
+        orbitAssigneeId: assigneeId,
+        actorSource: actor.source,
+        assigneeSource: assignee.source
+      }
+    });
+    if (linkError) throw linkError;
+  }
+
+  const { error: eventError } = await adminClient().from('integration_events').insert({
+    provider: 'slack',
+    integration_account_id: integration.id,
+    area_id: integration.area_id || null,
+    event_type: 'slash_command',
+    external_id: `slash:${command.team_id || ''}:${command.channel_id || ''}:${command.user_id || ''}:${command.trigger_id || now}`,
+    payload: {
+      command,
+      orbit: {
+        taskId: task.id,
+        createdBy,
+        assigneeId,
+        actorSource: actor.source,
+        assigneeSource: assignee.source,
+        actorSlackUserEmail: actor.slackUserEmail || '',
+        assigneeSlackUserEmail: assignee.slackUserEmail || '',
+        processedAt: now,
+        action: 'created_task_from_slash_command'
+      }
+    },
+    processed_at: now
+  });
+  if (eventError) throw eventError;
+
+  return { task, parsed, actor, assignee, createdBy, assigneeId };
+}
+
+async function handleSlashCommand(command, res) {
+  try {
+    if (command.command && command.command !== '/orbit') {
+      res.status(200).json(slackResponse('Orbit: okänt kommando. Använd `/orbit help`.'));
+      return;
+    }
+    if (parseSlashTask(command.text || '').help) {
+      res.status(200).json(slackResponse(slashHelpText()));
+      return;
+    }
+
+    const integration = await findSlackIntegration(command.team_id || '');
+    if (!integration) {
+      res.status(200).json(slackResponse('Orbit är inte anslutet till den här Slack-workspacen ännu.'));
+      return;
+    }
+
+    const result = await createTaskFromSlashCommand(command, integration);
+    if (result.help) {
+      res.status(200).json(slackResponse(slashHelpText()));
+      return;
+    }
+
+    const assignedText = result.assignee.source === 'slack_email' && result.assigneeId !== result.createdBy
+      ? ` och tilldelade den till ${result.assignee.slackUserName || 'vald person'}`
+      : result.assignee.source === 'slack_email'
+        ? ' i din Orbit Inbox'
+        : ' i Orbit Inbox';
+    res.status(200).json(slackResponse(`Orbit: skapade “${result.task.title}”${assignedText}.`));
+  } catch (error) {
+    res.status(200).json(slackResponse(`Orbit: kunde inte skapa uppgiften. ${error.message || 'Okänt fel.'}`));
   }
 }
 
@@ -329,6 +549,13 @@ export default async function handler(req, res) {
     requireMethod(req, 'POST');
     const body = await rawBody(req);
     verifySlackSignature(req, body);
+
+    const form = parseFormBody(body);
+    if (form.command) {
+      await handleSlashCommand(form, res);
+      return;
+    }
+
     const payload = parseInteraction(body);
 
     if (payload.type !== 'message_action') {
