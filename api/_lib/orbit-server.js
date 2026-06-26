@@ -10,7 +10,9 @@ const DEFAULT_SLACK_SCOPES = [
   'mpim:history',
   'reactions:read',
   'team:read',
-  'chat:write'
+  'chat:write',
+  'users:read',
+  'users:read.email'
 ];
 let cachedAdmin;
 let cachedUserKey;
@@ -306,6 +308,29 @@ export async function getSlackPermalink({ token, channel, messageTs }) {
     const data = await response.json().catch(() => ({}));
     if (!response.ok || !data.ok) throw new HttpError(response.status || 400, data.error || 'Kunde inte hämta Slack-länk.');
     return data.permalink || '';
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+export async function getSlackUserInfo({ token, userId }) {
+  if (!userId) return null;
+  const accessToken = slackAccessToken(token);
+  if (!accessToken) throw new HttpError(400, 'Slack-kopplingen saknar bot token.');
+
+  const url = new URL('https://slack.com/api/users.info');
+  url.searchParams.set('user', userId);
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 1200);
+  try {
+    const response = await fetch(url, {
+      headers: { authorization: `Bearer ${accessToken}` },
+      signal: controller.signal
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || !data.ok) throw new HttpError(response.status || 400, data.error || 'Kunde inte hämta Slack-användare.');
+    return data.user || null;
   } finally {
     clearTimeout(timeout);
   }

@@ -2,6 +2,7 @@ import {
   HttpError,
   adminClient,
   getSlackPermalink,
+  getSlackUserInfo,
   loadIntegrationToken,
   rawBody,
   requireMethod,
@@ -29,6 +30,16 @@ function cleanText(value = '') {
 function shortTitle(text, fallback = 'Slack-meddelande') {
   const clean = cleanText(text) || fallback;
   return clean.length > 90 ? `${clean.slice(0, 87)}…` : clean;
+}
+
+function initialsFromName(name = '') {
+  return cleanText(name)
+    .split(' ')
+    .filter(Boolean)
+    .slice(0, 2)
+    .map(part => part[0])
+    .join('')
+    .toUpperCase() || '?';
 }
 
 async function postSlackResponse(responseUrl, text) {
@@ -82,9 +93,100 @@ async function existingSlackLink(integrationId, channelId, messageTs) {
 
 async function loadTask(id) {
   if (!id) return null;
-  const { data, error } = await adminClient().from('tasks').select('id,title').eq('id', id).single();
+  const { data, error } = await adminClient().from('tasks').select('id,title').eq('id', id).limit(1);
+  if (error) throw error;
+  return data?.[0] || null;
+}
+
+function slackUserName(slackUser, fallback = '') {
+  return cleanText(
+    slackUser?.profile?.real_name ||
+    slackUser?.profile?.display_name ||
+    slackUser?.real_name ||
+    slackUser?.name ||
+    fallback
+  );
+}
+
+async function findAuthUserByEmail(email) {
+  const normalized = cleanText(email).toLowerCase();
+  if (!normalized) return null;
+
+  for (let page = 1; page <= 10; page += 1) {
+    const { data, error } = await adminClient().auth.admin.listUsers({ page, perPage: 1000 });
+    if (error) throw error;
+    const users = data?.users || [];
+    const match = users.find(user => cleanText(user.email).toLowerCase() === normalized);
+    if (match || users.length < 1000) return match || null;
+  }
+  return null;
+}
+
+async function ensureProfileForUser(user, fallbackName = '') {
+  if (!user?.id) return null;
+  const { data: existing, error: readError } = await adminClient()
+    .from('profiles')
+    .select('id,name')
+    .eq('id', user.id)
+    .limit(1);
+  if (readError) throw readError;
+  if (existing?.[0]) return existing[0];
+
+  const name = cleanText(fallbackName) || cleanText(user.email).split('@')[0] || 'Orbit-användare';
+  const { data, error } = await adminClient()
+    .from('profiles')
+    .insert({ id: user.id, name, initials: initialsFromName(name) })
+    .select('id,name')
+    .single();
   if (error) throw error;
   return data;
+}
+
+async function sharesOrbitTeam(userId, ownerId) {
+  if (!userId || !ownerId || userId === ownerId) return Boolean(userId && ownerId);
+  const { data, error } = await adminClient()
+    .from('team_members')
+    .select('team_id,user_id')
+    .in('user_id', [userId, ownerId])
+    .eq('status', 'active');
+  if (error) throw error;
+  const ownerTeams = new Set((data || []).filter(row => row.user_id === ownerId).map(row => row.team_id));
+  return (data || []).some(row => row.user_id === userId && ownerTeams.has(row.team_id));
+}
+
+async function resolveShortcutUser(payload, integration, token) {
+  const fallback = {
+    userId: integration.owner_id,
+    source: 'integration_owner',
+    slackUserId: payload.user?.id || '',
+    slackUserEmail: '',
+    slackUserName: payload.user?.name || ''
+  };
+  if (!token || !payload.user?.id) return fallback;
+
+  try {
+    const slackUser = await getSlackUserInfo({ token, userId: payload.user.id });
+    const email = cleanText(slackUser?.profile?.email).toLowerCase();
+    const name = slackUserName(slackUser, payload.user.name || payload.user.id);
+    if (!email) return { ...fallback, source: 'slack_user_without_email', slackUserName: name };
+
+    const authUser = await findAuthUserByEmail(email);
+    if (!authUser) return { ...fallback, source: 'slack_email_unmatched', slackUserEmail: email, slackUserName: name };
+
+    const allowed = await sharesOrbitTeam(authUser.id, integration.owner_id);
+    if (!allowed) return { ...fallback, source: 'slack_email_matched_without_shared_team', slackUserEmail: email, slackUserName: name };
+
+    const profile = await ensureProfileForUser(authUser, name);
+    return {
+      userId: profile?.id || authUser.id,
+      source: 'slack_email',
+      slackUserId: payload.user.id,
+      slackUserEmail: email,
+      slackUserName: name
+    };
+  } catch (error) {
+    return { ...fallback, source: 'slack_user_lookup_failed', lookupError: error.message || 'Slack user lookup misslyckades.' };
+  }
 }
 
 async function createTaskFromMessage(payload, integration) {
@@ -97,19 +199,26 @@ async function createTaskFromMessage(payload, integration) {
   if (!channelId || !messageTs) throw new HttpError(400, 'Slack-meddelandets kanal eller timestamp saknas.');
 
   const existing = await existingSlackLink(integration.id, channelId, messageTs);
-  if (existing?.task_id) return { task: await loadTask(existing.task_id), duplicate: true };
+  if (existing?.task_id) return { task: await loadTask(existing.task_id) || { id: existing.task_id, title: existing.text_snapshot || 'Slack-uppgift' }, duplicate: true };
+
+  let token = null;
+  try {
+    token = await loadIntegrationToken(integration.id);
+  } catch {
+    token = null;
+  }
+  const shortcutUser = await resolveShortcutUser(payload, integration, token);
+  const orbitUserId = shortcutUser.userId || integration.owner_id;
 
   let permalink = existing?.permalink || (payload.team?.id ? `slack://channel?team=${encodeURIComponent(payload.team.id)}&id=${encodeURIComponent(channelId)}&message=${encodeURIComponent(messageTs)}` : '');
   if (!permalink) {
     try {
-      const token = await loadIntegrationToken(integration.id);
       permalink = await getSlackPermalink({ token, channel: channelId, messageTs });
     } catch {
       permalink = '';
     }
   } else {
     try {
-      const token = await loadIntegrationToken(integration.id);
       permalink = await getSlackPermalink({ token, channel: channelId, messageTs }) || permalink;
     } catch {
       // Keep the deep link fallback if Slack cannot return an HTTP permalink.
@@ -123,7 +232,9 @@ async function createTaskFromMessage(payload, integration) {
     `Källa: Slack shortcut${channel.name ? ` · #${channel.name}` : ''}`,
     `Slack-kanal: ${channelId}`,
     `Slack message_ts: ${messageTs}`,
-    user.id ? `Skapad från Slack av: ${user.name || user.id}` : ''
+    user.id ? `Skapad från Slack av: ${user.name || user.id}` : '',
+    shortcutUser.slackUserEmail ? `Slack-email matchad mot Orbit: ${shortcutUser.slackUserEmail}` : '',
+    `Orbit-tilldelning: ${shortcutUser.source}`
   ].filter(Boolean).join('\n\n');
 
   const { data: task, error: taskError } = await adminClient()
@@ -132,8 +243,8 @@ async function createTaskFromMessage(payload, integration) {
       title,
       notes,
       project_id: null,
-      created_by: integration.owner_id,
-      assignee_id: integration.owner_id,
+      created_by: orbitUserId,
+      assignee_id: orbitUserId,
       bucket: 'inbox',
       priority: 3,
       status: 'todo',
@@ -148,7 +259,7 @@ async function createTaskFromMessage(payload, integration) {
   if (permalink) {
     const { error: linkError } = await adminClient().from('task_links').insert({
       task_id: task.id,
-      created_by: integration.owner_id,
+      created_by: orbitUserId,
       kind: 'chat',
       provider: 'Slack',
       title: 'Slack-meddelande',
@@ -156,6 +267,9 @@ async function createTaskFromMessage(payload, integration) {
       external_id: messageTs,
       metadata: {
         slackUserId: user.id || '',
+        slackUserEmail: shortcutUser.slackUserEmail || '',
+        orbitUserId,
+        assigneeSource: shortcutUser.source,
         channelId,
         threadTs,
         callbackId: payload.callback_id || ''
@@ -177,6 +291,9 @@ async function createTaskFromMessage(payload, integration) {
       source: 'message_shortcut',
       shortcutUserId: user.id || '',
       shortcutUserName: user.name || '',
+      shortcutUserEmail: shortcutUser.slackUserEmail || '',
+      orbitUserId,
+      assigneeSource: shortcutUser.source,
       callbackId: payload.callback_id || ''
     }
   }, { onConflict: 'integration_account_id,channel_id,message_ts' });
@@ -192,6 +309,9 @@ async function createTaskFromMessage(payload, integration) {
       ...payload,
       orbit: {
         taskId: task.id,
+        assigneeId: orbitUserId,
+        assigneeSource: shortcutUser.source,
+        slackUserEmail: shortcutUser.slackUserEmail || '',
         processedAt: now,
         action: 'created_task_from_message_shortcut',
         slackPermalink: permalink || ''
@@ -201,7 +321,7 @@ async function createTaskFromMessage(payload, integration) {
   });
   if (eventError) throw eventError;
 
-  return { task, duplicate: false };
+  return { task, duplicate: false, assigneeSource: shortcutUser.source };
 }
 
 export default async function handler(req, res) {
@@ -230,7 +350,7 @@ export default async function handler(req, res) {
     const result = await createTaskFromMessage(payload, integration);
     const text = result.duplicate
       ? `Orbit: det här Slack-meddelandet finns redan som uppgift: ${result.task.title || result.task.id}`
-      : `Orbit: skapade uppgiften “${result.task.title}”.`;
+      : `Orbit: skapade uppgiften “${result.task.title}”${result.assigneeSource === 'slack_email' ? ' i din Orbit Inbox' : ' i Orbit Inbox'}.`;
     await postSlackResponse(payload.response_url, text);
     res.status(200).json({ ok: true, ...result });
   } catch (error) {

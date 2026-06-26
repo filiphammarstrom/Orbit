@@ -99,7 +99,7 @@ Google Calendar och Slack använder dessa Vercel environment variables:
 - `SLACK_CLIENT_SECRET`
 - `SLACK_SIGNING_SECRET`
 - `SLACK_REDIRECT_URI`, t.ex. `https://orbit-iota-sage.vercel.app/api/slack-auth-callback`
-- `SLACK_SCOPES`, valfritt om du vill justera scopes. Om den används måste den innehålla `commands`.
+- `SLACK_SCOPES`, valfritt om du vill justera scopes. Om den används måste den innehålla `commands`, `users:read` och `users:read.email` för Slack-shortcuts och user mapping.
 
 Google Calendar-flödet:
 
@@ -125,13 +125,13 @@ Slack-flödet:
    - Name: `Skapa Orbit-task`
    - Short description: `Skapar en Orbit-uppgift från meddelandet`
    - Callback ID: `orbit_create_task`
-5. Lägg minst dessa bot scopes: `channels:history`, `commands`, `groups:history`, `im:history`, `mpim:history`, `reactions:read`, `team:read`, `chat:write`.
+5. Lägg minst dessa bot scopes: `channels:history`, `commands`, `groups:history`, `im:history`, `mpim:history`, `reactions:read`, `team:read`, `chat:write`, `users:read`, `users:read.email`.
 6. Lägg Vercel-miljövariablerna `SLACK_CLIENT_ID`, `SLACK_CLIENT_SECRET`, `SLACK_SIGNING_SECRET` och `SLACK_REDIRECT_URI`.
 7. Öppna Team-vyn i Orbit och klicka “Anslut Slack”. Om `commands` lagts till efter en tidigare installation behöver Slack kopplas om.
 8. Slack OAuth-callbacken sparar bot token krypterat i `private.integration_tokens`.
 9. Slack Events API verifierar `X-Slack-Signature`, deduplicerar `event_id`, försöker hämta en riktig Slack-permalink via `chat.getPermalink` och sparar inkommande events i `integration_events`.
 10. Öppna Team-vyns Slack-inbox för att granska nya Slack-events, öppna originalmeddelandet i Slack och skapa Orbit-uppgifter med titel, projekt, tilldelad och prioritet.
-11. Använd Slack message shortcut “Skapa Orbit-task” på ett meddelande för att skapa en uppgift direkt i integrationsägarens Orbit Inbox.
+11. Använd Slack message shortcut “Skapa Orbit-task” på ett meddelande för att skapa en uppgift direkt i Orbit. Om Slack-användarens email matchar en Orbit-användare som delar team med integrationsägaren hamnar den i den personens Inbox, annars i integrationsägarens Inbox.
 12. När en Slack-händelse eller shortcut blir en uppgift markeras den som hanterad, länkas till tasken och sparas även i `slack_message_links` med Slack-permalink när den finns.
 13. Använd MCP-verktygen `create_task_from_slack` eller `link_slack_message` för samma flöde från en AI-klient.
 14. `ingest_integration_event` kan spara inkommande Slack-events och samtidigt aktivera dolda tasks via ett triggernamn.
