@@ -176,8 +176,9 @@ function slackInboxContent(){
 function slackEventCard(eventRow){
   const summary=slackEventSummary(eventRow),integration=state.integrations.find(i=>i.id===eventRow.integrationAccountId),title=`Slack: ${summary.title}`;
   const text=summary.text||`${summary.eventType}${eventRow.externalId?` · ${eventRow.externalId}`:''}`;
+  const slackLink=summary.url?`<a class="slack-event-link" href="${escapeHtml(safeHref(summary.url))}" target="_blank" rel="noreferrer">Öppna i Slack</a>`:'';
   return `<article class="slack-event-card">
-    <div class="slack-event-main"><div><strong>${escapeHtml(summary.title)}</strong><p>${escapeHtml(text)}</p><small>${escapeHtml([integration?.displayName||'Slack',summary.channelId,formatDateTime(eventRow.createdAt)].filter(Boolean).join(' · '))}</small></div><span>${escapeHtml(summary.eventType)}</span></div>
+    <div class="slack-event-main"><div><strong>${escapeHtml(summary.title)}</strong><p>${escapeHtml(text)}</p><small>${escapeHtml([integration?.displayName||'Slack',summary.channelId,formatDateTime(eventRow.createdAt)].filter(Boolean).join(' · '))}</small></div><div class="slack-event-actions"><span>${escapeHtml(summary.eventType)}</span>${slackLink}</div></div>
     <form class="slack-event-form" data-slack-event="${eventRow.id}">
       <input name="title" value="${escapeHtml(title)}" required>
       <select name="projectId" class="slack-project-select">${projectOptionsHtml('')}</select>

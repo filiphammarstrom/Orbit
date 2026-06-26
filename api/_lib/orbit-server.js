@@ -282,6 +282,27 @@ export async function loadIntegrationToken(integrationId) {
   return decryptToken(row);
 }
 
+function slackAccessToken(token) {
+  return token?.access_token || token?.bot?.bot_access_token || token?.authed_user?.access_token || '';
+}
+
+export async function getSlackPermalink({ token, channel, messageTs }) {
+  if (!channel || !messageTs) return '';
+  const accessToken = slackAccessToken(token);
+  if (!accessToken) throw new HttpError(400, 'Slack-kopplingen saknar bot token.');
+
+  const url = new URL('https://slack.com/api/chat.getPermalink');
+  url.searchParams.set('channel', channel);
+  url.searchParams.set('message_ts', messageTs);
+
+  const response = await fetch(url, {
+    headers: { authorization: `Bearer ${accessToken}` }
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok || !data.ok) throw new HttpError(response.status || 400, data.error || 'Kunde inte hämta Slack-länk.');
+  return data.permalink || '';
+}
+
 export async function createGoogleCalendarEvent({ accessToken, calendarId, event }) {
   const response = await fetch(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events?sendUpdates=none`, {
     method: 'POST',

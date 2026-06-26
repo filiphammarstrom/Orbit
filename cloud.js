@@ -377,9 +377,9 @@ export function slackEventSummary(eventRow = {}) {
   const payload = eventRow.payload || {};
   const event = payload.event || {};
   const teamId = payload.team_id || payload.authorizations?.[0]?.team_id || '';
-  const channelId = event.channel || event.item?.channel || event.message?.channel || '';
-  const messageTs = event.ts || event.message?.ts || event.item?.ts || event.event_ts || '';
-  const threadTs = event.thread_ts || event.message?.thread_ts || messageTs || '';
+  const channelId = event.channel || event.item?.channel || event.message?.channel || payload.orbit?.slackChannelId || '';
+  const messageTs = event.message?.ts || event.ts || event.item?.ts || event.event_ts || payload.orbit?.slackMessageTs || '';
+  const threadTs = event.thread_ts || event.message?.thread_ts || payload.orbit?.slackThreadTs || messageTs || '';
   const authorExternalId = event.user || event.item_user || event.message?.user || '';
   const text = (event.text || event.message?.text || '').trim();
   const fallback = event.type === 'reaction_added'
@@ -387,7 +387,7 @@ export function slackEventSummary(eventRow = {}) {
     : `Slack-event: ${event.type || eventRow.eventType || 'okänt'}`;
   const titleText = text || fallback;
   const title = titleText.length > 80 ? `${titleText.slice(0, 77)}…` : titleText;
-  const url = event.permalink || (teamId && channelId && messageTs ? `slack://channel?team=${encodeURIComponent(teamId)}&id=${encodeURIComponent(channelId)}&message=${encodeURIComponent(messageTs)}` : '');
+  const url = event.permalink || payload.orbit?.slackPermalink || (teamId && channelId && messageTs ? `slack://channel?team=${encodeURIComponent(teamId)}&id=${encodeURIComponent(channelId)}&message=${encodeURIComponent(messageTs)}` : '');
 
   return {
     teamId,

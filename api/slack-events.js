@@ -1,6 +1,8 @@
 import {
   HttpError,
   adminClient,
+  getSlackPermalink,
+  loadIntegrationToken,
   rawBody,
   requireMethod,
   sendError,
@@ -49,6 +51,52 @@ async function markSlackUninstalled(teamId) {
     .eq('provider_team_id', teamId);
 }
 
+function slackMessageRef(payload) {
+  const event = payload.event || {};
+  if (event.item?.channel && event.item?.ts) {
+    return {
+      channel: event.item.channel,
+      messageTs: event.item.ts,
+      threadTs: event.thread_ts || event.item.thread_ts || ''
+    };
+  }
+  return {
+    channel: event.channel || event.message?.channel || '',
+    messageTs: event.message?.ts || event.ts || event.message?.event_ts || event.event_ts || '',
+    threadTs: event.thread_ts || event.message?.thread_ts || ''
+  };
+}
+
+async function enrichSlackPayload(payload, integration) {
+  const ref = slackMessageRef(payload);
+  if (!integration?.id || !ref.channel || !ref.messageTs) return payload;
+
+  try {
+    const token = await loadIntegrationToken(integration.id);
+    const permalink = await getSlackPermalink({ token, channel: ref.channel, messageTs: ref.messageTs });
+    if (!permalink) return payload;
+    return {
+      ...payload,
+      event: { ...(payload.event || {}), permalink },
+      orbit: {
+        ...(payload.orbit || {}),
+        slackPermalink: permalink,
+        slackChannelId: ref.channel,
+        slackMessageTs: ref.messageTs,
+        slackThreadTs: ref.threadTs || ''
+      }
+    };
+  } catch (error) {
+    return {
+      ...payload,
+      orbit: {
+        ...(payload.orbit || {}),
+        slackPermalinkError: error.message || 'Kunde inte hämta Slack-permalink.'
+      }
+    };
+  }
+}
+
 async function storeSlackEvent(payload, integration) {
   const event = payload.event || {};
   const externalId = payload.event_id || event.event_ts || event.ts || '';
@@ -91,7 +139,8 @@ export default async function handler(req, res) {
     const teamId = payload.team_id || payload.authorizations?.[0]?.team_id || '';
     const integration = await findSlackIntegration(teamId);
     if (payload.event?.type === 'app_uninstalled') await markSlackUninstalled(teamId);
-    const result = await storeSlackEvent(payload, integration);
+    const eventPayload = await enrichSlackPayload(payload, integration);
+    const result = await storeSlackEvent(eventPayload, integration);
 
     res.status(200).json({ ok: true, ...result });
   } catch (error) {
