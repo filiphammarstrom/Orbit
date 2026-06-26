@@ -4,6 +4,7 @@ import { createClient } from '@supabase/supabase-js';
 const GOOGLE_SCOPES = ['https://www.googleapis.com/auth/calendar.events'];
 const DEFAULT_SLACK_SCOPES = [
   'channels:history',
+  'commands',
   'groups:history',
   'im:history',
   'mpim:history',
@@ -295,12 +296,19 @@ export async function getSlackPermalink({ token, channel, messageTs }) {
   url.searchParams.set('channel', channel);
   url.searchParams.set('message_ts', messageTs);
 
-  const response = await fetch(url, {
-    headers: { authorization: `Bearer ${accessToken}` }
-  });
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok || !data.ok) throw new HttpError(response.status || 400, data.error || 'Kunde inte hämta Slack-länk.');
-  return data.permalink || '';
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 1500);
+  try {
+    const response = await fetch(url, {
+      headers: { authorization: `Bearer ${accessToken}` },
+      signal: controller.signal
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || !data.ok) throw new HttpError(response.status || 400, data.error || 'Kunde inte hämta Slack-länk.');
+    return data.permalink || '';
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 export async function createGoogleCalendarEvent({ accessToken, calendarId, event }) {
