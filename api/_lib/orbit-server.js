@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 
 const GOOGLE_SCOPES = ['https://www.googleapis.com/auth/calendar.events'];
 let cachedAdmin;
+let cachedUserKey;
 
 export class HttpError extends Error {
   constructor(status, message) {
@@ -17,6 +18,12 @@ export function requireEnv(name) {
   return value;
 }
 
+function requireAnyEnv(names) {
+  const entry = names.find(name => process.env[name]);
+  if (!entry) throw new HttpError(500, `Saknar serverkonfiguration: ${names.join(' eller ')}`);
+  return process.env[entry];
+}
+
 export function adminClient() {
   if (!cachedAdmin) {
     cachedAdmin = createClient(requireEnv('SUPABASE_URL'), requireEnv('SUPABASE_SERVICE_ROLE_KEY'), {
@@ -24,6 +31,31 @@ export function adminClient() {
     });
   }
   return cachedAdmin;
+}
+
+export function bearerToken(req) {
+  return (req.headers.authorization || '').replace(/^Bearer\s+/i, '').trim();
+}
+
+function supabaseUserKey() {
+  if (!cachedUserKey) {
+    cachedUserKey = requireAnyEnv([
+      'SUPABASE_PUBLISHABLE_KEY',
+      'SUPABASE_ANON_KEY',
+      'VITE_SUPABASE_PUBLISHABLE_KEY',
+      'VITE_SUPABASE_ANON_KEY'
+    ]);
+  }
+  return cachedUserKey;
+}
+
+export function userClient(req) {
+  const token = bearerToken(req);
+  if (!token) throw new HttpError(401, 'Saknar inloggnings-token.');
+  return createClient(requireEnv('SUPABASE_URL'), supabaseUserKey(), {
+    auth: { persistSession: false, autoRefreshToken: false },
+    global: { headers: { authorization: `Bearer ${token}` } }
+  });
 }
 
 export function sendError(res, error) {
@@ -44,7 +76,7 @@ export function googleRedirectUri(req) {
 }
 
 export async function authenticatedUser(req) {
-  const token = (req.headers.authorization || '').replace(/^Bearer\s+/i, '').trim();
+  const token = bearerToken(req);
   if (!token) throw new HttpError(401, 'Saknar inloggnings-token.');
 
   const { data, error } = await adminClient().auth.getUser(token);

@@ -14,7 +14,7 @@ Orbit är en molnbaserad fleranvändarapp för områden, projekt, team och villk
 - Kontextlänkar från andra appar, t.ex. mail, dokument, chattar och kalenderposter
 - “Tilldelat till mig”-vy med separering mellan uppgifter från andra och egna uppgifter
 - Team & delning-vy för att skapa team, bjuda in via e-post och dela områden med rätt team
-- Google Calendar-sektion på uppgifter: manuell “öppna i Google Calendar”-länk, kalenderkopplingar och köad sync-status
+- Google Calendar-sektion på uppgifter: manuell “öppna i Google Calendar”-länk, direkt-sync, retry och köad sync-status
 - Integrationsgrund för Google Calendar och Slack
 - Daglig Orbit-brief från MCP/AI samt sparade agentförslag
 - AI-control via MCP: externa AI-klienter kan läsa workspace, skapa projekt, masskapa tasks, tilldela personer och uppdatera status
@@ -102,10 +102,14 @@ Google Calendar-flödet:
 2. Öppna uppgiftens Google Calendar-sektion och använd “Öppna manuellt” för en förifylld kalenderpost.
 3. Klicka “Anslut Google” för att köra OAuth via `/api/google-auth-start` och `/api/google-auth-callback`.
 4. OAuth-callbacken sparar refresh token krypterat i `private.integration_tokens` via service-role-begränsad RPC.
-5. Köa sync från uppgiftspanelen.
-6. Kör `/api/google-calendar-sync` med headern `Authorization: Bearer <CRON_SECRET>` för att skapa pending events i Google Calendar och spara `providerEventId` + `eventUrl`.
+5. Köa sync från uppgiftspanelen. Webben försöker direkt skapa kalenderposten via `/api/google-calendar-sync-now`.
+6. Om direkt-sync misslyckas visas felet i uppgiftspanelen och länken kan köras igen med “Försök igen”.
+7. Vercel Cron kör `/api/google-calendar-sync` dagligen som fallback och skapar pending events i Google Calendar.
+8. Manuell worker-körning kan göras med headern `Authorization: Bearer <CRON_SECRET>`.
 
 Google Calendar API-scope som används: `https://www.googleapis.com/auth/calendar.events`.
+
+Cron-schemat i `vercel.json` är satt till dagligen (`0 6 * * *`) för att fungera även på Vercel Hobby. På Pro kan det höjas till t.ex. varje timme.
 
 Slack-flödet:
 

@@ -84,6 +84,7 @@
 .calendar-sync-row{display:grid;grid-template-columns:64px 1fr auto;gap:8px;align-items:center;background:#fff;border:1px solid var(--line);border-radius:10px;padding:9px}
 .calendar-sync-row strong{display:block;font-size:11px}
 .calendar-sync-row small{display:block;color:#999;font-size:9px;margin-top:2px}
+.calendar-sync-row .calendar-error{color:#b95650;font-weight:700}
 .calendar-sync-row a{font-size:10px;color:var(--purple);text-decoration:none}
 .calendar-status{display:inline-flex;justify-content:center;border-radius:999px;padding:4px 6px;background:#eee9f8;color:#6e5ac5;font-size:9px;font-weight:700}
 .calendar-status.synced{background:#e8f5ef;color:#33866f}

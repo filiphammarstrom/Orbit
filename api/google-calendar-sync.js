@@ -14,11 +14,18 @@ function checkWorkerAuth(req) {
   if (actual !== expected) throw new HttpError(401, 'Unauthorized.');
 }
 
-async function markLink(id, patch) {
+export async function markCalendarLink(id, patch) {
   await adminClient()
     .from('task_calendar_links')
     .update({ ...patch, updated_at: new Date().toISOString() })
     .eq('id', id);
+}
+
+export async function markCalendarLinkFailed(link, error) {
+  await markCalendarLink(link.id, {
+    status: 'failed',
+    payload: { ...(link.payload || {}), syncError: error.message || 'Okänt fel' }
+  });
 }
 
 async function loadTask(id) {
@@ -62,7 +69,7 @@ function googleEventId(linkId) {
   return `orbit${String(linkId).replace(/[^a-f0-9]/gi, '').toLowerCase()}`;
 }
 
-async function syncOne(link) {
+export async function syncCalendarLink(link) {
   const [task, integration] = await Promise.all([
     loadTask(link.task_id),
     loadIntegration(link.integration_account_id)
@@ -93,7 +100,7 @@ async function syncOne(link) {
     event
   });
 
-  await markLink(link.id, {
+  await markCalendarLink(link.id, {
     status: 'synced',
     provider_event_id: googleEvent.id || '',
     event_url: googleEvent.htmlLink || '',
@@ -121,12 +128,9 @@ export default async function handler(req, res) {
     const results = [];
     for (const link of links || []) {
       try {
-        results.push(await syncOne(link));
+        results.push(await syncCalendarLink(link));
       } catch (error) {
-        await markLink(link.id, {
-          status: 'failed',
-          payload: { ...(link.payload || {}), syncError: error.message || 'Okänt fel' }
-        });
+        await markCalendarLinkFailed(link, error);
         results.push({ id: link.id, status: 'failed', error: error.message || 'Okänt fel' });
       }
     }
