@@ -30,7 +30,7 @@
     <div class="brand"><span class="brandmark">O</span><span>orbit</span><button class="collapse">‹</button></div>
     <button class="quick-add" id="quickAdd"><span>＋</span> Ny uppgift <kbd>N</kbd></button>
     <nav id="mainNav"></nav>
-    <div class="nav-section"><div class="nav-label"><span>KATEGORIER</span><button title="Ny strukturvy" data-view="areas">＋</button></div><div id="projectNav"></div></div>
+    <div class="nav-section"><div class="nav-label"><span>KATEGORIER</span><button title="Ny kategori eller område" data-create-structure="category">＋</button></div><div id="projectNav"></div></div>
     <div class="sidebar-foot"><div class="avatar">FH</div><div><strong id="currentUserName">Mitt konto</strong><small>Min arbetsyta</small></div><button id="logoutButton" title="Logga ut">↪</button></div>
   </aside>
   <main>
@@ -87,6 +87,22 @@
         <p class="hint">Uppgiften förblir helt dold tills villkoret uppfylls. Håll Ctrl/⌘ för att välja flera uppgifter.</p>
       </details>
       <div class="dialog-actions"><button type="button" data-close-task-dialog class="secondary">Avbryt</button><button value="default" id="saveTask" class="primary">Skapa uppgift <span>↵</span></button></div>
+    </form>
+  </dialog>
+  <dialog id="structureDialog">
+    <form method="dialog" id="structureForm" class="structure-form">
+      <div class="dialog-head"><div><p class="eyebrow" id="structureEyebrow">STRUKTUR</p><h2 id="structureTitle">Ny kategori</h2></div><button type="button" data-close-structure-dialog class="close">×</button></div>
+      <p class="hint structure-help" id="structureHelp">Skapa kategori, område eller projekt på rätt nivå.</p>
+      <input type="hidden" name="mode">
+      <label id="structureCategoryField">Kategori<input name="category" list="structureCategoryOptions" placeholder="T.ex. Privat, Jobb eller Bolag"><datalist id="structureCategoryOptions"></datalist></label>
+      <label id="structureAreaField">Område<select name="areaId" id="structureAreaSelect"></select></label>
+      <label id="structureNameField"><span id="structureNameLabel">Namn</span><input name="name" id="structureNameInput" placeholder="Namn" required></label>
+      <div class="form-grid structure-details">
+        <label id="structureIconField">Ikon<input name="icon" maxlength="2" value="◫"></label>
+        <label>Färg<input name="color" type="color" value="#7659ef"></label>
+        <label id="structureTeamField">Delas med<select name="teamId" id="structureTeamSelect"></select></label>
+      </div>
+      <div class="dialog-actions"><button type="button" data-close-structure-dialog class="secondary">Avbryt</button><button value="default" class="primary" id="saveStructure">Skapa</button></div>
     </form>
   </dialog>
   <div class="toast" id="toast"></div>

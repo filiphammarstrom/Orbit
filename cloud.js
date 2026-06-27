@@ -332,6 +332,7 @@ export function subscribeToChanges(onChange) {
     .on('postgres_changes', { event: '*', schema: 'public', table: 'teams' }, onChange)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'team_members' }, onChange)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'areas' }, onChange)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'projects' }, onChange)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'invitations' }, onChange)
     .subscribe();
 }
@@ -608,6 +609,39 @@ export async function createTeam(name) {
   const { error: memberError } = await supabase.from('team_members').insert({ team_id: data.id, user_id: user.id, role: 'owner', status: 'active' });
   if (memberError) throw memberError;
 
+  return data;
+}
+
+export async function createArea(input = {}) {
+  const user = (await session())?.user;
+  if (!user) throw new Error('Du är inte inloggad.');
+  const name = String(input.name || '').trim();
+  if (!name) throw new Error('Området behöver ett namn.');
+  const category = String(input.category || 'Privat').trim() || 'Privat';
+
+  const { data, error } = await supabase.from('areas').insert({
+    name: name.slice(0, 120),
+    category: category.slice(0, 80),
+    icon: String(input.icon || '◫').trim().slice(0, 2) || '◫',
+    color: input.color || '#7659ef',
+    owner_id: user.id,
+    team_id: input.teamId || null
+  }).select().single();
+  if (error) throw error;
+  return data;
+}
+
+export async function createProject(input = {}) {
+  const name = String(input.name || '').trim();
+  if (!name) throw new Error('Projektet behöver ett namn.');
+  if (!input.areaId) throw new Error('Välj vilket område projektet ska ligga under.');
+
+  const { data, error } = await supabase.from('projects').insert({
+    area_id: input.areaId,
+    name: name.slice(0, 120),
+    color: input.color || '#8b70ff'
+  }).select().single();
+  if (error) throw error;
   return data;
 }
 

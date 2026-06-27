@@ -1,4 +1,4 @@
-import { configured, session, signIn, signUp, signOut, loadCloudState, createCloudTask, updateCloudTask, subscribeToChanges, addComment, addTaskLink, startGoogleCalendarOAuth, startSlackOAuth, slackEventSummary, createTaskFromSlackEvent, syncCalendarLinkNow, queueCalendarSync, saveDailyBrief, saveAgentRun, markNotificationRead, decideApproval, createTeam, createInvitation, shareAreaWithTeam, updateAreaDetails } from './cloud.js';
+import { configured, session, signIn, signUp, signOut, loadCloudState, createCloudTask, updateCloudTask, subscribeToChanges, addComment, addTaskLink, startGoogleCalendarOAuth, startSlackOAuth, slackEventSummary, createTaskFromSlackEvent, syncCalendarLinkNow, queueCalendarSync, saveDailyBrief, saveAgentRun, markNotificationRead, decideApproval, createTeam, createArea, createProject, createInvitation, shareAreaWithTeam, updateAreaDetails } from './cloud.js';
 
 let state, view = 'today', projectView='list', liveChannel;
 const $ = s => document.querySelector(s);
@@ -6,6 +6,8 @@ const bucketViews = ['inbox','today','later','someday'];
 const navItems = [['inbox','⌄','Inbox'],['today','☀','Gör idag'],['later','◷','Gör sen'],['someday','◇','Gör nån gång']];
 const mobileItems = [['inbox','⌄','Inbox'],['today','☀','Idag'],['later','◷','Sen'],['someday','◇','Nån gång'],['areas','▦','Områden']];
 let pendingCapture = readCaptureIntent();
+const collapsedCategories = new Set();
+const collapsedAreas = new Set();
 
 async function api(path, options={}) {
   if(path==='/state') return loadCloudState();
@@ -31,6 +33,11 @@ const projectsForArea=a=>state.projects.filter(p=>p.areaId===a.id);
 const taskCountForProjects=projects=>visible().filter(t=>projects.some(p=>p.id===t.projectId)).length;
 const categoryViewId=category=>`category:${encodeURIComponent(category)}`;
 const categoryFromView=()=>decodeURIComponent(view.slice('category:'.length));
+const areaHasActiveProject=a=>view.startsWith('project:')&&projectsForArea(a).some(p=>view==='project:'+p.id);
+const areaIsActive=a=>view==='area:'+a.id||areaHasActiveProject(a);
+const categoryIsActive=group=>view===categoryViewId(group.category)||group.areas.some(areaIsActive);
+const categoryIsOpen=group=>categoryIsActive(group)||!collapsedCategories.has(group.category);
+const areaIsOpen=a=>areaIsActive(a)||!collapsedAreas.has(a.id);
 const escapeHtml=(s='')=>String(s).replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
 const toast=text=>{$('#toast').textContent=text;$('#toast').classList.add('show');setTimeout(()=>$('#toast').classList.remove('show'),2200)};
 const avatarHtml=p=>`<span class="mini-avatar" title="${p.name}" style="background:${p.color}">${p.initials}</span>`;
@@ -141,11 +148,40 @@ function registerServiceWorker(){
   window.addEventListener('load',()=>navigator.serviceWorker.register('/service-worker.js').catch(()=>{}));
 }
 
+function bindStructureActions(root=document){
+  root.querySelectorAll('[data-toggle-category]').forEach(b=>b.onclick=()=>{const category=b.dataset.toggleCategory;collapsedCategories.has(category)?collapsedCategories.delete(category):collapsedCategories.add(category);render()});
+  root.querySelectorAll('[data-toggle-area]').forEach(b=>b.onclick=()=>{const id=b.dataset.toggleArea;collapsedAreas.has(id)?collapsedAreas.delete(id):collapsedAreas.add(id);render()});
+  root.querySelectorAll('[data-create-structure]').forEach(b=>b.onclick=()=>openStructureDialog(b.dataset.createStructure));
+  root.querySelectorAll('[data-create-area]').forEach(b=>b.onclick=()=>openStructureDialog('area',{category:b.dataset.createArea}));
+  root.querySelectorAll('[data-create-project]').forEach(b=>b.onclick=()=>openStructureDialog('project',{areaId:b.dataset.createProject}));
+}
+
 function renderNav(){
   $('#mainNav').innerHTML=navItems.map(([id,ico,label])=>`<button class="nav-item ${view===id?'active':''}" data-view="${id}"><span class="ico">${ico}</span><span>${label}</span><span class="count">${navCount(id)||''}</span></button>`).join('');
-  $('#projectNav').innerHTML=areaGroups().map(group=>{const categoryProjects=group.areas.flatMap(projectsForArea),categoryView=categoryViewId(group.category),categoryCount=taskCountForProjects(categoryProjects);return `<div class="category-group"><button class="category-label category-nav ${view===categoryView?'active':''}" data-view="${escapeHtml(categoryView)}"><span>${escapeHtml(group.category)}</span><span class="count">${categoryCount||''}</span></button>${group.areas.map(a=>{const projects=projectsForArea(a),count=taskCountForProjects(projects);return `<div class="area-group"><button class="nav-item area-nav ${view==='area:'+a.id?'active':''}" data-view="area:${a.id}"><span class="area-icon" style="background:${a.color}">${a.icon}</span><span>${escapeHtml(areaName(a))}</span><span class="count">${count||''}</span><span class="chevron">⌄</span></button>${projects.map(p=>`<button class="nav-item project-child ${view==='project:'+p.id?'active':''}" data-view="project:${p.id}"><span class="project-dot" style="background:${p.color}"></span><span>${escapeHtml(p.name)}</span><span class="count">${visible().filter(t=>t.projectId===p.id).length||''}</span></button>`).join('')}</div>`}).join('')}</div>`}).join('');
+  $('#projectNav').innerHTML=`<button class="structure-overview ${view==='areas'?'active':''}" data-view="areas">▦ Strukturöversikt</button><button class="structure-create" data-create-structure="category">＋ Ny kategori / område</button>${areaGroups().map(group=>{
+    const categoryProjects=group.areas.flatMap(projectsForArea),categoryView=categoryViewId(group.category),categoryCount=taskCountForProjects(categoryProjects),open=categoryIsOpen(group);
+    return `<div class="tree-category ${open?'open':'closed'}">
+      <div class="tree-row category-row ${categoryIsActive(group)?'active':''}">
+        <button class="tree-toggle" data-toggle-category="${escapeHtml(group.category)}">${open?'▾':'▸'}</button>
+        <button class="tree-main" data-view="${escapeHtml(categoryView)}"><span>${escapeHtml(group.category)}</span><small>${group.areas.length} område${group.areas.length===1?'':'n'}</small><i>${categoryCount||''}</i></button>
+        <button class="tree-add" title="Nytt område i ${escapeHtml(group.category)}" data-create-area="${escapeHtml(group.category)}">＋</button>
+      </div>
+      ${open?`<div class="tree-children">${group.areas.map(a=>{
+        const projects=projectsForArea(a),areaOpen=areaIsOpen(a),count=taskCountForProjects(projects);
+        return `<div class="tree-area ${areaOpen?'open':'closed'}">
+          <div class="tree-row area-row ${areaIsActive(a)?'active':''}">
+            <button class="tree-toggle" data-toggle-area="${a.id}">${areaOpen?'▾':'▸'}</button>
+            <button class="tree-main" data-view="area:${a.id}"><span class="area-icon" style="background:${a.color}">${a.icon}</span><span>${escapeHtml(areaName(a))}</span><small>${projects.length} projekt</small><i>${count||''}</i></button>
+            <button class="tree-add" title="Nytt projekt i ${escapeHtml(areaName(a))}" data-create-project="${a.id}">＋</button>
+          </div>
+          ${areaOpen?`<div class="tree-projects">${projects.map(p=>`<button class="tree-project ${view==='project:'+p.id?'active':''}" data-view="project:${p.id}"><span class="project-dot" style="background:${p.color}"></span><span>${escapeHtml(p.name)}</span><i>${visible().filter(t=>t.projectId===p.id).length||''}</i></button>`).join('')}${projects.length?'':`<button class="tree-empty-project" data-create-project="${a.id}">＋ Skapa första projektet</button>`}</div>`:''}
+        </div>`;
+      }).join('')}<button class="tree-create-under" data-create-area="${escapeHtml(group.category)}">＋ Nytt område i ${escapeHtml(group.category)}</button></div>`:''}
+    </div>`;
+  }).join('')}`;
   $('#mobileNav').innerHTML=mobileItems.map(([id,ico,label])=>`<button class="mobile-nav-item ${view===id||(id==='areas'&&(view.startsWith('category:')||view.startsWith('area:')||view.startsWith('project:')))?'active':''}" data-view="${id}"><span>${ico}</span><small>${label.replace('Gör ','')}</small>${id!=='areas'&&navCount(id)?`<i>${navCount(id)}</i>`:''}</button>`).join('');
   document.querySelectorAll('[data-view]').forEach(b=>b.onclick=()=>{view=b.dataset.view;render()});
+  bindStructureActions();
 }
 
 function render(){
@@ -171,6 +207,7 @@ function render(){
   document.querySelectorAll('.check').forEach(b=>b.onclick=e=>{e.stopPropagation();complete(b.dataset.id)});
   document.querySelectorAll('[data-area-open]').forEach(c=>c.onclick=()=>{view='area:'+c.dataset.areaOpen;render()});
   document.querySelectorAll('#taskList [data-view]').forEach(b=>b.onclick=()=>{view=b.dataset.view;render()});
+  bindStructureActions($('#taskList'));
   document.querySelectorAll('[data-overdue-open]').forEach(b=>b.onclick=()=>openInspector(b.dataset.overdueOpen));
   document.querySelectorAll('[data-overdue-done]').forEach(b=>b.onclick=()=>complete(b.dataset.overdueDone));
   document.querySelectorAll('[data-plan-open]').forEach(b=>b.onclick=()=>openInspector(b.dataset.planOpen));
@@ -414,21 +451,21 @@ function areaHierarchyCard(a){
   const projects=projectsForArea(a),members=membersForArea(a),current=team(a.teamId),owner=a.ownerId===state.currentUserId,category=areaCategory(a),taskCount=taskCountForProjects(projects);
   return `<article class="area-card hierarchy-area-card">
     <div class="area-card-head"><span class="area-card-icon" style="background:${a.color}">${a.icon}</span><div><h3>${escapeHtml(areaName(a))}</h3><p>${projects.length} projekt · ${taskCount} uppgifter</p></div></div>
-    <div class="area-card-projects">${projects.map(p=>`<span>${escapeHtml(p.name)}</span>`).join('')||'<span>Inga projekt ännu</span>'}</div>
+    <div class="area-card-projects">${projects.map(p=>`<button data-view="project:${p.id}"><span class="project-dot" style="background:${p.color}"></span>${escapeHtml(p.name)}</button>`).join('')||'<span>Inga projekt ännu</span>'}</div>
     <div class="area-settings">
       <label>Kategori<input data-area-category="${a.id}" data-original-category="${escapeHtml(category)}" value="${escapeHtml(category)}" ${owner?'':'disabled'}></label>
       <label>Delas med<select data-area-share="${a.id}" ${owner?'':'disabled'}><option value="">Endast privat</option>${state.teams.map(t=>`<option value="${t.id}" ${a.teamId===t.id?'selected':''}>${escapeHtml(t.name)}</option>`).join('')}</select></label>
     </div>
     <div class="access-note">${a.teamId?'Delas med':'Privat för dig'}<span class="team-stack">${members.map(avatarHtml).join('')}</span>${a.teamId?escapeHtml(current?.name||'Okänt team'):'Endast du'}</div>
-    <button class="secondary area-open" type="button" data-area-open="${a.id}">Öppna område</button>
+    <div class="area-card-actions"><button class="secondary" type="button" data-area-open="${a.id}">Öppna område</button><button class="secondary" type="button" data-create-project="${a.id}">＋ Nytt projekt</button></div>
   </article>`;
 }
 
 function areaCards(){
   const groups=areaGroups();
   return `<div class="hierarchy-page">
-    <section class="hierarchy-intro"><div><p class="eyebrow">MODELLEN</p><h3>Kategori → Område → Projekt → Task → Subtask</h3><p>Kategorier är översta nivån, t.ex. Privat, Bolag eller Jobb. Team kopplas till områden för åtkomst och är därför inte en egen uppgiftslista.</p></div></section>
-    ${groups.length?groups.map(group=>`<section class="category-card"><div class="category-head"><div><p class="eyebrow">KATEGORI</p><h3>${escapeHtml(group.category)}</h3><p>${group.areas.length} område${group.areas.length===1?'':'n'}</p></div></div><div class="area-grid">${group.areas.map(areaHierarchyCard).join('')}</div></section>`).join(''):'<div class="empty">Inga områden ännu.</div>'}
+    <section class="hierarchy-intro"><div><p class="eyebrow">MODELLEN</p><h3>Kategori → Område → Projekt → Task → Subtask</h3><p>Kategorier är översta nivån, t.ex. Privat, Bolag eller Jobb. Team kopplas till områden för åtkomst och är därför inte en egen uppgiftslista.</p></div><button class="primary" data-create-structure="category">＋ Ny kategori</button></section>
+    ${groups.length?groups.map(group=>`<section class="category-card"><div class="category-head"><div><p class="eyebrow">KATEGORI</p><h3>${escapeHtml(group.category)}</h3><p>${group.areas.length} område${group.areas.length===1?'':'n'}</p></div><button class="secondary" data-create-area="${escapeHtml(group.category)}">＋ Nytt område</button></div><div class="area-grid">${group.areas.map(areaHierarchyCard).join('')}</div></section>`).join(''):'<div class="empty">Inga områden ännu. Skapa första kategorin ovan.</div>'}
     ${areaAccessContent()}
   </div>`;
 }
@@ -603,6 +640,90 @@ function renderAgentPanel(){
   $('#agentActions').querySelectorAll('[data-agent-task]').forEach(b=>b.onclick=()=>openInspector(b.dataset.agentTask));
   $('#runAgent').onclick=async()=>{const plan=buildAgentPlan();await saveAgentRun(plan);await load();toast('Agenten har föreslagit nästa steg.')};
 }
+
+function currentCategory(){
+  if(view.startsWith('category:'))return categoryFromView();
+  if(view.startsWith('area:'))return areaCategory(area(view.split(':')[1]));
+  if(view.startsWith('project:'))return areaCategory(areaForProject(view.split(':')[1]));
+  return 'Privat';
+}
+
+function currentAreaId(){
+  if(view.startsWith('area:'))return view.split(':')[1];
+  if(view.startsWith('project:'))return project(view.split(':')[1])?.areaId||'';
+  return '';
+}
+
+function fillStructureOptions(selectedAreaId=''){
+  $('#structureCategoryOptions').innerHTML=areaGroups().map(group=>`<option value="${escapeHtml(group.category)}"></option>`).join('');
+  $('#structureAreaSelect').innerHTML=areaGroups().map(group=>`<optgroup label="${escapeHtml(group.category)}">${group.areas.map(a=>option(a.id,areaName(a),selectedAreaId)).join('')}</optgroup>`).join('');
+  $('#structureTeamSelect').innerHTML='<option value="">Endast privat</option>'+state.teams.map(t=>option(t.id,t.name,'')).join('');
+}
+
+function showStructureField(id,show){
+  const el=$(id);
+  if(el)el.style.display=show?'block':'none';
+}
+
+function openStructureDialog(mode='category',context={}){
+  const dialog=$('#structureDialog'),form=$('#structureForm');
+  if(!dialog||!form)return;
+  form.reset();
+  const areaId=context.areaId||currentAreaId()||state.areas[0]?.id||'',category=context.category||currentCategory();
+  fillStructureOptions(areaId);
+  form.elements.mode.value=mode;
+  form.elements.color.value=mode==='project'?'#8b70ff':'#7659ef';
+  form.elements.icon.value='◫';
+  form.elements.category.value=category==='Privat'&&mode==='category'?'':category;
+  form.elements.areaId.value=areaId;
+  showStructureField('#structureCategoryField',mode!=='project');
+  showStructureField('#structureAreaField',mode==='project');
+  showStructureField('#structureIconField',mode!=='project');
+  showStructureField('#structureTeamField',mode!=='project');
+  const title={category:'Ny kategori',area:'Nytt område',project:'Nytt projekt'}[mode]||'Ny struktur';
+  const help={
+    category:'En kategori syns i vänsterspalten när den har minst ett område. Skapa därför kategorin och första området samtidigt.',
+    area:`Området hamnar under kategorin “${category||'Privat'}” och kan senare delas med ett team.`,
+    project:'Projektet hamnar under valt område. Uppgifter under projektet följer områdets åtkomst.'
+  }[mode];
+  $('#structureEyebrow').textContent=mode==='project'?'PROJEKT':mode==='area'?'OMRÅDE':'KATEGORI';
+  $('#structureTitle').textContent=title;
+  $('#structureHelp').textContent=help;
+  $('#structureNameLabel').textContent=mode==='project'?'Projektets namn':mode==='area'?'Områdets namn':'Första området i kategorin';
+  $('#structureNameInput').placeholder=mode==='project'?'T.ex. Bygga v1':mode==='area'?'T.ex. Huset, Barnen eller Båten':'T.ex. Allmänt, Huset eller Foreshadow';
+  $('#saveStructure').textContent=mode==='project'?'Skapa projekt':mode==='area'?'Skapa område':'Skapa kategori';
+  dialog.showModal();
+  setTimeout(()=>mode==='project'?$('#structureNameInput').focus():form.elements.category.focus(),50);
+}
+
+$('#structureForm').onsubmit=async e=>{
+  e.preventDefault();
+  const form=e.target,save=$('#saveStructure'),data=Object.fromEntries(new FormData(form)),mode=data.mode;
+  save.disabled=true;
+  try{
+    if(mode==='project'){
+      const created=await createProject({areaId:data.areaId,name:data.name,color:data.color});
+      collapsedAreas.delete(data.areaId);
+      const a=area(data.areaId);if(a)collapsedCategories.delete(areaCategory(a));
+      view='project:'+created.id;
+      $('#structureDialog').close();
+      await load();
+      toast('Projektet är skapat.');
+      return;
+    }
+    const category=(data.category||'').trim()||'Privat';
+    if(mode==='category'&&!data.category.trim())throw new Error('Skriv namnet på kategorin.');
+    const created=await createArea({name:data.name,category,icon:data.icon,color:data.color,teamId:data.teamId||null});
+    collapsedCategories.delete(category);
+    collapsedAreas.delete(created.id);
+    view='area:'+created.id;
+    $('#structureDialog').close();
+    await load();
+    toast(mode==='category'?'Kategorin och första området är skapade.':'Området är skapat.');
+  }catch(error){toast(error.message)}
+  finally{save.disabled=false}
+};
+
 function refreshAssignees(){const projectId=$('#projectSelect').value;$('#assigneeSelect').innerHTML=assigneeOptionsHtml(projectId,defaultAssigneeForProject(projectId))}
 function openDialog(prefill={}){
   $('#taskForm').reset();
@@ -629,6 +750,7 @@ function openDialog(prefill={}){
 $('#projectSelect').onchange=refreshAssignees;
 $('#quickAdd').onclick=$('#addRow').onclick=$('#mobileAdd').onclick=openDialog;$('#closeInspector').onclick=()=>$('#inspector').classList.remove('open');
 document.querySelectorAll('[data-close-task-dialog]').forEach(b=>b.onclick=()=>$('#taskDialog').close());
+document.querySelectorAll('[data-close-structure-dialog]').forEach(b=>b.onclick=()=>$('#structureDialog').close());
 document.querySelectorAll('[data-project-view]').forEach(b=>b.onclick=()=>{projectView=b.dataset.projectView;document.querySelectorAll('[data-project-view]').forEach(x=>x.classList.toggle('active',x===b));render()});
 $('#notificationButton').onclick=()=>$('#notificationPanel').classList.add('open');$('#closeNotifications').onclick=()=>$('#notificationPanel').classList.remove('open');
 $('#taskForm').onsubmit=async e=>{
