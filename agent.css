@@ -200,6 +200,190 @@
   text-align: left;
 }
 
+.daily-plan-card {
+  background: linear-gradient(180deg, #fff, #fbf9ff);
+  border: 1px solid #e7defb;
+  border-radius: 20px;
+  box-shadow: 0 10px 30px #3424500b;
+  margin: 0 0 18px;
+  padding: 18px;
+}
+
+.daily-plan-card.too-much {
+  border-color: #ead7b2;
+  background: linear-gradient(180deg, #fff, #fffaf0);
+}
+
+.daily-plan-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+
+.daily-plan-head h3 {
+  font: 800 18px Manrope;
+  margin: 0;
+}
+
+.daily-plan-head p {
+  color: #81788a;
+  font-size: 12px;
+  line-height: 1.55;
+  margin: 6px 0 0;
+}
+
+.daily-plan-head > span {
+  min-width: 42px;
+  height: 34px;
+  border-radius: 12px;
+  background: #efeaff;
+  color: var(--purple);
+  display: grid;
+  place-items: center;
+  font-weight: 850;
+}
+
+.daily-plan-card.too-much .daily-plan-head > span {
+  background: #fff0cf;
+  color: #b67820;
+}
+
+.daily-focus-list {
+  display: grid;
+  gap: 10px;
+}
+
+.daily-focus-card {
+  align-items: center;
+  background: #fff;
+  border: 1px solid #ece6f5;
+  border-radius: 14px;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: 1fr auto;
+  padding: 12px;
+}
+
+.daily-focus-card.active {
+  border-color: #d7c9ff;
+  box-shadow: inset 4px 0 0 var(--purple);
+}
+
+.daily-focus-main {
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  display: grid;
+  gap: 4px;
+  padding: 0;
+  text-align: left;
+}
+
+.daily-focus-main small {
+  color: var(--purple);
+  font-size: 9px;
+  font-weight: 850;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.daily-focus-main strong {
+  color: #25202d;
+  font: 800 13px Manrope;
+}
+
+.daily-focus-main span {
+  color: #918997;
+  font-size: 11px;
+}
+
+.daily-focus-action {
+  background: var(--purple);
+  border: 0;
+  border-radius: 10px;
+  color: #fff;
+  cursor: pointer;
+  font-weight: 800;
+  padding: 9px 12px;
+}
+
+.daily-plan-overflow {
+  align-items: center;
+  background: #fff8e8;
+  border: 1px solid #f2dfb7;
+  border-radius: 14px;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  margin-top: 12px;
+  padding: 12px;
+}
+
+.daily-plan-overflow strong,
+.daily-plan-overflow small {
+  display: block;
+}
+
+.daily-plan-overflow strong {
+  color: #6c5322;
+  font: 800 13px Manrope;
+}
+
+.daily-plan-overflow small {
+  color: #9a7d43;
+  font-size: 11px;
+  margin-top: 3px;
+}
+
+.daily-overflow-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.daily-overflow-list article {
+  align-items: center;
+  background: #fff;
+  border: 1px solid #eee4cf;
+  border-radius: 12px;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+  padding: 9px 10px;
+}
+
+.daily-overflow-list article > button {
+  background: transparent;
+  border: 0;
+  color: #4d4654;
+  cursor: pointer;
+  font-weight: 750;
+  overflow: hidden;
+  padding: 0;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.daily-overflow-list div {
+  display: flex;
+  gap: 6px;
+}
+
+.daily-overflow-list div button {
+  background: #f5f1e8;
+  border: 0;
+  border-radius: 8px;
+  color: #6c5322;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 800;
+  padding: 7px 9px;
+  white-space: nowrap;
+}
+
 @media (max-width: 800px) {
   .agent-head {
     display: block;
@@ -226,5 +410,27 @@
 
   .reschedule-actions button {
     padding: 10px 8px;
+  }
+
+  .daily-plan-head,
+  .daily-plan-overflow,
+  .daily-focus-card,
+  .daily-overflow-list article {
+    display: grid;
+  }
+
+  .daily-focus-card {
+    grid-template-columns: 1fr;
+  }
+
+  .daily-focus-action,
+  .daily-plan-overflow .secondary,
+  .daily-overflow-list div button {
+    width: 100%;
+  }
+
+  .daily-overflow-list div {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
   }
 }

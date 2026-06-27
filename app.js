@@ -173,6 +173,9 @@ function render(){
   document.querySelectorAll('#taskList [data-view]').forEach(b=>b.onclick=()=>{view=b.dataset.view;render()});
   document.querySelectorAll('[data-overdue-open]').forEach(b=>b.onclick=()=>openInspector(b.dataset.overdueOpen));
   document.querySelectorAll('[data-overdue-done]').forEach(b=>b.onclick=()=>complete(b.dataset.overdueDone));
+  document.querySelectorAll('[data-plan-open]').forEach(b=>b.onclick=()=>openInspector(b.dataset.planOpen));
+  document.querySelectorAll('[data-plan-start]').forEach(b=>b.onclick=async()=>{b.disabled=true;try{await startFocusTask(b.dataset.planStart)}catch(error){toast(error.message);b.disabled=false}});
+  document.querySelectorAll('[data-plan-trim]').forEach(b=>b.onclick=async()=>{b.disabled=true;try{await trimTodayPlan()}catch(error){toast(error.message);b.disabled=false}});
   document.querySelectorAll('[data-reschedule]').forEach(b=>b.onclick=async()=>{b.disabled=true;try{await rescheduleTask(b.dataset.task,b.dataset.reschedule)}catch(error){toast(error.message);b.disabled=false}});
   document.querySelectorAll('.board-card,.calendar-task,.flow-node').forEach(c=>c.onclick=()=>openInspector(c.dataset.id));
   if(showAreas)bindAreaOverview();
@@ -183,13 +186,64 @@ function render(){
 
 function todayContent(tasks){
   const overdue=tasks.filter(isOverdue),ready=tasks.filter(t=>!isOverdue(t));
-  return `${overdue.length?overdueReviewHtml(overdue):todayNudgeHtml(ready)}${ready.length?ready.map(taskGroupHtml).join(''):'<div class="empty">När du planerat om det som släpar är dagen ren.</div>'}`;
+  const empty=overdue.length?'När du planerat om det som släpar är dagen ren.':'Dagen är ren. Lägg in ett litet steg när du vill.';
+  return `${overdue.length?overdueReviewHtml(overdue):''}${dailyPlanHtml(ready)}${ready.length?ready.map(taskGroupHtml).join(''):`<div class="empty">${empty}</div>`}`;
 }
 
 function todayNudgeHtml(tasks){
   if(!tasks.length)return'';
   const doing=tasks.find(t=>t.status==='doing'),p1=tasks.find(t=>t.priority===1),candidate=doing||p1||tasks[0];
   return `<section class="execution-nudge"><div><p class="eyebrow">${doing?'PÅBÖRJAT':p1?'PRIO':'LITET STEG'}</p><h3>${doing?'Fortsätt där du redan börjat':'Välj ett tydligt nästa steg'}</h3><p>${doing?'Du har redan startat den här. Det är ofta lättare att avsluta än att starta om.':'Håll dagen liten: en konkret sak först, sedan nästa.'}</p></div><button class="secondary" data-overdue-open="${candidate.id}">${escapeHtml(candidate.title)}</button></section>`;
+}
+
+function dailyPlan(tasks){
+  const score=t=>[
+    t.status==='doing'?0:1,
+    isReminderDue(t)?0:1,
+    isDueToday(t)?0:1,
+    Number(t.priority||4),
+    t.dueAt?new Date(t.dueAt).getTime():Number.MAX_SAFE_INTEGER,
+    t.createdAt?new Date(t.createdAt).getTime():0
+  ];
+  const sorted=[...tasks].sort((a,b)=>{const as=score(a),bs=score(b);for(let i=0;i<as.length;i++){if(as[i]!==bs[i])return as[i]-bs[i]}return String(a.title).localeCompare(String(b.title),'sv-SE')});
+  const doing=sorted.filter(t=>t.status==='doing');
+  const focus=[...doing,...sorted.filter(t=>t.status!=='doing')].filter((t,i,self)=>self.findIndex(x=>x.id===t.id)===i).slice(0,3);
+  const overflow=sorted.filter(t=>!focus.some(f=>f.id===t.id));
+  return{focus,overflow,total:sorted.length,tooMuch:sorted.length>5||overflow.length>0};
+}
+
+function dailyPlanReason(t){
+  if(t.status==='doing')return'Påbörjad';
+  if(isReminderDue(t))return'Påminnelse';
+  if(t.priority===1)return'Prio 1';
+  if(isDueToday(t))return'Planerad idag';
+  return'Litet nästa steg';
+}
+
+function taskContextLabel(t){
+  const p=project(t.projectId),a=areaForProject(t.projectId);
+  return [p?.name,a?areaName(a):'',scheduleLabel(t)].filter(Boolean).join(' · ')||'Inbox';
+}
+
+function dailyPlanHtml(tasks){
+  const plan=dailyPlan(tasks);
+  if(!plan.total)return'';
+  const title=plan.focus.length===1?'Dagens lilla steg':'Dagens 3 små steg';
+  return `<section class="daily-plan-card ${plan.tooMuch?'too-much':''}">
+    <div class="daily-plan-head">
+      <div><p class="eyebrow">DAGLIG PLANERING</p><h3>${title}</h3><p>${plan.tooMuch?'Dagen är för tung. Välj max tre saker och flytta resten.':'Lagom nivå. Gör en sak, checka av, ta nästa.'}</p></div>
+      <span>${plan.focus.length}/${plan.total}</span>
+    </div>
+    <div class="daily-focus-list">${plan.focus.map((t,i)=>`<article class="daily-focus-card ${t.status==='doing'?'active':''}">
+      <button class="daily-focus-main" data-plan-open="${t.id}"><small>${i+1}. ${dailyPlanReason(t)}</small><strong>${escapeHtml(t.title)}</strong><span>${escapeHtml(taskContextLabel(t))}</span></button>
+      <button class="daily-focus-action" data-plan-start="${t.id}">${t.status==='doing'?'Fortsätt':'Starta'}</button>
+    </article>`).join('')}</div>
+    ${plan.overflow.length?`<div class="daily-plan-overflow">
+      <div><strong>${plan.overflow.length} utanför fokus</strong><small>Flytta bort överskottet så “Idag” inte blir en vägg.</small></div>
+      <button class="secondary" data-plan-trim="1">Lätta dagen</button>
+    </div>
+    <div class="daily-overflow-list">${plan.overflow.slice(0,4).map(t=>`<article><button data-plan-open="${t.id}">${escapeHtml(t.title)}</button><div><button data-task="${t.id}" data-reschedule="tomorrow">Imorgon</button><button data-task="${t.id}" data-reschedule="someday">Någon gång</button></div></article>`).join('')}</div>`:''}
+  </section>`;
 }
 
 function overdueReviewHtml(tasks){
@@ -207,6 +261,29 @@ async function rescheduleTask(id,preset){
   await api('/tasks/'+id,{method:'PATCH',body:JSON.stringify(patch)});
   await load();
   toast(preset==='someday'?'Flyttad till Gör nån gång.':'Uppgiften har fått nytt datum.');
+}
+
+async function startFocusTask(id){
+  const t=state.tasks.find(task=>task.id===id);
+  if(!t)throw new Error('Uppgiften finns inte längre.');
+  const patch={bucket:'today',status:'doing'};
+  if(!t.dueAt||isOverdue(t)){patch.dueAt=todayPlanTime();patch.due=formatDateTime(patch.dueAt)}
+  await api('/tasks/'+id,{method:'PATCH',body:JSON.stringify(patch)});
+  await load();
+  toast('Markerad som påbörjad.');
+}
+
+async function trimTodayPlan(){
+  const ready=topLevel(tasksForBucketView('today')).filter(t=>!isOverdue(t));
+  const move=dailyPlan(ready).overflow;
+  if(!move.length){toast('Dagen är redan lagom.');return}
+  for(const [index,t] of move.entries()){
+    const offset=index<3?1:3+Math.floor((index-3)/3),hour=9+(index%3);
+    const dueAt=dayAt(offset,hour).toISOString();
+    await api('/tasks/'+t.id,{method:'PATCH',body:JSON.stringify({bucket:'later',dueAt,due:formatDateTime(dueAt),reminderAt:null,status:t.status==='doing'?'planned':t.status})});
+  }
+  await load();
+  toast(`${move.length} uppgift${move.length===1?'':'er'} flyttad${move.length===1?'':'e'} från idag.`);
 }
 
 function categoryContent(group,tasks){
