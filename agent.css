@@ -89,6 +89,117 @@
   margin: 5px 0 0;
 }
 
+.overdue-review,
+.execution-nudge {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  box-shadow: 0 5px 22px #34245008;
+  margin: 0 0 18px;
+  padding: 18px;
+}
+
+.overdue-review {
+  border-color: #f2d9d6;
+  background: linear-gradient(180deg, #fff, #fff8f7);
+}
+
+.overdue-review-head,
+.execution-nudge {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.overdue-review-head h3,
+.execution-nudge h3 {
+  font: 800 18px Manrope;
+  margin: 0;
+}
+
+.overdue-review-head p,
+.execution-nudge p {
+  color: #8b8490;
+  font-size: 12px;
+  line-height: 1.55;
+  margin: 6px 0 0;
+}
+
+.overdue-review-head > span {
+  min-width: 34px;
+  height: 34px;
+  border-radius: 12px;
+  background: #ffe8e4;
+  color: #cf5d55;
+  display: grid;
+  place-items: center;
+  font-weight: 800;
+}
+
+.overdue-reschedule-list {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.overdue-reschedule-card {
+  border: 1px solid #f0dfdc;
+  border-radius: 13px;
+  background: #fff;
+  padding: 12px;
+}
+
+.overdue-title {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0;
+  text-align: left;
+  cursor: pointer;
+}
+
+.overdue-title strong {
+  font: 750 13px Manrope;
+}
+
+.overdue-title small {
+  color: #c66b63;
+  font-size: 11px;
+}
+
+.reschedule-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-top: 11px;
+}
+
+.reschedule-actions button {
+  border: 0;
+  border-radius: 9px;
+  background: #f4f2f6;
+  color: #5f5966;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 750;
+  padding: 8px 10px;
+}
+
+.reschedule-actions button:first-child {
+  background: #efeaff;
+  color: var(--purple);
+}
+
+.execution-nudge button {
+  line-height: 1.35;
+  max-width: 280px;
+  text-align: left;
+}
+
 @media (max-width: 800px) {
   .agent-head {
     display: block;
@@ -96,5 +207,24 @@
 
   .agent-head .secondary {
     margin-top: 14px;
+  }
+
+  .overdue-review-head,
+  .execution-nudge {
+    display: grid;
+  }
+
+  .execution-nudge button {
+    max-width: none;
+    width: 100%;
+  }
+
+  .reschedule-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .reschedule-actions button {
+    padding: 10px 8px;
   }
 }

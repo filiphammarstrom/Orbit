@@ -48,6 +48,8 @@ const sameLocalDate=(iso,date=new Date())=>Boolean(iso)&&localDateISO(new Date(i
 const isDueToday=t=>sameLocalDate(t.dueAt);
 const isOverdue=t=>Boolean(t.dueAt)&&!t.completed&&new Date(t.dueAt).getTime()<startOfLocalDay().getTime();
 const isReminderDue=t=>Boolean(t.reminderAt)&&!t.completed&&new Date(t.reminderAt).getTime()<=Date.now();
+const dayAt=(offset=0,h=9,m=0)=>{const d=startOfLocalDay();d.setDate(d.getDate()+offset);d.setHours(h,m,0,0);return d};
+const todayPlanTime=()=>{const d=dayAt(0,18);if(d.getTime()<Date.now()+30*60000)d.setTime(Date.now()+60*60000);return d.toISOString()};
 const formatDateTime=iso=>{if(!iso)return'';const d=new Date(iso);if(Number.isNaN(d.getTime()))return'';const same=sameLocalDate(iso);return new Intl.DateTimeFormat('sv-SE',same?{hour:'2-digit',minute:'2-digit'}:{weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}).format(d)};
 const formatTime=iso=>{const d=new Date(iso);return Number.isNaN(d.getTime())?'':new Intl.DateTimeFormat('sv-SE',{hour:'2-digit',minute:'2-digit'}).format(d)};
 const addMinutes=(iso,minutes)=>{const d=new Date(iso||Date.now());d.setMinutes(d.getMinutes()+minutes);return d.toISOString()};
@@ -164,16 +166,47 @@ function render(){
   $('.section-head>div').style.display=showAreas?'none':'';$('#addRow').style.display=showAreas?'none':'';$('#focusCard').style.display=view==='today'?'flex':'none';
   const todayAll=state.tasks.filter(t=>t.visible&&(t.bucket==='today'||isDueToday(t)||(!t.completed&&(isOverdue(t)||isReminderDue(t))))),done=todayAll.filter(t=>t.completed).length,pct=todayAll.length?Math.round(done/todayAll.length*100):0;
   $('#todayCount').textContent=todayAll.filter(t=>!t.completed).length;$('#progressText').textContent=pct+'%';$('.done-ring').style.strokeDashoffset=100-pct;
-  $('#taskList').innerHTML=showAreas?areaCards():currentCategory?categoryContent(currentCategory,tasks):currentProject?projectContent(tasks):tasks.length?tasks.map(taskGroupHtml).join(''):'<div class="empty">Här är lugnt och fint.</div>';
+  $('#taskList').innerHTML=showAreas?areaCards():currentCategory?categoryContent(currentCategory,tasks):currentProject?projectContent(tasks):view==='today'?todayContent(tasks):tasks.length?tasks.map(taskGroupHtml).join(''):'<div class="empty">Här är lugnt och fint.</div>';
   document.querySelectorAll('.task').forEach(el=>el.onclick=e=>{if(!e.target.classList.contains('check'))openInspector(el.dataset.id)});
   document.querySelectorAll('.check').forEach(b=>b.onclick=e=>{e.stopPropagation();complete(b.dataset.id)});
   document.querySelectorAll('[data-area-open]').forEach(c=>c.onclick=()=>{view='area:'+c.dataset.areaOpen;render()});
   document.querySelectorAll('#taskList [data-view]').forEach(b=>b.onclick=()=>{view=b.dataset.view;render()});
+  document.querySelectorAll('[data-overdue-open]').forEach(b=>b.onclick=()=>openInspector(b.dataset.overdueOpen));
+  document.querySelectorAll('[data-overdue-done]').forEach(b=>b.onclick=()=>complete(b.dataset.overdueDone));
+  document.querySelectorAll('[data-reschedule]').forEach(b=>b.onclick=async()=>{b.disabled=true;try{await rescheduleTask(b.dataset.task,b.dataset.reschedule)}catch(error){toast(error.message);b.disabled=false}});
   document.querySelectorAll('.board-card,.calendar-task,.flow-node').forEach(c=>c.onclick=()=>openInspector(c.dataset.id));
   if(showAreas)bindAreaOverview();
   renderNotifications();
   renderDailyBrief();
   renderAgentPanel();
+}
+
+function todayContent(tasks){
+  const overdue=tasks.filter(isOverdue),ready=tasks.filter(t=>!isOverdue(t));
+  return `${overdue.length?overdueReviewHtml(overdue):todayNudgeHtml(ready)}${ready.length?ready.map(taskGroupHtml).join(''):'<div class="empty">När du planerat om det som släpar är dagen ren.</div>'}`;
+}
+
+function todayNudgeHtml(tasks){
+  if(!tasks.length)return'';
+  const doing=tasks.find(t=>t.status==='doing'),p1=tasks.find(t=>t.priority===1),candidate=doing||p1||tasks[0];
+  return `<section class="execution-nudge"><div><p class="eyebrow">${doing?'PÅBÖRJAT':p1?'PRIO':'LITET STEG'}</p><h3>${doing?'Fortsätt där du redan börjat':'Välj ett tydligt nästa steg'}</h3><p>${doing?'Du har redan startat den här. Det är ofta lättare att avsluta än att starta om.':'Håll dagen liten: en konkret sak först, sedan nästa.'}</p></div><button class="secondary" data-overdue-open="${candidate.id}">${escapeHtml(candidate.title)}</button></section>`;
+}
+
+function overdueReviewHtml(tasks){
+  return `<section class="overdue-review"><div class="overdue-review-head"><div><p class="eyebrow">PLANERA OM FÖRST</p><h3>${tasks.length} försenad${tasks.length===1?' uppgift':'e uppgifter'}</h3><p>Bestäm ett nytt datum eller flytta bort den. Annars växer overdue-listan och blir brus.</p></div><span>${tasks.length}</span></div><div class="overdue-reschedule-list">${tasks.map(t=>`<article class="overdue-reschedule-card"><button class="overdue-title" data-overdue-open="${t.id}"><strong>${escapeHtml(t.title)}</strong><small>${escapeHtml(scheduleLabel(t))}</small></button><div class="reschedule-actions"><button data-task="${t.id}" data-reschedule="today">Idag</button><button data-task="${t.id}" data-reschedule="tomorrow">Imorgon</button><button data-task="${t.id}" data-reschedule="week">Senare i veckan</button><button data-task="${t.id}" data-reschedule="someday">Någon gång</button><button data-overdue-done="${t.id}">Klar</button></div></article>`).join('')}</div></section>`;
+}
+
+async function rescheduleTask(id,preset){
+  let dueAt=null,bucket='later',due='',reminderAt=null;
+  if(preset==='today'){dueAt=todayPlanTime();bucket='today';due=formatDateTime(dueAt)}
+  else if(preset==='tomorrow'){dueAt=dayAt(1,9).toISOString();bucket='later';due=formatDateTime(dueAt)}
+  else if(preset==='week'){dueAt=dayAt(3,9).toISOString();bucket='later';due=formatDateTime(dueAt)}
+  else if(preset==='someday'){bucket='someday';dueAt=null;due='';reminderAt=null}
+  else throw new Error('Okänt planeringsval.');
+  const patch={bucket,due,dueAt,reminderAt};
+  await api('/tasks/'+id,{method:'PATCH',body:JSON.stringify(patch)});
+  await load();
+  toast(preset==='someday'?'Flyttad till Gör nån gång.':'Uppgiften har fått nytt datum.');
 }
 
 function categoryContent(group,tasks){
