@@ -47,7 +47,7 @@
   <nav class="mobile-nav" id="mobileNav" aria-label="Huvudnavigation"></nav>
   <dialog id="taskDialog">
     <form method="dialog" id="taskForm">
-      <div class="dialog-head"><div><p class="eyebrow">NY UPPGIFT</p><h2>Fånga nästa steg</h2></div><button value="cancel" class="close">×</button></div>
+      <div class="dialog-head"><div><p class="eyebrow">NY UPPGIFT</p><h2>Fånga nästa steg</h2></div><button type="button" data-close-task-dialog class="close">×</button></div>
       <input id="newTitle" name="title" placeholder="Vad behöver göras?" autocomplete="off" required>
       <textarea name="notes" placeholder="Anteckningar (valfritt)"></textarea>
       <div class="form-grid">
@@ -86,7 +86,7 @@
         </div>
         <p class="hint">Uppgiften förblir helt dold tills villkoret uppfylls. Håll Ctrl/⌘ för att välja flera uppgifter.</p>
       </details>
-      <div class="dialog-actions"><button value="cancel" class="secondary">Avbryt</button><button value="default" id="saveTask" class="primary">Skapa uppgift <span>↵</span></button></div>
+      <div class="dialog-actions"><button type="button" data-close-task-dialog class="secondary">Avbryt</button><button value="default" id="saveTask" class="primary">Skapa uppgift <span>↵</span></button></div>
     </form>
   </dialog>
   <div class="toast" id="toast"></div>

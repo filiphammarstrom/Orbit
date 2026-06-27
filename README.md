@@ -35,7 +35,7 @@ npm install
 npm run dev
 ```
 
-Ett nytt konto får automatiskt ett privat område i kategorin `Privat`. Om kontots e-post redan finns i en väntande teaminbjudan kopplas användaren automatiskt in i teamet vid signup. All data skyddas med RLS: en användare ser endast egna områden och områden vars team personen är aktiv medlem i. Tilldelade personer måste också ha åtkomst till området.
+Ett nytt konto får automatiskt området `Allmänt` i kategorin `Privat`. Om kontots e-post redan finns i en väntande teaminbjudan kopplas användaren automatiskt in i teamet vid signup. All data skyddas med RLS: en användare ser endast egna områden och områden vars team personen är aktiv medlem i. Tilldelade personer måste också ha åtkomst till området.
 
 ## Driftsättning
 

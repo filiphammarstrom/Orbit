@@ -104,7 +104,7 @@ begin
   insert into public.profiles(id,name,initials)
   values(new.id,coalesce(new.raw_user_meta_data->>'name',split_part(new.email,'@',1)),upper(left(coalesce(new.raw_user_meta_data->>'name',new.email),2)))
   on conflict (id) do nothing;
-  insert into public.areas(name,icon,color,category,owner_id) values('Privat','⌂','#49a58f','Privat',new.id);
+  insert into public.areas(name,icon,color,category,owner_id) values('Allmänt','⌂','#49a58f','Privat',new.id);
   insert into public.team_members(team_id,user_id,role,status)
   select i.team_id,new.id,i.role,'active' from public.invitations i
   where lower(i.email)=lower(new.email) and i.accepted_at is null and i.expires_at>now()
