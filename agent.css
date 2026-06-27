@@ -68,6 +68,27 @@
   margin-top: 4px;
 }
 
+.assignment-badge {
+  color: #5d4bc4;
+  background: var(--purple-soft);
+  border-radius: 999px;
+  padding: 2px 7px;
+  font-weight: 700;
+}
+
+.trigger-box code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  background: #ffffff9c;
+  border-radius: 5px;
+  padding: 1px 4px;
+}
+
+.trigger-box p,
+.trigger-box small {
+  display: block;
+  margin: 5px 0 0;
+}
+
 @media (max-width: 800px) {
   .agent-head {
     display: block;

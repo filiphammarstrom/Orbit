@@ -12,7 +12,7 @@ Orbit är en molnbaserad fleranvändarapp för områden, projekt, team och villk
 - Strukturerade datumfält (`due_at`, `reminder_at`) används i listor, kalender, AI-brief och MCP — med enkel svensk snabbtolkning som “imorgon 09:00”
 - Externa MCP-händelser och tidsbaserad aktivering
 - Kontextlänkar från andra appar, t.ex. mail, dokument, chattar och kalenderposter
-- “Tilldelat till mig”-vy med separering mellan uppgifter från andra och egna uppgifter
+- Uppgifter som tilldelats dig ligger kvar i sina vanliga listor/projekt men markeras med “Tilldelat till dig”
 - Team & delning-vy för att skapa team, bjuda in via e-post och dela områden med rätt team
 - Google Calendar-sektion på uppgifter: manuell “öppna i Google Calendar”-länk, direkt-sync, retry och köad sync-status
 - Integrationsgrund för Google Calendar och Slack, inklusive Slack-inbox, message shortcut och länkar tillbaka till Slack-meddelanden
@@ -154,6 +154,24 @@ Body:
 ```
 
 `actorId` kan skickas i bodyn eller sättas globalt som `ORBIT_WEBHOOK_ACTOR_ID`. Om det saknas används områdets ägare.
+
+Gmail/Google-trigger:
+
+För Gmail-liknande flöden finns även `POST /api/gmail-trigger`. Den använder samma auth-header och låser upp samma `external_event`-uppgifter, men accepterar Gmail-fält direkt.
+
+```json
+{
+  "areaId": "uuid-for-området",
+  "from": "Pelle <pelle@example.com>",
+  "subject": "Re: Offert",
+  "messageId": "gmail-message-id",
+  "threadId": "gmail-thread-id",
+  "url": "https://mail.google.com/mail/u/0/#inbox/...",
+  "snippet": "Svarar här..."
+}
+```
+
+Om `name`/`triggerName` saknas skapar Orbit triggernamnet `gmail_reply:pelle@example.com` från avsändaren. En dold uppgift ska alltså ha extern trigger `gmail_reply:pelle@example.com`, eller ett eget exakt triggernamn om Make/Zapier/Apps Script skickar `name`.
 
 Slack-flödet:
 

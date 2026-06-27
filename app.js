@@ -3,8 +3,8 @@ import { configured, session, signIn, signUp, signOut, loadCloudState, createClo
 let state, view = 'today', projectView='list', liveChannel;
 const $ = s => document.querySelector(s);
 const bucketViews = ['inbox','today','later','someday'];
-const navItems = [['inbox','⌄','Inbox'],['today','☀','Gör idag'],['assigned','◎','Tilldelat'],['later','◷','Gör sen'],['someday','◇','Gör nån gång'],['team','⚭','Team']];
-const mobileItems = [['inbox','⌄','Inbox'],['today','☀','Idag'],['assigned','◎','Tilldelat'],['later','◷','Sen'],['someday','◇','Nån gång'],['areas','▦','Områden']];
+const navItems = [['inbox','⌄','Inbox'],['today','☀','Gör idag'],['later','◷','Gör sen'],['someday','◇','Gör nån gång'],['team','⚭','Team']];
+const mobileItems = [['inbox','⌄','Inbox'],['today','☀','Idag'],['later','◷','Sen'],['someday','◇','Nån gång'],['areas','▦','Områden']];
 let pendingCapture = readCaptureIntent();
 
 async function api(path, options={}) {
@@ -16,8 +16,6 @@ async function api(path, options={}) {
 async function load(){ try{const userId=state?.currentUserId;state=await api('/state');if(userId)state.currentUserId=userId;render()}catch(e){toast(e.message)} }
 const visible=()=>state.tasks.filter(t=>t.visible&&!t.completed);
 const topLevel=tasks=>tasks.filter(t=>!t.parentTaskId);
-const assignedToMe=()=>visible().filter(t=>t.assigneeId===state.currentUserId);
-const assignedRoots=tasks=>tasks.filter(t=>!t.parentTaskId||!tasks.some(p=>p.id===t.parentTaskId));
 const childrenOf=id=>state.tasks.filter(t=>t.parentTaskId===id);
 const person=id=>state.people.find(p=>p.id===id)||{id,name:'Okänd',initials:'?',color:'#999'};
 const project=id=>state.projects.find(p=>p.id===id);
@@ -83,7 +81,7 @@ const safeHref=url=>{const value=(url||'').trim();return !value||/^(javascript|d
 const linkKindLabel=kind=>({email:'Mail',calendar:'Kalender',document:'Dokument',chat:'Chatt',web:'Webb',file:'Fil',mcp:'MCP',other:'Länk'})[kind]||'Länk';
 const linkKindIcon=kind=>({email:'✉',calendar:'◷',document:'▤',chat:'☵',web:'↗',file:'▣',mcp:'✦',other:'↗'})[kind]||'↗';
 const calendarStatusLabel=status=>({pending:'Köad',synced:'Synkad',failed:'Misslyckad',deleted:'Borttagen'})[status]||status;
-const navCount=id=>id==='assigned'?assignedToMe().length:id==='team'?(state.invitations||[]).filter(i=>!i.acceptedAt).length:bucketViews.includes(id)?tasksForBucketView(id).length:0;
+const navCount=id=>id==='team'?(state.invitations||[]).filter(i=>!i.acceptedAt).length:bucketViews.includes(id)?tasksForBucketView(id).length:0;
 const option=(value,label,selected)=>`<option value="${escapeHtml(value)}" ${String(value)===String(selected||'')?'selected':''}>${escapeHtml(label)}</option>`;
 const projectOptionsHtml=selected=>'<option value="">Personligt / Inbox</option>'+state.areas.map(a=>`<optgroup label="${escapeHtml(a.name)}">${state.projects.filter(p=>p.areaId===a.id).map(p=>option(p.id,p.name,selected)).join('')}</optgroup>`).join('');
 const assigneesForProject=projectId=>{const p=project(projectId);return p?membersForArea(area(p.areaId)):[person(state.currentUserId)]};
@@ -141,23 +139,23 @@ function renderNav(){
 }
 
 function render(){
+  if(view==='assigned')view='today';
   renderNav();let tasks=[],title,eye='MIN DAG',showAreas=false,showTeam=false,currentProject=null;
   const labels={inbox:'Inbox',today:'Gör idag',later:'Gör sen',someday:'Gör nån gång'};
   if(view==='areas'){title='Områden';eye='DITT LIV';showAreas=true}
   else if(view==='team'){title='Team & delning';eye='SAMARBETE';showTeam=true}
-  else if(view==='assigned'){tasks=assignedRoots(assignedToMe());title='Tilldelat till mig';eye='SAMARBETE'}
   else if(view.startsWith('area:')){const a=area(view.split(':')[1]),ids=state.projects.filter(p=>p.areaId===a.id).map(p=>p.id);tasks=topLevel(visible().filter(t=>ids.includes(t.projectId)));title=a.name;eye='OMRÅDE'}
   else if(view.startsWith('project:')){const p=project(view.split(':')[1]);currentProject=p;const canPlan=p.ownerId===state.currentUserId||(!p.ownerId&&area(p.areaId)?.ownerId===state.currentUserId);tasks=topLevel(state.tasks.filter(t=>t.projectId===p.id&&!t.completed&&(t.visible||canPlan)));title=p.name;eye=area(p.areaId)?.name.toUpperCase()||'PROJEKT'}
   else{tasks=topLevel(tasksForBucketView(view));title=labels[view]}
   $('#pageTitle').textContent=title;$('#eyebrow').textContent=eye;
-  $('#subtitle').textContent=view==='today'?new Intl.DateTimeFormat('sv-SE',{weekday:'long',day:'numeric',month:'long'}).format(new Date()):showAreas?'Separata platser för privatliv, jobb och allt däremellan':showTeam?'Skapa team, bjud in personer och bestäm vilka områden teamet får se.':view==='assigned'?'Allt som ligger på dig, oavsett projekt eller område.':`${tasks.length} aktiva uppgifter`;
-  $('#sectionTitle').textContent=showAreas?'Dina områden':showTeam?'Team, inbjudningar och åtkomst':view==='assigned'?'Uppgifter tilldelade till dig':view==='inbox'?'Okategoriserat':'Att göra';
+  $('#subtitle').textContent=view==='today'?new Intl.DateTimeFormat('sv-SE',{weekday:'long',day:'numeric',month:'long'}).format(new Date()):showAreas?'Separata platser för privatliv, jobb och allt däremellan':showTeam?'Skapa team, bjud in personer och bestäm vilka områden teamet får se.':`${tasks.length} aktiva uppgifter`;
+  $('#sectionTitle').textContent=showAreas?'Dina områden':showTeam?'Team, inbjudningar och åtkomst':view==='inbox'?'Okategoriserat':'Att göra';
   $('#projectToolbar').classList.toggle('open',Boolean(currentProject));
   if(currentProject){const colors={on_track:'#42a68b',at_risk:'#e2a33d',off_track:'#d96761'},labels={on_track:'På rätt väg',at_risk:'Risk',off_track:'Försenat'};$('#projectHealth').innerHTML=`<span class="health-pill"><i style="background:${colors[currentProject.health]}"></i>${labels[currentProject.health]}</span>`}
   $('.section-head>div').style.display=showAreas||showTeam?'none':'';$('#addRow').style.display=showAreas||showTeam?'none':'';$('#focusCard').style.display=view==='today'?'flex':'none';
   const todayAll=state.tasks.filter(t=>t.visible&&(t.bucket==='today'||isDueToday(t)||(!t.completed&&(isOverdue(t)||isReminderDue(t))))),done=todayAll.filter(t=>t.completed).length,pct=todayAll.length?Math.round(done/todayAll.length*100):0;
   $('#todayCount').textContent=todayAll.filter(t=>!t.completed).length;$('#progressText').textContent=pct+'%';$('.done-ring').style.strokeDashoffset=100-pct;
-  $('#taskList').innerHTML=showAreas?areaCards():showTeam?teamSharingContent():view==='assigned'?assignedContent():currentProject?projectContent(tasks):tasks.length?tasks.map(taskGroupHtml).join(''):'<div class="empty">Här är lugnt och fint.</div>';
+  $('#taskList').innerHTML=showAreas?areaCards():showTeam?teamSharingContent():currentProject?projectContent(tasks):tasks.length?tasks.map(taskGroupHtml).join(''):'<div class="empty">Här är lugnt och fint.</div>';
   document.querySelectorAll('.task').forEach(el=>el.onclick=e=>{if(!e.target.classList.contains('check'))openInspector(el.dataset.id)});
   document.querySelectorAll('.check').forEach(b=>b.onclick=e=>{e.stopPropagation();complete(b.dataset.id)});
   document.querySelectorAll('.area-card').forEach(c=>c.onclick=()=>{view='area:'+c.dataset.area;render()});
@@ -180,13 +178,6 @@ function renderNotifications(){
   const itemHtml=items.map(n=>`<button class="notification-item ${n.readAt?'':'unread'}" data-notification="${n.id}" data-task="${n.taskId||''}"><span><strong>${escapeHtml(n.title)}</strong><p>${escapeHtml(n.body)}</p><time>${new Date(n.createdAt).toLocaleString('sv-SE',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}</time></span></button>`).join('');
   $('#notificationList').innerHTML=reminderHtml||itemHtml?reminderHtml+itemHtml:'<div class="empty">Inga notiser ännu.</div>';
   document.querySelectorAll('[data-notification]').forEach(n=>n.onclick=async()=>{if(n.dataset.notification.startsWith('reminder:')){openInspector(n.dataset.task);return}await markNotificationRead(n.dataset.notification);if(n.dataset.task)openInspector(n.dataset.task);await load()})
-}
-
-function assignedContent(){
-  const mine=assignedRoots(assignedToMe()),fromOthers=mine.filter(t=>t.createdBy&&t.createdBy!==state.currentUserId),own=mine.filter(t=>!t.createdBy||t.createdBy===state.currentUserId);
-  if(!mine.length)return'<div class="empty">Inga aktiva uppgifter ligger på dig just nu.</div>';
-  const section=(title,items,empty)=>`<section class="assigned-block"><div class="assigned-head"><h3>${title}</h3><span>${items.length}</span></div>${items.length?items.map(taskGroupHtml).join(''):`<p class="muted-line">${empty}</p>`}</section>`;
-  return `<div class="assigned-layout">${section('Från andra',fromOthers,'När kollegor tilldelar dig något syns det här.')}${section('Mina egna',own,'Dina egna uppgifter visas här när de är tilldelade dig.')}</div>`;
 }
 
 function teamSharingContent(){
@@ -259,14 +250,23 @@ function bindTeamSharing(){
 
 function areaCards(){return `<div class="area-grid">${state.areas.map(a=>{const projects=state.projects.filter(p=>p.areaId===a.id),members=membersForArea(a);return `<button class="area-card" data-area="${a.id}"><div class="area-card-head"><span class="area-card-icon" style="background:${a.color}">${a.icon}</span><div><h3>${a.name}</h3><p>${projects.length} projekt · ${visible().filter(t=>projects.some(p=>p.id===t.projectId)).length} uppgifter</p></div></div><div class="area-card-projects">${projects.map(p=>`<span>${p.name}</span>`).join('')||'<span>Inga projekt ännu</span>'}</div><div class="access-note">${a.teamId?'Delas med':'Privat för dig'}<span class="team-stack">${members.map(avatarHtml).join('')}</span>${a.teamId?team(a.teamId).name:'Endast du'}</div></button>`}).join('')}</div>`}
 function taskGroupHtml(t){const all=childrenOf(t.id),shown=all.filter(c=>c.visible&&!c.completed),done=all.filter(c=>c.completed).length;return `<div class="task-group">${taskHtml(t,all.length?`${done}/${all.length}`:'')}${shown.length?`<div class="subtasks">${shown.map(c=>taskHtml(c)).join('')}</div>`:''}${all.some(c=>!c.visible&&!c.completed)?`<div class="subtask-waiting">⚡ ${all.filter(c=>!c.visible&&!c.completed).length} nästa steg väntar på ett villkor</div>`:''}</div>`}
+function assignmentBadge(t){return t.assigneeId===state.currentUserId&&t.createdBy&&t.createdBy!==state.currentUserId?'<span class="assignment-badge mine">◎ Tilldelat till dig</span>':''}
 function taskHtml(t,progress=''){
   const p=project(t.projectId),a=person(t.assigneeId),ar=areaForProject(t.projectId),linkCount=linksForTask(t.id).length,when=scheduleLabel(t),remind=reminderLabel(t);
-  return `<article class="task ${progress?'has-children':''}" data-id="${t.id}"><button class="check p${t.priority}" data-id="${t.id}" aria-label="${t.taskType==='approval'?'Godkänn':'Markera klar'}"></button><div><div class="task-title">${t.taskType==='milestone'?'◆ ':t.taskType==='approval'?'✓ ':''}${escapeHtml(t.title)}</div><div class="task-meta">${progress?`<span class="subtask-progress">☷ ${progress} delsteg</span>`:''}${linkCount?`<span class="context-count">↗ ${linkCount}</span>`:''}${when?`<span class="due ${isOverdue(t)?'overdue':''}">◷ ${escapeHtml(when)}</span>`:''}${remind?`<span class="reminder ${isReminderDue(t)?'due-now':''}">⏰ ${isReminderDue(t)?'Nu':escapeHtml(remind)}</span>`:''}${p?`<span class="project-tag"><i class="project-dot" style="background:${p.color}"></i>${p.name}</span>`:''}${ar&&!t.parentTaskId?`<span class="area-badge"><i style="background:${ar.color}"></i>${ar.name}</span>`:''}</div></div>${avatarHtml(a)}</article>`
+  return `<article class="task ${progress?'has-children':''}" data-id="${t.id}"><button class="check p${t.priority}" data-id="${t.id}" aria-label="${t.taskType==='approval'?'Godkänn':'Markera klar'}"></button><div><div class="task-title">${t.taskType==='milestone'?'◆ ':t.taskType==='approval'?'✓ ':''}${escapeHtml(t.title)}</div><div class="task-meta">${assignmentBadge(t)}${progress?`<span class="subtask-progress">☷ ${progress} delsteg</span>`:''}${linkCount?`<span class="context-count">↗ ${linkCount}</span>`:''}${when?`<span class="due ${isOverdue(t)?'overdue':''}">◷ ${escapeHtml(when)}</span>`:''}${remind?`<span class="reminder ${isReminderDue(t)?'due-now':''}">⏰ ${isReminderDue(t)?'Nu':escapeHtml(remind)}</span>`:''}${p?`<span class="project-tag"><i class="project-dot" style="background:${p.color}"></i>${p.name}</span>`:''}${ar&&!t.parentTaskId?`<span class="area-badge"><i style="background:${ar.color}"></i>${ar.name}</span>`:''}</div></div>${avatarHtml(a)}</article>`
 }
 async function complete(id){const openChildren=childrenOf(id).filter(t=>!t.completed);if(openChildren.length){toast(`${openChildren.length} underuppgift${openChildren.length>1?'er':''} återstår.`);return}const task=state.tasks.find(t=>t.id===id),approval=(state.approvals||[]).find(a=>a.taskId===id&&a.status==='pending');if(task?.taskType==='approval'&&approval){if(approval.requestedFrom!==state.currentUserId){toast('Inväntar godkännande från rätt person.');return}await decideApproval(approval.id,'approved')}else await api('/tasks/'+id,{method:'PATCH',body:JSON.stringify({completed:true})});await load();toast(task?.taskType==='approval'?'Godkänt.':`Klart!${state.tasks.some(t=>t.visible&&!t.completed&&t.trigger?.taskId===id)?' Nästa steg är nu synligt.':''}`)}
 function renderTaskLinks(t){
   const links=linksForTask(t.id);
   return `<div class="link-section"><h3>Länkar från andra appar · ${links.length}</h3>${links.length?`<div class="task-links">${links.map(l=>`<a class="task-link-card" href="${escapeHtml(safeHref(l.url))}" target="_blank" rel="noreferrer"><span>${linkKindIcon(l.kind)}</span><div><strong>${escapeHtml(l.title||l.url||linkKindLabel(l.kind))}</strong><small>${escapeHtml([l.provider,linkKindLabel(l.kind)].filter(Boolean).join(' · '))}</small></div></a>`).join('')}</div>`:'<p class="hint">Inga länkar ännu. Lägg till mail, dokument, chatt eller annat som hör till uppgiften.</p>'}<form class="link-form" id="taskLinkForm"><select name="kind"><option value="email">Mail</option><option value="calendar">Kalender</option><option value="document">Dokument</option><option value="chat">Chatt</option><option value="web">Webb</option><option value="other">Annat</option></select><input name="title" placeholder="Titel"><input name="url" placeholder="Länk / deep link" required><button>＋</button></form></div>`
+}
+
+function renderTriggerBox(t){
+  if(!t.trigger)return'';
+  if(t.trigger.type==='external_event'){
+    return `<div class="trigger-box"><strong>⚡ Väntar på extern trigger</strong><p>Triggernamn: <code>${escapeHtml(t.trigger.event||'')}</code></p><small>Kan låsas upp via <code>/api/external-event</code> eller Gmail-vägen <code>/api/gmail-trigger</code>.</small></div>`;
+  }
+  return `<div class="trigger-box"><strong>⚡ Aktiverad av villkor</strong>${escapeHtml(t.trigger.label||'Ett externt villkor')}</div>`;
 }
 
 function renderCalendarSync(t){
@@ -353,7 +353,7 @@ function openInspector(id){
   const t=state.tasks.find(x=>x.id===id);if(!t)return;
   const p=project(t.projectId),a=person(t.assigneeId),ar=areaForProject(t.projectId),tm=team(ar?.teamId),subs=childrenOf(t.id),comments=(state.comments||[]).filter(c=>c.taskId===id);
   const when=scheduleLabel(t),remind=reminderLabel(t);
-  $('#inspectorContent').innerHTML=`<p class="eyebrow">${ar?escapeHtml(ar.name).toUpperCase():'UPPGIFT'}</p><button class="check big-check p${t.priority}" id="detailCheck"></button><h2>${escapeHtml(t.title)}</h2>${subs.length?`<div class="parent-lock">Huvuduppgiften blir klar automatiskt när alla ${subs.length} delsteg är klara.</div>`:''}${t.activationReason?`<div class="activation-explain"><strong>✦ Varför ser jag detta nu?</strong>${escapeHtml(t.activationReason)}${t.activatedAt?` · ${new Date(t.activatedAt).toLocaleString('sv-SE')}`:''}</div>`:''}${t.notes?`<p style="color:#777;font-size:13px;line-height:1.6">${escapeHtml(t.notes)}</p>`:''}<div class="detail-row"><span>Status</span><strong class="status-chip">${statusLabel(t.status)}</strong></div><div class="detail-row"><span>Område</span><strong>${ar?ar.icon+' '+ar.name:'Personligt'}</strong></div><div class="detail-row"><span>Projekt</span><strong>${p?p.name:'Inbox'}</strong></div><div class="detail-row"><span>Tilldelad</span><strong>${a.name}</strong></div><div class="detail-row"><span>Åtkomst</span><strong>${tm?tm.name:'Endast du'}</strong></div><div class="detail-row"><span>Deadline</span><strong>${when?escapeHtml(when):'Inget datum'}</strong></div><div class="detail-row"><span>Påminnelse</span><strong>${remind?`${isReminderDue(t)?'Nu · ':''}${escapeHtml(remind)}`:'Ingen'}</strong></div>${renderTaskEditForm(t)}${subs.length?`<div class="inspector-subtasks"><h3>Underuppgifter · ${subs.filter(s=>s.completed).length}/${subs.length}</h3>${subs.map(s=>`<div class="inspector-subtask ${s.completed?'done':''} ${!s.visible?'waiting':''}">${s.completed?'✓':s.visible?`<button class="check p${s.priority}" data-id="${s.id}"></button>`:'⚡'}<span>${escapeHtml(s.title)}</span><small>${!s.visible?'Väntar':person(s.assigneeId).initials}</small></div>`).join('')}</div>`:''}${t.trigger?`<div class="trigger-box"><strong>⚡ Aktiverad av villkor</strong>${escapeHtml(t.trigger.label||'Ett externt villkor')}</div>`:''}${renderCalendarSync(t)}${renderTaskLinks(t)}<div class="comment-section"><h3>Kommentarer · ${comments.length}</h3>${comments.map(c=>`<div class="comment">${avatarHtml(person(c.authorId))}<div><p>${escapeHtml(c.body)}</p><time>${new Date(c.createdAt).toLocaleString('sv-SE')}</time></div></div>`).join('')}<form class="comment-form" id="commentForm"><input name="comment" placeholder="Skriv en kommentar eller @nämn någon…" required><button>Skicka</button></form></div>`;
+  $('#inspectorContent').innerHTML=`<p class="eyebrow">${ar?escapeHtml(ar.name).toUpperCase():'UPPGIFT'}</p><button class="check big-check p${t.priority}" id="detailCheck"></button><h2>${escapeHtml(t.title)}</h2>${subs.length?`<div class="parent-lock">Huvuduppgiften blir klar automatiskt när alla ${subs.length} delsteg är klara.</div>`:''}${t.activationReason?`<div class="activation-explain"><strong>✦ Varför ser jag detta nu?</strong>${escapeHtml(t.activationReason)}${t.activatedAt?` · ${new Date(t.activatedAt).toLocaleString('sv-SE')}`:''}</div>`:''}${t.notes?`<p style="color:#777;font-size:13px;line-height:1.6">${escapeHtml(t.notes)}</p>`:''}<div class="detail-row"><span>Status</span><strong class="status-chip">${statusLabel(t.status)}</strong></div><div class="detail-row"><span>Område</span><strong>${ar?ar.icon+' '+ar.name:'Personligt'}</strong></div><div class="detail-row"><span>Projekt</span><strong>${p?p.name:'Inbox'}</strong></div><div class="detail-row"><span>Tilldelad</span><strong>${a.name}</strong></div><div class="detail-row"><span>Åtkomst</span><strong>${tm?tm.name:'Endast du'}</strong></div><div class="detail-row"><span>Deadline</span><strong>${when?escapeHtml(when):'Inget datum'}</strong></div><div class="detail-row"><span>Påminnelse</span><strong>${remind?`${isReminderDue(t)?'Nu · ':''}${escapeHtml(remind)}`:'Ingen'}</strong></div>${renderTaskEditForm(t)}${subs.length?`<div class="inspector-subtasks"><h3>Underuppgifter · ${subs.filter(s=>s.completed).length}/${subs.length}</h3>${subs.map(s=>`<div class="inspector-subtask ${s.completed?'done':''} ${!s.visible?'waiting':''}">${s.completed?'✓':s.visible?`<button class="check p${s.priority}" data-id="${s.id}"></button>`:'⚡'}<span>${escapeHtml(s.title)}</span><small>${!s.visible?'Väntar':person(s.assigneeId).initials}</small></div>`).join('')}</div>`:''}${renderTriggerBox(t)}${renderCalendarSync(t)}${renderTaskLinks(t)}<div class="comment-section"><h3>Kommentarer · ${comments.length}</h3>${comments.map(c=>`<div class="comment">${avatarHtml(person(c.authorId))}<div><p>${escapeHtml(c.body)}</p><time>${new Date(c.createdAt).toLocaleString('sv-SE')}</time></div></div>`).join('')}<form class="comment-form" id="commentForm"><input name="comment" placeholder="Skriv en kommentar eller @nämn någon…" required><button>Skicka</button></form></div>`;
   $('#detailCheck').onclick=()=>{complete(id);if(!subs.length)$('#inspector').classList.remove('open')};
   document.querySelectorAll('.inspector-subtask .check').forEach(b=>b.onclick=async()=>{await complete(b.dataset.id);openInspector(id)});
   bindTaskEditForm(id);

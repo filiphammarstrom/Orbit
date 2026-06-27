@@ -81,7 +81,7 @@
           <label>Typ<select name="triggerType" id="triggerType"><option value="">Ingen trigger</option><option value="task_completed">När uppgifter är klara</option><option value="external_event">När en extern händelse sker</option></select></label>
           <label>Villkorslogik<select name="activationMode"><option value="all">Alla valda måste vara klara</option><option value="any">Minst en måste vara klar</option></select></label>
           <label>Föregående uppgifter<select name="dependencyTaskIds" id="dependencyTaskSelect" multiple size="4"></select></label>
-          <label>Extern händelse<input name="triggerValue" id="externalTriggerValue" placeholder="T.ex. pelle_replied_email"></label>
+          <label>Extern händelse<input name="triggerValue" id="externalTriggerValue" placeholder="T.ex. pelle_replied_email eller gmail_reply:pelle@example.com"></label>
         </div>
         <p class="hint">Uppgiften förblir helt dold tills villkoret uppfylls. Håll Ctrl/⌘ för att välja flera uppgifter.</p>
       </details>
