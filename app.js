@@ -1,4 +1,4 @@
-import { configured, session, signIn, signUp, signOut, loadCloudState, createCloudTask, updateCloudTask, subscribeToChanges, addComment, addTaskLink, startGoogleCalendarOAuth, startSlackOAuth, slackEventSummary, createTaskFromSlackEvent, syncCalendarLinkNow, queueCalendarSync, saveDailyBrief, markNotificationRead, decideApproval, createTeam, createInvitation, shareAreaWithTeam } from './cloud.js';
+import { configured, session, signIn, signUp, signOut, loadCloudState, createCloudTask, updateCloudTask, subscribeToChanges, addComment, addTaskLink, startGoogleCalendarOAuth, startSlackOAuth, slackEventSummary, createTaskFromSlackEvent, syncCalendarLinkNow, queueCalendarSync, saveDailyBrief, saveAgentRun, markNotificationRead, decideApproval, createTeam, createInvitation, shareAreaWithTeam } from './cloud.js';
 
 let state, view = 'today', projectView='list', liveChannel;
 const $ = s => document.querySelector(s);
@@ -165,6 +165,7 @@ function render(){
   if(showTeam)bindTeamSharing();
   renderNotifications();
   renderDailyBrief();
+  renderAgentPanel();
 }
 
 function projectContent(tasks){if(!tasks.length)return'<div class="empty">Projektet väntar på sin första uppgift.</div>';if(projectView==='board')return boardHtml(tasks);if(projectView==='calendar')return calendarHtml(tasks);if(projectView==='flow')return flowHtml(tasks);return tasks.map(taskGroupHtml).join('')}
@@ -383,6 +384,41 @@ function renderDailyBrief(){
   $('#briefFocusTasks').innerHTML=brief?`<div class="brief-tags">${focus.map(t=>`<button data-id="${t.id}">${escapeHtml(t.title)}</button>`).join('')}${(brief.suggestions||[]).slice(0,2).map(s=>`<span>${escapeHtml(s.text)}</span>`).join('')}</div>`:'';
   $('#briefFocusTasks').querySelectorAll('button').forEach(b=>b.onclick=()=>openInspector(b.dataset.id));
   $('#generateBrief').onclick=async()=>{const generated=buildDailyBrief();await saveDailyBrief(generated);await load();toast('Dagens brief är uppdaterad.')};
+}
+
+function buildAgentPlan(){
+  const active=state.tasks.filter(t=>t.visible&&!t.completed),hidden=state.tasks.filter(t=>!t.visible&&!t.completed),overdue=topLevel(active.filter(isOverdue)),p1=topLevel(active.filter(t=>t.priority===1)),doing=topLevel(active.filter(t=>t.status==='doing')),inbox=topLevel(active.filter(t=>t.bucket==='inbox')),waiting=topLevel(active.filter(t=>t.status==='waiting'||hidden.some(h=>h.parentTaskId===t.id))),dueWithoutCalendar=topLevel(active.filter(t=>t.dueAt&&!calendarLinksForTask(t.id).some(l=>['pending','synced'].includes(l.status)))),linked=topLevel(active.filter(t=>linksForTask(t.id).length));
+  const actions=[];
+  const push=(type,text,task)=>actions.push({type,text,taskId:task?.id||null,taskTitle:task?.title||''});
+  if(overdue[0])push('overdue',`Ta hand om försenad uppgift: ${overdue[0].title}.`,overdue[0]);
+  if(p1[0])push('priority',`Starta nästa P1: ${p1[0].title}.`,p1[0]);
+  if(doing[0])push('progress',`Fortsätt pågående arbete: ${doing[0].title}.`,doing[0]);
+  if(dueWithoutCalendar[0])push('calendar',`Schemalägg ${dueWithoutCalendar[0].title} i Google Calendar.`,dueWithoutCalendar[0]);
+  if(inbox.length)push('inbox',`Rensa inboxen: ${inbox.length} osorterad${inbox.length>1?'e':''} uppgift${inbox.length>1?'er':''}.`,inbox[0]);
+  if(waiting.length)push('waiting',`Följ upp vänteläge: ${waiting[0].title}.`,waiting[0]);
+  if(hidden.length)actions.push({type:'trigger',text:`${hidden.length} dold${hidden.length>1?'a':''} uppgift${hidden.length>1?'er':''} väntar på kedja eller extern trigger.`,taskId:null,taskTitle:''});
+  if(linked[0])push('context',`Använd app-länken på ${linked[0].title} för snabb kontext.`,linked[0]);
+  if(!actions.length)actions.push({type:'calm',text:'Inget akut hittades. Välj en tydlig uppgift och håll dagen enkel.',taskId:null,taskTitle:''});
+  return {
+    goal:'Föreslå nästa praktiska steg',
+    result:{
+      summary:`Agenten hittade ${actions.length} rekommenderad${actions.length===1?'':'e'} åtgärd${actions.length===1?'':'er'} utifrån prioritet, datum, inbox, väntelägen och länkar.`,
+      proposedActions:actions.slice(0,6),
+      stats:{active:active.length,hidden:hidden.length,overdue:overdue.length,p1:p1.length,inbox:inbox.length,waiting:waiting.length,dueWithoutCalendar:dueWithoutCalendar.length},
+      generatedBy:'orbit-client-agent',
+      generatedAt:new Date().toISOString()
+    }
+  };
+}
+
+function renderAgentPanel(){
+  const card=$('#agentCard');if(!card||!state)return;
+  card.style.display=view==='today'?'block':'none';
+  const latest=[...(state.agentRuns||[])].sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt))[0],actions=latest?.result?.proposedActions||[];
+  $('#agentSummary').textContent=latest?.result?.summary||'Kör agenten för att få konkreta nästa steg baserat på prioritet, inbox, kalenderläge, väntelägen och app-länkar.';
+  $('#agentActions').innerHTML=actions.length?actions.slice(0,5).map(a=>`<button class="agent-action" ${a.taskId?`data-agent-task="${a.taskId}"`:''}><span>${escapeHtml((a.type||'next').toUpperCase())}</span><strong>${escapeHtml(a.text||'Föreslagen åtgärd')}</strong>${a.taskTitle?`<small>${escapeHtml(a.taskTitle)}</small>`:''}</button>`).join(''):'<p class="hint">Inga agentförslag sparade ännu.</p>';
+  $('#agentActions').querySelectorAll('[data-agent-task]').forEach(b=>b.onclick=()=>openInspector(b.dataset.agentTask));
+  $('#runAgent').onclick=async()=>{const plan=buildAgentPlan();await saveAgentRun(plan);await load();toast('Agenten har föreslagit nästa steg.')};
 }
 function refreshAssignees(){const projectId=$('#projectSelect').value;$('#assigneeSelect').innerHTML=assigneeOptionsHtml(projectId,defaultAssigneeForProject(projectId))}
 function openDialog(prefill={}){

@@ -1,0 +1,79 @@
+.agent-card {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 20px;
+  margin: -18px 0 28px;
+  box-shadow: 0 12px 34px #34265a0c;
+}
+
+.agent-head {
+  display: flex;
+  gap: 18px;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.agent-head h2 {
+  font: 800 20px Manrope;
+  margin: 0 0 6px;
+}
+
+.agent-head p {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.agent-actions {
+  display: grid;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.agent-action {
+  width: 100%;
+  text-align: left;
+  border: 1px solid #ebe7f2;
+  background: #fbfafc;
+  border-radius: 12px;
+  padding: 12px;
+  cursor: pointer;
+}
+
+.agent-action:hover {
+  background: var(--purple-soft);
+  border-color: #dacfff;
+}
+
+.agent-action span {
+  display: block;
+  color: var(--purple);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .12em;
+  margin-bottom: 4px;
+}
+
+.agent-action strong {
+  display: block;
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.agent-action small {
+  display: block;
+  color: #999;
+  margin-top: 4px;
+}
+
+@media (max-width: 800px) {
+  .agent-head {
+    display: block;
+  }
+
+  .agent-head .secondary {
+    margin-top: 14px;
+  }
+}

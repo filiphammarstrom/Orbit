@@ -73,6 +73,8 @@ Tillgängliga MCP-verktyg:
 - `daily_brief` — skapar och kan spara en daglig sammanfattning
 - `agent_suggest_next_actions` — ger read-only-förslag på nästa steg
 
+Webbappen har också en “AI-agent”-panel i Today-vyn. Den kör en lokal regelbaserad agent över dina synliga uppgifter, inbox, deadlines, Google Calendar-köer, väntelägen och app-länkar och sparar resultatet i `agent_runs`. Det är avsiktligt samma datayta som MCP/externa AI-klienter kan använda senare.
+
 Rekommenderat flöde för ChatGPT/Claude:
 
 1. Kör `list_workspace` för att hämta giltiga `areaId`, `projectId` och `assigneeId`.

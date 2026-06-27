@@ -325,6 +325,7 @@ export function subscribeToChanges(onChange) {
     .on('postgres_changes', { event: '*', schema: 'public', table: 'notifications' }, onChange)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'task_links' }, onChange)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'daily_briefs' }, onChange)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'agent_runs' }, onChange)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'integration_accounts' }, onChange)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'integration_events' }, onChange)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'task_calendar_links' }, onChange)
@@ -551,6 +552,22 @@ export async function saveDailyBrief(input) {
     blockers: input.blockers || [],
     suggestions: input.suggestions || [],
     generated_by: input.generatedBy || 'orbit-client-agent'
+  }).select().single();
+  if (error) throw error;
+  return data;
+}
+
+export async function saveAgentRun(input) {
+  const user = (await session())?.user;
+  if (!user) throw new Error('Du är inte inloggad.');
+
+  const { data, error } = await supabase.from('agent_runs').insert({
+    user_id: user.id,
+    area_id: input.areaId || null,
+    goal: input.goal || 'Föreslå nästa steg',
+    status: input.status || 'done',
+    result: input.result || {},
+    completed_at: input.completedAt || new Date().toISOString()
   }).select().single();
   if (error) throw error;
   return data;
