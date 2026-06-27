@@ -16,6 +16,7 @@ create table if not exists public.team_members (
 );
 create table if not exists public.areas (
   id uuid primary key default gen_random_uuid(), name text not null, icon text not null default '◫', color text not null default '#7659ef',
+  category text not null default 'Privat',
   owner_id uuid not null references public.profiles(id), team_id uuid references public.teams(id) on delete set null, created_at timestamptz not null default now()
 );
 create table if not exists public.projects (
@@ -103,7 +104,7 @@ begin
   insert into public.profiles(id,name,initials)
   values(new.id,coalesce(new.raw_user_meta_data->>'name',split_part(new.email,'@',1)),upper(left(coalesce(new.raw_user_meta_data->>'name',new.email),2)))
   on conflict (id) do nothing;
-  insert into public.areas(name,icon,color,owner_id) values('Privat','⌂','#49a58f',new.id);
+  insert into public.areas(name,icon,color,category,owner_id) values('Privat','⌂','#49a58f','Privat',new.id);
   insert into public.team_members(team_id,user_id,role,status)
   select i.team_id,new.id,i.role,'active' from public.invitations i
   where lower(i.email)=lower(new.email) and i.accepted_at is null and i.expires_at>now()

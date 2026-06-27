@@ -185,7 +185,7 @@ export async function loadCloudState() {
       memberIds: members.data.filter(m => m.team_id === t.id && m.status === 'active').map(m => m.user_id)
     })),
     teamMembers: members.data.map(m => ({ teamId: m.team_id, userId: m.user_id, role: m.role, status: m.status })),
-    areas: areas.data.map(a => ({ id: a.id, name: a.name, icon: a.icon, color: a.color, ownerId: a.owner_id, teamId: a.team_id })),
+    areas: areas.data.map(a => ({ id: a.id, name: a.name, icon: a.icon, color: a.color, category: a.category || 'Privat', ownerId: a.owner_id, teamId: a.team_id })),
     projects: projects.data.map(p => ({
       id: p.id,
       name: p.name,
@@ -648,7 +648,18 @@ export async function createInvitation(teamId, email, role = 'member') {
 }
 
 export async function shareAreaWithTeam(areaId, teamId) {
-  const { data, error } = await supabase.from('areas').update({ team_id: teamId || null }).eq('id', areaId).select().single();
+  return updateAreaDetails(areaId, { teamId });
+}
+
+export async function updateAreaDetails(areaId, patch = {}) {
+  const row = {};
+  if (Object.prototype.hasOwnProperty.call(patch, 'teamId')) row.team_id = patch.teamId || null;
+  if (Object.prototype.hasOwnProperty.call(patch, 'category')) {
+    const category = String(patch.category || '').trim() || 'Privat';
+    row.category = category.slice(0, 80);
+  }
+  if (!Object.keys(row).length) throw new Error('Inget att uppdatera.');
+  const { data, error } = await supabase.from('areas').update(row).eq('id', areaId).select().single();
   if (error) throw error;
   return data;
 }

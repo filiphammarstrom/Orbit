@@ -18,18 +18,19 @@
   <link rel="stylesheet" href="auth.css">
   <link rel="stylesheet" href="project-management.css">
   <link rel="stylesheet" href="team.css">
+  <link rel="stylesheet" href="hierarchy.css">
   <link rel="stylesheet" href="agent.css">
 </head>
 <body>
   <section class="auth-screen" id="authScreen">
     <div class="auth-brand"><span class="brandmark">O</span><span>orbit</span></div>
-    <div class="auth-card"><p class="eyebrow">DIN GEMENSAMMA ARBETSYTA</p><h1 id="authTitle">Välkommen tillbaka</h1><p class="auth-copy">Logga in för att se dina områden, team och uppgifter.</p><form id="authForm"><label id="nameLabel">Namn<input name="name" autocomplete="name" placeholder="Ditt namn"></label><label>E-post<input name="email" type="email" autocomplete="email" required placeholder="du@exempel.se"></label><label>Lösenord<input name="password" type="password" autocomplete="current-password" minlength="8" required placeholder="Minst 8 tecken"></label><button class="primary" id="authSubmit">Logga in</button></form><button class="auth-switch" id="authSwitch">Inget konto? Skapa ett</button><p class="auth-error" id="authError"></p><div class="config-help" id="configHelp">Molnanslutningen saknas. Kopiera <code>.env.example</code> till <code>.env</code> och fyll i Supabase-adressen och den publika nyckeln.</div></div>
+    <div class="auth-card"><p class="eyebrow">DIN GEMENSAMMA ARBETSYTA</p><h1 id="authTitle">Välkommen tillbaka</h1><p class="auth-copy">Logga in för att se kategorier, områden, projekt och uppgifter.</p><form id="authForm"><label id="nameLabel">Namn<input name="name" autocomplete="name" placeholder="Ditt namn"></label><label>E-post<input name="email" type="email" autocomplete="email" required placeholder="du@exempel.se"></label><label>Lösenord<input name="password" type="password" autocomplete="current-password" minlength="8" required placeholder="Minst 8 tecken"></label><button class="primary" id="authSubmit">Logga in</button></form><button class="auth-switch" id="authSwitch">Inget konto? Skapa ett</button><p class="auth-error" id="authError"></p><div class="config-help" id="configHelp">Molnanslutningen saknas. Kopiera <code>.env.example</code> till <code>.env</code> och fyll i Supabase-adressen och den publika nyckeln.</div></div>
   </section>
   <aside class="sidebar">
     <div class="brand"><span class="brandmark">O</span><span>orbit</span><button class="collapse">‹</button></div>
     <button class="quick-add" id="quickAdd"><span>＋</span> Ny uppgift <kbd>N</kbd></button>
     <nav id="mainNav"></nav>
-    <div class="nav-section"><div class="nav-label"><span>OMRÅDEN</span><button title="Nytt område">＋</button></div><div id="projectNav"></div></div>
+    <div class="nav-section"><div class="nav-label"><span>KATEGORIER</span><button title="Ny strukturvy" data-view="areas">＋</button></div><div id="projectNav"></div></div>
     <div class="sidebar-foot"><div class="avatar">FH</div><div><strong id="currentUserName">Mitt konto</strong><small>Min arbetsyta</small></div><button id="logoutButton" title="Logga ut">↪</button></div>
   </aside>
   <main>

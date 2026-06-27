@@ -1,9 +1,9 @@
-import { configured, session, signIn, signUp, signOut, loadCloudState, createCloudTask, updateCloudTask, subscribeToChanges, addComment, addTaskLink, startGoogleCalendarOAuth, startSlackOAuth, slackEventSummary, createTaskFromSlackEvent, syncCalendarLinkNow, queueCalendarSync, saveDailyBrief, saveAgentRun, markNotificationRead, decideApproval, createTeam, createInvitation, shareAreaWithTeam } from './cloud.js';
+import { configured, session, signIn, signUp, signOut, loadCloudState, createCloudTask, updateCloudTask, subscribeToChanges, addComment, addTaskLink, startGoogleCalendarOAuth, startSlackOAuth, slackEventSummary, createTaskFromSlackEvent, syncCalendarLinkNow, queueCalendarSync, saveDailyBrief, saveAgentRun, markNotificationRead, decideApproval, createTeam, createInvitation, shareAreaWithTeam, updateAreaDetails } from './cloud.js';
 
 let state, view = 'today', projectView='list', liveChannel;
 const $ = s => document.querySelector(s);
 const bucketViews = ['inbox','today','later','someday'];
-const navItems = [['inbox','⌄','Inbox'],['today','☀','Gör idag'],['later','◷','Gör sen'],['someday','◇','Gör nån gång'],['team','⚭','Team']];
+const navItems = [['inbox','⌄','Inbox'],['today','☀','Gör idag'],['later','◷','Gör sen'],['someday','◇','Gör nån gång']];
 const mobileItems = [['inbox','⌄','Inbox'],['today','☀','Idag'],['later','◷','Sen'],['someday','◇','Nån gång'],['areas','▦','Områden']];
 let pendingCapture = readCaptureIntent();
 
@@ -22,7 +22,12 @@ const project=id=>state.projects.find(p=>p.id===id);
 const area=id=>state.areas.find(a=>a.id===id);
 const team=id=>state.teams.find(t=>t.id===id);
 const areaForProject=id=>area(project(id)?.areaId);
-const membersForArea=a=>a?.teamId?team(a.teamId)?.memberIds.map(person).filter(Boolean):[person(a?.ownerId||'me')];
+const membersForArea=a=>a?.teamId?(team(a.teamId)?.memberIds||[]).map(person).filter(Boolean):[person(a?.ownerId||state?.currentUserId||'me')];
+const areaCategory=a=>(a?.category||'Privat').trim()||'Privat';
+const categorySort=(a,b)=>a.localeCompare(b,'sv-SE',{sensitivity:'base'});
+const areaGroups=()=>[...new Set((state.areas||[]).map(areaCategory))].sort(categorySort).map(category=>({category,areas:state.areas.filter(a=>areaCategory(a)===category)}));
+const projectsForArea=a=>state.projects.filter(p=>p.areaId===a.id);
+const taskCountForProjects=projects=>visible().filter(t=>projects.some(p=>p.id===t.projectId)).length;
 const escapeHtml=(s='')=>String(s).replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
 const toast=text=>{$('#toast').textContent=text;$('#toast').classList.add('show');setTimeout(()=>$('#toast').classList.remove('show'),2200)};
 const avatarHtml=p=>`<span class="mini-avatar" title="${p.name}" style="background:${p.color}">${p.initials}</span>`;
@@ -81,9 +86,9 @@ const safeHref=url=>{const value=(url||'').trim();return !value||/^(javascript|d
 const linkKindLabel=kind=>({email:'Mail',calendar:'Kalender',document:'Dokument',chat:'Chatt',web:'Webb',file:'Fil',mcp:'MCP',other:'Länk'})[kind]||'Länk';
 const linkKindIcon=kind=>({email:'✉',calendar:'◷',document:'▤',chat:'☵',web:'↗',file:'▣',mcp:'✦',other:'↗'})[kind]||'↗';
 const calendarStatusLabel=status=>({pending:'Köad',synced:'Synkad',failed:'Misslyckad',deleted:'Borttagen'})[status]||status;
-const navCount=id=>id==='team'?(state.invitations||[]).filter(i=>!i.acceptedAt).length:bucketViews.includes(id)?tasksForBucketView(id).length:0;
+const navCount=id=>bucketViews.includes(id)?tasksForBucketView(id).length:0;
 const option=(value,label,selected)=>`<option value="${escapeHtml(value)}" ${String(value)===String(selected||'')?'selected':''}>${escapeHtml(label)}</option>`;
-const projectOptionsHtml=selected=>'<option value="">Personligt / Inbox</option>'+state.areas.map(a=>`<optgroup label="${escapeHtml(a.name)}">${state.projects.filter(p=>p.areaId===a.id).map(p=>option(p.id,p.name,selected)).join('')}</optgroup>`).join('');
+const projectOptionsHtml=selected=>'<option value="">Personligt / Inbox</option>'+areaGroups().map(group=>`<optgroup label="${escapeHtml(group.category)}">${group.areas.flatMap(a=>projectsForArea(a).map(p=>option(p.id,`${a.name} · ${p.name}`,selected))).join('')}</optgroup>`).join('');
 const assigneesForProject=projectId=>{const p=project(projectId);return p?membersForArea(area(p.areaId)):[person(state.currentUserId)]};
 const assigneeOptionsHtml=(projectId,selected)=>{const list=assigneesForProject(projectId);if(selected&&!list.some(p=>p.id===selected))list.push(person(selected));return list.map(p=>option(p.id,p.name,selected||list[0]?.id)).join('')};
 const defaultAssigneeForProject=projectId=>assigneesForProject(projectId)[0]?.id||state.currentUserId;
@@ -133,34 +138,34 @@ function registerServiceWorker(){
 
 function renderNav(){
   $('#mainNav').innerHTML=navItems.map(([id,ico,label])=>`<button class="nav-item ${view===id?'active':''}" data-view="${id}"><span class="ico">${ico}</span><span>${label}</span><span class="count">${navCount(id)||''}</span></button>`).join('');
-  $('#projectNav').innerHTML=state.areas.map(a=>{const projects=state.projects.filter(p=>p.areaId===a.id);return `<div class="area-group"><button class="nav-item area-nav ${view==='area:'+a.id?'active':''}" data-view="area:${a.id}"><span class="area-icon" style="background:${a.color}">${a.icon}</span><span>${a.name}</span><span class="count">${visible().filter(t=>projects.some(p=>p.id===t.projectId)).length||''}</span><span class="chevron">⌄</span></button>${projects.map(p=>`<button class="nav-item project-child ${view==='project:'+p.id?'active':''}" data-view="project:${p.id}"><span class="project-dot" style="background:${p.color}"></span><span>${p.name}</span><span class="count">${visible().filter(t=>t.projectId===p.id).length||''}</span></button>`).join('')}</div>`}).join('');
+  $('#projectNav').innerHTML=areaGroups().map(group=>`<div class="category-group"><div class="category-label">${escapeHtml(group.category)}</div>${group.areas.map(a=>{const projects=projectsForArea(a),count=taskCountForProjects(projects);return `<div class="area-group"><button class="nav-item area-nav ${view==='area:'+a.id?'active':''}" data-view="area:${a.id}"><span class="area-icon" style="background:${a.color}">${a.icon}</span><span>${escapeHtml(a.name)}</span><span class="count">${count||''}</span><span class="chevron">⌄</span></button>${projects.map(p=>`<button class="nav-item project-child ${view==='project:'+p.id?'active':''}" data-view="project:${p.id}"><span class="project-dot" style="background:${p.color}"></span><span>${escapeHtml(p.name)}</span><span class="count">${visible().filter(t=>t.projectId===p.id).length||''}</span></button>`).join('')}</div>`}).join('')}</div>`).join('');
   $('#mobileNav').innerHTML=mobileItems.map(([id,ico,label])=>`<button class="mobile-nav-item ${view===id||(id==='areas'&&(view.startsWith('area:')||view.startsWith('project:')))?'active':''}" data-view="${id}"><span>${ico}</span><small>${label.replace('Gör ','')}</small>${id!=='areas'&&navCount(id)?`<i>${navCount(id)}</i>`:''}</button>`).join('');
   document.querySelectorAll('[data-view]').forEach(b=>b.onclick=()=>{view=b.dataset.view;render()});
 }
 
 function render(){
   if(view==='assigned')view='today';
-  renderNav();let tasks=[],title,eye='MIN DAG',showAreas=false,showTeam=false,currentProject=null;
+  if(view==='team')view='areas';
+  renderNav();let tasks=[],title,eye='MIN DAG',showAreas=false,currentProject=null;
   const labels={inbox:'Inbox',today:'Gör idag',later:'Gör sen',someday:'Gör nån gång'};
-  if(view==='areas'){title='Områden';eye='DITT LIV';showAreas=true}
-  else if(view==='team'){title='Team & delning';eye='SAMARBETE';showTeam=true}
-  else if(view.startsWith('area:')){const a=area(view.split(':')[1]),ids=state.projects.filter(p=>p.areaId===a.id).map(p=>p.id);tasks=topLevel(visible().filter(t=>ids.includes(t.projectId)));title=a.name;eye='OMRÅDE'}
-  else if(view.startsWith('project:')){const p=project(view.split(':')[1]);currentProject=p;const canPlan=p.ownerId===state.currentUserId||(!p.ownerId&&area(p.areaId)?.ownerId===state.currentUserId);tasks=topLevel(state.tasks.filter(t=>t.projectId===p.id&&!t.completed&&(t.visible||canPlan)));title=p.name;eye=area(p.areaId)?.name.toUpperCase()||'PROJEKT'}
+  if(view==='areas'){title='Kategorier & områden';eye='STRUKTUR';showAreas=true}
+  else if(view.startsWith('area:')){const a=area(view.split(':')[1]);if(!a){view='areas';return render()}const projects=projectsForArea(a),ids=projects.map(p=>p.id);tasks=topLevel(visible().filter(t=>ids.includes(t.projectId)));title=a.name;eye=areaCategory(a).toUpperCase()}
+  else if(view.startsWith('project:')){const p=project(view.split(':')[1]);if(!p){view='areas';return render()}currentProject=p;const canPlan=p.ownerId===state.currentUserId||(!p.ownerId&&area(p.areaId)?.ownerId===state.currentUserId);tasks=topLevel(state.tasks.filter(t=>t.projectId===p.id&&!t.completed&&(t.visible||canPlan)));title=p.name;eye=area(p.areaId)?.name.toUpperCase()||'PROJEKT'}
   else{tasks=topLevel(tasksForBucketView(view));title=labels[view]}
   $('#pageTitle').textContent=title;$('#eyebrow').textContent=eye;
-  $('#subtitle').textContent=view==='today'?new Intl.DateTimeFormat('sv-SE',{weekday:'long',day:'numeric',month:'long'}).format(new Date()):showAreas?'Separata platser för privatliv, jobb och allt däremellan':showTeam?'Skapa team, bjud in personer och bestäm vilka områden teamet får se.':`${tasks.length} aktiva uppgifter`;
-  $('#sectionTitle').textContent=showAreas?'Dina områden':showTeam?'Team, inbjudningar och åtkomst':view==='inbox'?'Okategoriserat':'Att göra';
+  $('#subtitle').textContent=view==='today'?new Intl.DateTimeFormat('sv-SE',{weekday:'long',day:'numeric',month:'long'}).format(new Date()):showAreas?'Kategori → område → projekt → uppgift → underuppgift. Team styr bara åtkomst.':`${tasks.length} aktiva uppgifter`;
+  $('#sectionTitle').textContent=showAreas?'Kategori, område, projekt och åtkomst':view==='inbox'?'Okategoriserat':'Att göra';
   $('#projectToolbar').classList.toggle('open',Boolean(currentProject));
   if(currentProject){const colors={on_track:'#42a68b',at_risk:'#e2a33d',off_track:'#d96761'},labels={on_track:'På rätt väg',at_risk:'Risk',off_track:'Försenat'};$('#projectHealth').innerHTML=`<span class="health-pill"><i style="background:${colors[currentProject.health]}"></i>${labels[currentProject.health]}</span>`}
-  $('.section-head>div').style.display=showAreas||showTeam?'none':'';$('#addRow').style.display=showAreas||showTeam?'none':'';$('#focusCard').style.display=view==='today'?'flex':'none';
+  $('.section-head>div').style.display=showAreas?'none':'';$('#addRow').style.display=showAreas?'none':'';$('#focusCard').style.display=view==='today'?'flex':'none';
   const todayAll=state.tasks.filter(t=>t.visible&&(t.bucket==='today'||isDueToday(t)||(!t.completed&&(isOverdue(t)||isReminderDue(t))))),done=todayAll.filter(t=>t.completed).length,pct=todayAll.length?Math.round(done/todayAll.length*100):0;
   $('#todayCount').textContent=todayAll.filter(t=>!t.completed).length;$('#progressText').textContent=pct+'%';$('.done-ring').style.strokeDashoffset=100-pct;
-  $('#taskList').innerHTML=showAreas?areaCards():showTeam?teamSharingContent():currentProject?projectContent(tasks):tasks.length?tasks.map(taskGroupHtml).join(''):'<div class="empty">Här är lugnt och fint.</div>';
+  $('#taskList').innerHTML=showAreas?areaCards():currentProject?projectContent(tasks):tasks.length?tasks.map(taskGroupHtml).join(''):'<div class="empty">Här är lugnt och fint.</div>';
   document.querySelectorAll('.task').forEach(el=>el.onclick=e=>{if(!e.target.classList.contains('check'))openInspector(el.dataset.id)});
   document.querySelectorAll('.check').forEach(b=>b.onclick=e=>{e.stopPropagation();complete(b.dataset.id)});
-  document.querySelectorAll('.area-card').forEach(c=>c.onclick=()=>{view='area:'+c.dataset.area;render()});
+  document.querySelectorAll('[data-area-open]').forEach(c=>c.onclick=()=>{view='area:'+c.dataset.areaOpen;render()});
   document.querySelectorAll('.board-card,.calendar-task,.flow-node').forEach(c=>c.onclick=()=>openInspector(c.dataset.id));
-  if(showTeam)bindTeamSharing();
+  if(showAreas)bindAreaOverview();
   renderNotifications();
   renderDailyBrief();
   renderAgentPanel();
@@ -248,7 +253,57 @@ function bindTeamSharing(){
   document.querySelectorAll('[data-area-share]').forEach(s=>s.onchange=async()=>{await shareAreaWithTeam(s.dataset.areaShare,s.value||null);await load();toast(s.value?'Området är delat med teamet.':'Området är privat igen.')});
 }
 
-function areaCards(){return `<div class="area-grid">${state.areas.map(a=>{const projects=state.projects.filter(p=>p.areaId===a.id),members=membersForArea(a);return `<button class="area-card" data-area="${a.id}"><div class="area-card-head"><span class="area-card-icon" style="background:${a.color}">${a.icon}</span><div><h3>${a.name}</h3><p>${projects.length} projekt · ${visible().filter(t=>projects.some(p=>p.id===t.projectId)).length} uppgifter</p></div></div><div class="area-card-projects">${projects.map(p=>`<span>${p.name}</span>`).join('')||'<span>Inga projekt ännu</span>'}</div><div class="access-note">${a.teamId?'Delas med':'Privat för dig'}<span class="team-stack">${members.map(avatarHtml).join('')}</span>${a.teamId?team(a.teamId).name:'Endast du'}</div></button>`}).join('')}</div>`}
+function bindAreaOverview(){
+  bindTeamSharing();
+  document.querySelectorAll('[data-area-category]').forEach(input=>{
+    const save=async()=>{
+      const value=input.value.trim()||'Privat';
+      if(value===input.dataset.originalCategory)return;
+      input.dataset.originalCategory=value;
+      input.disabled=true;
+      try{await updateAreaDetails(input.dataset.areaCategory,{category:value});await load();toast(`Området flyttades till ${value}.`)}
+      catch(error){input.disabled=false;toast(error.message)}
+    };
+    input.onblur=save;
+    input.onchange=save;
+  });
+}
+
+function areaAccessContent(){
+  const pending=(state.invitations||[]).filter(i=>!i.acceptedAt),accepted=(state.invitations||[]).filter(i=>i.acceptedAt);
+  return `<section class="area-access-card">
+    <div class="share-head"><div><p class="eyebrow">TEAM & ÅTKOMST</p><h3>Team är delningsgrupper, inte en task-lista</h3><p>Skapa ett team här och koppla sedan rätt team till ett område. Projekt och uppgifter under området följer samma åtkomst.</p></div><span>${state.teams.length} team</span></div>
+    <section class="team-create-card compact-access-card">
+      <div><p class="eyebrow">NYTT TEAM</p><h3>Skapa åtkomstgrupp</h3><p>Exempel: Sambo, Jobbteamet eller Båtgruppen.</p></div>
+      <form id="createTeamForm" class="inline-form"><input name="name" placeholder="T.ex. Jobbteamet" required><button class="primary">Skapa team</button></form>
+    </section>
+    <section class="team-grid">${state.teams.length?state.teams.map(teamCard).join(''):'<div class="empty card-empty">Inga team ännu. Skapa ett team när ett område ska delas.</div>'}</section>
+    <section class="invite-summary"><strong>${pending.length}</strong> väntande inbjudningar · <strong>${accepted.length}</strong> accepterade</section>
+  </section>`;
+}
+
+function areaHierarchyCard(a){
+  const projects=projectsForArea(a),members=membersForArea(a),current=team(a.teamId),owner=a.ownerId===state.currentUserId,category=areaCategory(a),taskCount=taskCountForProjects(projects);
+  return `<article class="area-card hierarchy-area-card">
+    <div class="area-card-head"><span class="area-card-icon" style="background:${a.color}">${a.icon}</span><div><h3>${escapeHtml(a.name)}</h3><p>${projects.length} projekt · ${taskCount} uppgifter</p></div></div>
+    <div class="area-card-projects">${projects.map(p=>`<span>${escapeHtml(p.name)}</span>`).join('')||'<span>Inga projekt ännu</span>'}</div>
+    <div class="area-settings">
+      <label>Kategori<input data-area-category="${a.id}" data-original-category="${escapeHtml(category)}" value="${escapeHtml(category)}" ${owner?'':'disabled'}></label>
+      <label>Delas med<select data-area-share="${a.id}" ${owner?'':'disabled'}><option value="">Endast privat</option>${state.teams.map(t=>`<option value="${t.id}" ${a.teamId===t.id?'selected':''}>${escapeHtml(t.name)}</option>`).join('')}</select></label>
+    </div>
+    <div class="access-note">${a.teamId?'Delas med':'Privat för dig'}<span class="team-stack">${members.map(avatarHtml).join('')}</span>${a.teamId?escapeHtml(current?.name||'Okänt team'):'Endast du'}</div>
+    <button class="secondary area-open" type="button" data-area-open="${a.id}">Öppna område</button>
+  </article>`;
+}
+
+function areaCards(){
+  const groups=areaGroups();
+  return `<div class="hierarchy-page">
+    <section class="hierarchy-intro"><div><p class="eyebrow">MODELLEN</p><h3>Kategori → Område → Projekt → Task → Subtask</h3><p>Kategorier är översta nivån, t.ex. Privat, Bolag eller Jobb. Team kopplas till områden för åtkomst och är därför inte en egen uppgiftslista.</p></div></section>
+    ${groups.length?groups.map(group=>`<section class="category-card"><div class="category-head"><div><p class="eyebrow">KATEGORI</p><h3>${escapeHtml(group.category)}</h3><p>${group.areas.length} område${group.areas.length===1?'':'n'}</p></div></div><div class="area-grid">${group.areas.map(areaHierarchyCard).join('')}</div></section>`).join(''):'<div class="empty">Inga områden ännu.</div>'}
+    ${areaAccessContent()}
+  </div>`;
+}
 function taskGroupHtml(t){const all=childrenOf(t.id),shown=all.filter(c=>c.visible&&!c.completed),done=all.filter(c=>c.completed).length;return `<div class="task-group">${taskHtml(t,all.length?`${done}/${all.length}`:'')}${shown.length?`<div class="subtasks">${shown.map(c=>taskHtml(c)).join('')}</div>`:''}${all.some(c=>!c.visible&&!c.completed)?`<div class="subtask-waiting">⚡ ${all.filter(c=>!c.visible&&!c.completed).length} nästa steg väntar på ett villkor</div>`:''}</div>`}
 function assignmentBadge(t){return t.assigneeId===state.currentUserId&&t.createdBy&&t.createdBy!==state.currentUserId?'<span class="assignment-badge mine">◎ Tilldelat till dig</span>':''}
 function taskHtml(t,progress=''){

@@ -1,6 +1,6 @@
 # Orbit
 
-Orbit är en molnbaserad fleranvändarapp för områden, projekt, team och villkorsstyrda uppgifter. Webbklienten använder Supabase Auth, Postgres, Row Level Security och Realtime. Det finns ingen lokal databas eller lokal reservlagring.
+Orbit är en molnbaserad fleranvändarapp för kategorier, områden, projekt, teamåtkomst och villkorsstyrda uppgifter. Webbklienten använder Supabase Auth, Postgres, Row Level Security och Realtime. Det finns ingen lokal databas eller lokal reservlagring.
 
 ## Projekthantering
 
@@ -13,7 +13,7 @@ Orbit är en molnbaserad fleranvändarapp för områden, projekt, team och villk
 - Externa MCP-händelser och tidsbaserad aktivering
 - Kontextlänkar från andra appar, t.ex. mail, dokument, chattar och kalenderposter
 - Uppgifter som tilldelats dig ligger kvar i sina vanliga listor/projekt men markeras med “Tilldelat till dig”
-- Team & delning-vy för att skapa team, bjuda in via e-post och dela områden med rätt team
+- Strukturvy för kategori → område → projekt, där team bara styr åtkomst/delning
 - Google Calendar-sektion på uppgifter: manuell “öppna i Google Calendar”-länk, direkt-sync, retry och köad sync-status
 - Integrationsgrund för Google Calendar och Slack, inklusive Slack-inbox, message shortcut och länkar tillbaka till Slack-meddelanden
 - Daglig Orbit-brief från MCP/AI samt sparade agentförslag
@@ -35,7 +35,7 @@ npm install
 npm run dev
 ```
 
-Ett nytt konto får automatiskt ett privat område. Om kontots e-post redan finns i en väntande teaminbjudan kopplas användaren automatiskt in i teamet vid signup. All data skyddas med RLS: en användare ser endast egna områden och områden vars team personen är aktiv medlem i. Tilldelade personer måste också ha åtkomst till området.
+Ett nytt konto får automatiskt ett privat område i kategorin `Privat`. Om kontots e-post redan finns i en väntande teaminbjudan kopplas användaren automatiskt in i teamet vid signup. All data skyddas med RLS: en användare ser endast egna områden och områden vars team personen är aktiv medlem i. Tilldelade personer måste också ha åtkomst till området.
 
 ## Driftsättning
 
@@ -190,10 +190,10 @@ Slack-flödet:
    - Slå gärna på escaping för användare/kanaler så mentions skickas som Slack-ID:n.
 6. Lägg minst dessa bot scopes: `channels:history`, `commands`, `groups:history`, `im:history`, `mpim:history`, `reactions:read`, `team:read`, `chat:write`, `users:read`, `users:read.email`.
 7. Lägg Vercel-miljövariablerna `SLACK_CLIENT_ID`, `SLACK_CLIENT_SECRET`, `SLACK_SIGNING_SECRET` och `SLACK_REDIRECT_URI`.
-8. Öppna Team-vyn i Orbit och klicka “Anslut Slack”. Om `commands`, `users:read` eller `users:read.email` lagts till efter en tidigare installation behöver Slack kopplas om.
+8. Anslut Slack via integrationsflödet i Orbit. Om `commands`, `users:read` eller `users:read.email` lagts till efter en tidigare installation behöver Slack kopplas om.
 9. Slack OAuth-callbacken sparar bot token krypterat i `private.integration_tokens`.
 10. Slack Events API verifierar `X-Slack-Signature`, deduplicerar `event_id`, försöker hämta en riktig Slack-permalink via `chat.getPermalink` och sparar inkommande events i `integration_events`.
-11. Öppna Team-vyns Slack-inbox för att granska nya Slack-events, öppna originalmeddelandet i Slack och skapa Orbit-uppgifter med titel, projekt, tilldelad och prioritet.
+11. Granska nya Slack-events i Orbit, öppna originalmeddelandet i Slack och skapa Orbit-uppgifter med titel, projekt, tilldelad och prioritet.
 12. Använd Slack message shortcut “Skapa Orbit-task” på ett meddelande för att skapa en uppgift direkt i Orbit. Om Slack-användarens email matchar en Orbit-användare som delar team med integrationsägaren hamnar den i den personens Inbox, annars i integrationsägarens Inbox.
 13. Använd `/orbit Svara på offerten #idag p1` för att skapa en task direkt från Slack. `/orbit <@person> Följ upp avtalet #sen p2` tilldelar tasken till personen om Slack-emailen matchar en Orbit-användare som delar team.
 14. När en Slack-händelse, shortcut eller slash command blir en uppgift markeras den som hanterad/länkad och sparas i `integration_events`. Message shortcuts sparas även i `slack_message_links` med Slack-permalink när den finns.
