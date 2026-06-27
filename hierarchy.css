@@ -57,7 +57,7 @@
   border-radius: 10px;
   display: grid;
   gap: 4px;
-  grid-template-columns: 22px 1fr 24px;
+  grid-template-columns: 22px 1fr 24px 24px;
   min-height: 34px;
 }
 
@@ -69,6 +69,7 @@
 
 .tree-toggle,
 .tree-add,
+.tree-edit,
 .tree-main,
 .tree-project,
 .tree-empty-project,
@@ -78,21 +79,33 @@
 }
 
 .tree-toggle,
-.tree-add {
+.tree-add,
+.tree-edit {
   background: transparent;
   color: #aaa2b3;
   height: 28px;
   padding: 0;
 }
 
-.tree-add {
+.tree-add,
+.tree-edit {
   border-radius: 8px;
-  color: var(--purple);
   font-weight: 900;
 }
 
-.tree-add:hover {
+.tree-add {
+  color: var(--purple);
+}
+
+.tree-edit {
+  color: #9a92a5;
+  font-size: 12px;
+}
+
+.tree-add:hover,
+.tree-edit:hover {
   background: var(--purple-soft);
+  color: var(--purple);
 }
 
 .tree-main {
@@ -160,6 +173,13 @@
   padding-left: 12px;
 }
 
+.tree-project-line {
+  align-items: center;
+  display: grid;
+  gap: 3px;
+  grid-template-columns: 1fr 24px;
+}
+
 .tree-project {
   align-items: center;
   background: transparent;
@@ -172,6 +192,11 @@
   min-height: 30px;
   padding: 0 8px;
   text-align: left;
+}
+
+.tree-project-line .project-edit {
+  height: 26px;
+  padding: 0;
 }
 
 .tree-project:hover,
@@ -215,6 +240,30 @@
   padding: 5px;
 }
 
+.icon-picker {
+  display: grid;
+  gap: 5px;
+  grid-template-columns: repeat(4, 1fr);
+  margin-top: 8px;
+}
+
+.icon-picker button {
+  background: #f4f2f6;
+  border: 1px solid #e4deea;
+  border-radius: 8px;
+  color: #5c5964;
+  cursor: pointer;
+  font-size: 15px;
+  min-height: 32px;
+}
+
+.icon-picker button:hover,
+.icon-picker button.active {
+  background: var(--purple-soft);
+  border-color: #cfc2ff;
+  color: var(--purple);
+}
+
 .hierarchy-intro {
   align-items: center;
   display: flex;
@@ -226,8 +275,20 @@
   white-space: nowrap;
 }
 
+.category-head-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
 .category-head .secondary {
   align-self: flex-start;
+}
+
+.project-chip {
+  display: inline-flex;
+  gap: 2px;
 }
 
 .area-card-projects button {
@@ -243,6 +304,10 @@
   padding: 6px 9px;
 }
 
+.area-card-projects .chip-edit {
+  padding: 6px 8px;
+}
+
 .area-card-projects button:hover {
   background: var(--purple-soft);
   color: var(--purple);
@@ -251,7 +316,7 @@
 .area-card-actions {
   display: grid;
   gap: 8px;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr 1fr 1fr;
   margin-top: 14px;
 }
 
@@ -266,6 +331,7 @@
   .tree-main i,
   .tree-project i,
   .tree-add,
+  .tree-edit,
   .tree-toggle {
     display: none;
   }
@@ -297,12 +363,14 @@
   }
 
   .hierarchy-intro,
-  .category-head {
+  .category-head,
+  .category-head-actions {
     display: grid;
   }
 
   .hierarchy-intro .primary,
   .category-head .secondary,
+  .category-head-actions,
   .area-card-actions {
     width: 100%;
   }

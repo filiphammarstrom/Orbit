@@ -581,10 +581,23 @@ export async function markNotificationRead(id) {
 
 export async function updateProject(id, patch) {
   const row = {};
-  for (const [k, v] of Object.entries(patch)) {
-    const map = { ownerId: 'owner_id', startDate: 'start_date', dueDate: 'due_date' };
-    row[map[k] || k] = v;
+  if (Object.prototype.hasOwnProperty.call(patch, 'name')) {
+    const name = String(patch.name || '').trim();
+    if (!name) throw new Error('Projektet behöver ett namn.');
+    row.name = name.slice(0, 120);
   }
+  if (Object.prototype.hasOwnProperty.call(patch, 'color')) row.color = patch.color || '#8b70ff';
+  if (Object.prototype.hasOwnProperty.call(patch, 'areaId')) {
+    if (!patch.areaId) throw new Error('Välj vilket område projektet ska ligga under.');
+    row.area_id = patch.areaId;
+  }
+  if (Object.prototype.hasOwnProperty.call(patch, 'ownerId')) row.owner_id = patch.ownerId || null;
+  if (Object.prototype.hasOwnProperty.call(patch, 'objective')) row.objective = patch.objective || '';
+  if (Object.prototype.hasOwnProperty.call(patch, 'status')) row.status = patch.status || 'planned';
+  if (Object.prototype.hasOwnProperty.call(patch, 'health')) row.health = patch.health || 'on_track';
+  if (Object.prototype.hasOwnProperty.call(patch, 'startDate')) row.start_date = patch.startDate || null;
+  if (Object.prototype.hasOwnProperty.call(patch, 'dueDate')) row.due_date = patch.dueDate || null;
+  if (!Object.keys(row).length) throw new Error('Inget att uppdatera.');
   const { data, error } = await supabase.from('projects').update(row).eq('id', id).select().single();
   if (error) throw error;
   return data;
@@ -645,6 +658,24 @@ export async function createProject(input = {}) {
   return data;
 }
 
+export async function renameCategory(oldCategory, newCategory) {
+  const user = (await session())?.user;
+  if (!user) throw new Error('Du är inte inloggad.');
+  const from = String(oldCategory || '').trim() || 'Privat';
+  const to = String(newCategory || '').trim() || 'Privat';
+  if (!to) throw new Error('Kategorin behöver ett namn.');
+  if (from === to) return [];
+
+  const { data, error } = await supabase.from('areas')
+    .update({ category: to.slice(0, 80) })
+    .eq('owner_id', user.id)
+    .eq('category', from)
+    .select();
+  if (error) throw error;
+  if (!data?.length) throw new Error('Du kan bara byta namn på kategorier som innehåller egna områden.');
+  return data;
+}
+
 export async function createInvitation(teamId, email, role = 'member') {
   const user = (await session())?.user;
   if (!user) throw new Error('Du är inte inloggad.');
@@ -687,6 +718,13 @@ export async function shareAreaWithTeam(areaId, teamId) {
 
 export async function updateAreaDetails(areaId, patch = {}) {
   const row = {};
+  if (Object.prototype.hasOwnProperty.call(patch, 'name')) {
+    const name = String(patch.name || '').trim();
+    if (!name) throw new Error('Området behöver ett namn.');
+    row.name = name.slice(0, 120);
+  }
+  if (Object.prototype.hasOwnProperty.call(patch, 'icon')) row.icon = String(patch.icon || '◫').trim().slice(0, 2) || '◫';
+  if (Object.prototype.hasOwnProperty.call(patch, 'color')) row.color = patch.color || '#7659ef';
   if (Object.prototype.hasOwnProperty.call(patch, 'teamId')) row.team_id = patch.teamId || null;
   if (Object.prototype.hasOwnProperty.call(patch, 'category')) {
     const category = String(patch.category || '').trim() || 'Privat';

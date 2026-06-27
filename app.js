@@ -1,4 +1,4 @@
-import { configured, session, signIn, signUp, signOut, loadCloudState, createCloudTask, updateCloudTask, subscribeToChanges, addComment, addTaskLink, startGoogleCalendarOAuth, startSlackOAuth, slackEventSummary, createTaskFromSlackEvent, syncCalendarLinkNow, queueCalendarSync, saveDailyBrief, saveAgentRun, markNotificationRead, decideApproval, createTeam, createArea, createProject, createInvitation, shareAreaWithTeam, updateAreaDetails } from './cloud.js';
+import { configured, session, signIn, signUp, signOut, loadCloudState, createCloudTask, updateCloudTask, subscribeToChanges, addComment, addTaskLink, startGoogleCalendarOAuth, startSlackOAuth, slackEventSummary, createTaskFromSlackEvent, syncCalendarLinkNow, queueCalendarSync, saveDailyBrief, saveAgentRun, markNotificationRead, decideApproval, createTeam, createArea, createProject, updateProject, renameCategory, createInvitation, shareAreaWithTeam, updateAreaDetails } from './cloud.js';
 
 let state, view = 'today', projectView='list', liveChannel;
 const $ = s => document.querySelector(s);
@@ -154,6 +154,9 @@ function bindStructureActions(root=document){
   root.querySelectorAll('[data-create-structure]').forEach(b=>b.onclick=()=>openStructureDialog(b.dataset.createStructure));
   root.querySelectorAll('[data-create-area]').forEach(b=>b.onclick=()=>openStructureDialog('area',{category:b.dataset.createArea}));
   root.querySelectorAll('[data-create-project]').forEach(b=>b.onclick=()=>openStructureDialog('project',{areaId:b.dataset.createProject}));
+  root.querySelectorAll('[data-edit-category]').forEach(b=>b.onclick=()=>openStructureDialog('edit-category',{category:b.dataset.editCategory}));
+  root.querySelectorAll('[data-edit-area]').forEach(b=>b.onclick=()=>openStructureDialog('edit-area',{areaId:b.dataset.editArea}));
+  root.querySelectorAll('[data-edit-project]').forEach(b=>b.onclick=()=>openStructureDialog('edit-project',{projectId:b.dataset.editProject}));
 }
 
 function renderNav(){
@@ -164,6 +167,7 @@ function renderNav(){
       <div class="tree-row category-row ${categoryIsActive(group)?'active':''}">
         <button class="tree-toggle" data-toggle-category="${escapeHtml(group.category)}">${open?'▾':'▸'}</button>
         <button class="tree-main" data-view="${escapeHtml(categoryView)}"><span>${escapeHtml(group.category)}</span><small>${group.areas.length} område${group.areas.length===1?'':'n'}</small><i>${categoryCount||''}</i></button>
+        <button class="tree-edit" title="Redigera kategori" data-edit-category="${escapeHtml(group.category)}">✎</button>
         <button class="tree-add" title="Nytt område i ${escapeHtml(group.category)}" data-create-area="${escapeHtml(group.category)}">＋</button>
       </div>
       ${open?`<div class="tree-children">${group.areas.map(a=>{
@@ -172,9 +176,10 @@ function renderNav(){
           <div class="tree-row area-row ${areaIsActive(a)?'active':''}">
             <button class="tree-toggle" data-toggle-area="${a.id}">${areaOpen?'▾':'▸'}</button>
             <button class="tree-main" data-view="area:${a.id}"><span class="area-icon" style="background:${a.color}">${a.icon}</span><span>${escapeHtml(areaName(a))}</span><small>${projects.length} projekt</small><i>${count||''}</i></button>
+            <button class="tree-edit" title="Redigera område" data-edit-area="${a.id}">✎</button>
             <button class="tree-add" title="Nytt projekt i ${escapeHtml(areaName(a))}" data-create-project="${a.id}">＋</button>
           </div>
-          ${areaOpen?`<div class="tree-projects">${projects.map(p=>`<button class="tree-project ${view==='project:'+p.id?'active':''}" data-view="project:${p.id}"><span class="project-dot" style="background:${p.color}"></span><span>${escapeHtml(p.name)}</span><i>${visible().filter(t=>t.projectId===p.id).length||''}</i></button>`).join('')}${projects.length?'':`<button class="tree-empty-project" data-create-project="${a.id}">＋ Skapa första projektet</button>`}</div>`:''}
+          ${areaOpen?`<div class="tree-projects">${projects.map(p=>`<div class="tree-project-line"><button class="tree-project ${view==='project:'+p.id?'active':''}" data-view="project:${p.id}"><span class="project-dot" style="background:${p.color}"></span><span>${escapeHtml(p.name)}</span><i>${visible().filter(t=>t.projectId===p.id).length||''}</i></button><button class="tree-edit project-edit" title="Redigera projekt" data-edit-project="${p.id}">✎</button></div>`).join('')}${projects.length?'':`<button class="tree-empty-project" data-create-project="${a.id}">＋ Skapa första projektet</button>`}</div>`:''}
         </div>`;
       }).join('')}<button class="tree-create-under" data-create-area="${escapeHtml(group.category)}">＋ Nytt område i ${escapeHtml(group.category)}</button></div>`:''}
     </div>`;
@@ -451,13 +456,13 @@ function areaHierarchyCard(a){
   const projects=projectsForArea(a),members=membersForArea(a),current=team(a.teamId),owner=a.ownerId===state.currentUserId,category=areaCategory(a),taskCount=taskCountForProjects(projects);
   return `<article class="area-card hierarchy-area-card">
     <div class="area-card-head"><span class="area-card-icon" style="background:${a.color}">${a.icon}</span><div><h3>${escapeHtml(areaName(a))}</h3><p>${projects.length} projekt · ${taskCount} uppgifter</p></div></div>
-    <div class="area-card-projects">${projects.map(p=>`<button data-view="project:${p.id}"><span class="project-dot" style="background:${p.color}"></span>${escapeHtml(p.name)}</button>`).join('')||'<span>Inga projekt ännu</span>'}</div>
+    <div class="area-card-projects">${projects.map(p=>`<span class="project-chip"><button data-view="project:${p.id}"><span class="project-dot" style="background:${p.color}"></span>${escapeHtml(p.name)}</button><button class="chip-edit" data-edit-project="${p.id}" title="Redigera projekt">✎</button></span>`).join('')||'<span>Inga projekt ännu</span>'}</div>
     <div class="area-settings">
       <label>Kategori<input data-area-category="${a.id}" data-original-category="${escapeHtml(category)}" value="${escapeHtml(category)}" ${owner?'':'disabled'}></label>
       <label>Delas med<select data-area-share="${a.id}" ${owner?'':'disabled'}><option value="">Endast privat</option>${state.teams.map(t=>`<option value="${t.id}" ${a.teamId===t.id?'selected':''}>${escapeHtml(t.name)}</option>`).join('')}</select></label>
     </div>
     <div class="access-note">${a.teamId?'Delas med':'Privat för dig'}<span class="team-stack">${members.map(avatarHtml).join('')}</span>${a.teamId?escapeHtml(current?.name||'Okänt team'):'Endast du'}</div>
-    <div class="area-card-actions"><button class="secondary" type="button" data-area-open="${a.id}">Öppna område</button><button class="secondary" type="button" data-create-project="${a.id}">＋ Nytt projekt</button></div>
+    <div class="area-card-actions"><button class="secondary" type="button" data-area-open="${a.id}">Öppna område</button><button class="secondary" type="button" data-edit-area="${a.id}">✎ Redigera</button><button class="secondary" type="button" data-create-project="${a.id}">＋ Nytt projekt</button></div>
   </article>`;
 }
 
@@ -465,7 +470,7 @@ function areaCards(){
   const groups=areaGroups();
   return `<div class="hierarchy-page">
     <section class="hierarchy-intro"><div><p class="eyebrow">MODELLEN</p><h3>Kategori → Område → Projekt → Task → Subtask</h3><p>Kategorier är översta nivån, t.ex. Privat, Bolag eller Jobb. Team kopplas till områden för åtkomst och är därför inte en egen uppgiftslista.</p></div><button class="primary" data-create-structure="category">＋ Ny kategori</button></section>
-    ${groups.length?groups.map(group=>`<section class="category-card"><div class="category-head"><div><p class="eyebrow">KATEGORI</p><h3>${escapeHtml(group.category)}</h3><p>${group.areas.length} område${group.areas.length===1?'':'n'}</p></div><button class="secondary" data-create-area="${escapeHtml(group.category)}">＋ Nytt område</button></div><div class="area-grid">${group.areas.map(areaHierarchyCard).join('')}</div></section>`).join(''):'<div class="empty">Inga områden ännu. Skapa första kategorin ovan.</div>'}
+    ${groups.length?groups.map(group=>`<section class="category-card"><div class="category-head"><div><p class="eyebrow">KATEGORI</p><h3>${escapeHtml(group.category)}</h3><p>${group.areas.length} område${group.areas.length===1?'':'n'}</p></div><div class="category-head-actions"><button class="secondary" data-edit-category="${escapeHtml(group.category)}">✎ Redigera kategori</button><button class="secondary" data-create-area="${escapeHtml(group.category)}">＋ Nytt område</button></div></div><div class="area-grid">${group.areas.map(areaHierarchyCard).join('')}</div></section>`).join(''):'<div class="empty">Inga områden ännu. Skapa första kategorin ovan.</div>'}
     ${areaAccessContent()}
   </div>`;
 }
@@ -654,10 +659,10 @@ function currentAreaId(){
   return '';
 }
 
-function fillStructureOptions(selectedAreaId=''){
+function fillStructureOptions(selectedAreaId='',selectedTeamId=''){
   $('#structureCategoryOptions').innerHTML=areaGroups().map(group=>`<option value="${escapeHtml(group.category)}"></option>`).join('');
   $('#structureAreaSelect').innerHTML=areaGroups().map(group=>`<optgroup label="${escapeHtml(group.category)}">${group.areas.map(a=>option(a.id,areaName(a),selectedAreaId)).join('')}</optgroup>`).join('');
-  $('#structureTeamSelect').innerHTML='<option value="">Endast privat</option>'+state.teams.map(t=>option(t.id,t.name,'')).join('');
+  $('#structureTeamSelect').innerHTML='<option value="">Endast privat</option>'+state.teams.map(t=>option(t.id,t.name,selectedTeamId)).join('');
 }
 
 function showStructureField(id,show){
@@ -665,35 +670,51 @@ function showStructureField(id,show){
   if(el)el.style.display=show?'block':'none';
 }
 
+function setStructureIcon(icon='◫'){
+  const value=String(icon||'◫').trim().slice(0,2)||'◫';
+  const input=$('#structureForm')?.elements?.icon;
+  if(input)input.value=value;
+  document.querySelectorAll('[data-icon-choice]').forEach(b=>b.classList.toggle('active',b.dataset.iconChoice===value));
+}
+
 function openStructureDialog(mode='category',context={}){
   const dialog=$('#structureDialog'),form=$('#structureForm');
   if(!dialog||!form)return;
   form.reset();
-  const areaId=context.areaId||currentAreaId()||state.areas[0]?.id||'',category=context.category||currentCategory();
-  fillStructureOptions(areaId);
+  const editingCategory=mode==='edit-category',editingArea=mode==='edit-area',editingProject=mode==='edit-project',editing=editingCategory||editingArea||editingProject;
+  const currentArea=editingArea?area(context.areaId):null,currentProject=editingProject?project(context.projectId):null,projectArea=currentProject?area(currentProject.areaId):null;
+  const areaId=context.areaId||currentProject?.areaId||currentAreaId()||state.areas[0]?.id||'',category=context.category||areaCategory(currentArea)||areaCategory(projectArea)||currentCategory();
+  fillStructureOptions(areaId,currentArea?.teamId||'');
   form.elements.mode.value=mode;
-  form.elements.color.value=mode==='project'?'#8b70ff':'#7659ef';
-  form.elements.icon.value='◫';
-  form.elements.category.value=category==='Privat'&&mode==='category'?'':category;
+  form.elements.entityId.value=context.areaId||context.projectId||'';
+  form.elements.originalCategory.value=category||'';
+  form.elements.color.value=currentProject?.color||currentArea?.color||(mode==='project'?'#8b70ff':'#7659ef');
+  setStructureIcon(currentArea?.icon||'◫');
+  form.elements.category.value=editingCategory?category:(category==='Privat'&&mode==='category'?'':category);
   form.elements.areaId.value=areaId;
-  showStructureField('#structureCategoryField',mode!=='project');
-  showStructureField('#structureAreaField',mode==='project');
-  showStructureField('#structureIconField',mode!=='project');
-  showStructureField('#structureTeamField',mode!=='project');
-  const title={category:'Ny kategori',area:'Nytt område',project:'Nytt projekt'}[mode]||'Ny struktur';
+  form.elements.name.value=editingCategory?category:currentArea?areaName(currentArea):currentProject?.name||'';
+  showStructureField('#structureCategoryField',mode!=='project'&&!editingCategory&&mode!=='edit-project');
+  showStructureField('#structureAreaField',mode==='project'||editingProject);
+  showStructureField('#structureIconField',mode!=='project'&&!editingCategory&&mode!=='edit-project');
+  showStructureField('#structureColorField',!editingCategory);
+  showStructureField('#structureTeamField',mode!=='project'&&!editingCategory&&mode!=='edit-project');
+  const title={category:'Ny kategori',area:'Nytt område',project:'Nytt projekt','edit-category':'Redigera kategori','edit-area':'Redigera område','edit-project':'Redigera projekt'}[mode]||'Ny struktur';
   const help={
     category:'En kategori syns i vänsterspalten när den har minst ett område. Skapa därför kategorin och första området samtidigt.',
     area:`Området hamnar under kategorin “${category||'Privat'}” och kan senare delas med ett team.`,
-    project:'Projektet hamnar under valt område. Uppgifter under projektet följer områdets åtkomst.'
+    project:'Projektet hamnar under valt område. Uppgifter under projektet följer områdets åtkomst.',
+    'edit-category':'Byter namn på kategorin för dina egna områden i den kategorin.',
+    'edit-area':'Ändra namn, kategori, ikon, färg eller vilket team området delas med.',
+    'edit-project':'Ändra projektets namn, färg eller flytta projektet till ett annat område.'
   }[mode];
-  $('#structureEyebrow').textContent=mode==='project'?'PROJEKT':mode==='area'?'OMRÅDE':'KATEGORI';
+  $('#structureEyebrow').textContent=mode.includes('project')?'PROJEKT':mode.includes('area')?'OMRÅDE':'KATEGORI';
   $('#structureTitle').textContent=title;
   $('#structureHelp').textContent=help;
-  $('#structureNameLabel').textContent=mode==='project'?'Projektets namn':mode==='area'?'Områdets namn':'Första området i kategorin';
-  $('#structureNameInput').placeholder=mode==='project'?'T.ex. Bygga v1':mode==='area'?'T.ex. Huset, Barnen eller Båten':'T.ex. Allmänt, Huset eller Foreshadow';
-  $('#saveStructure').textContent=mode==='project'?'Skapa projekt':mode==='area'?'Skapa område':'Skapa kategori';
+  $('#structureNameLabel').textContent=editingCategory?'Kategorins namn':mode.includes('project')?'Projektets namn':mode.includes('area')?'Områdets namn':'Första området i kategorin';
+  $('#structureNameInput').placeholder=mode.includes('project')?'T.ex. Bygga v1':mode.includes('area')?'T.ex. Huset, Barnen eller Båten':editingCategory?'T.ex. Privat, Jobb eller Bolag':'T.ex. Allmänt, Huset eller Foreshadow';
+  $('#saveStructure').textContent=editing?'Spara ändringar':mode==='project'?'Skapa projekt':mode==='area'?'Skapa område':'Skapa kategori';
   dialog.showModal();
-  setTimeout(()=>mode==='project'?$('#structureNameInput').focus():form.elements.category.focus(),50);
+  setTimeout(()=>editing||mode==='project'?$('#structureNameInput').focus():form.elements.category.focus(),50);
 }
 
 $('#structureForm').onsubmit=async e=>{
@@ -701,6 +722,40 @@ $('#structureForm').onsubmit=async e=>{
   const form=e.target,save=$('#saveStructure'),data=Object.fromEntries(new FormData(form)),mode=data.mode;
   save.disabled=true;
   try{
+    if(mode==='edit-category'){
+      const nextName=(data.name||'').trim();
+      if(!nextName)throw new Error('Kategorin behöver ett namn.');
+      await renameCategory(data.originalCategory,nextName);
+      collapsedCategories.delete(data.originalCategory);
+      collapsedCategories.delete(nextName);
+      if(view===categoryViewId(data.originalCategory))view=categoryViewId(nextName);
+      $('#structureDialog').close();
+      await load();
+      toast('Kategorin är uppdaterad.');
+      return;
+    }
+    if(mode==='edit-area'){
+      await updateAreaDetails(data.entityId,{name:data.name,category:data.category,icon:data.icon,color:data.color,teamId:data.teamId||null});
+      const previousCategory=data.originalCategory||'Privat',nextCategory=(data.category||'').trim()||'Privat';
+      collapsedCategories.delete(previousCategory);
+      collapsedCategories.delete(nextCategory);
+      collapsedAreas.delete(data.entityId);
+      view='area:'+data.entityId;
+      $('#structureDialog').close();
+      await load();
+      toast('Området är uppdaterat.');
+      return;
+    }
+    if(mode==='edit-project'){
+      await updateProject(data.entityId,{name:data.name,areaId:data.areaId,color:data.color});
+      collapsedAreas.delete(data.areaId);
+      const a=area(data.areaId);if(a)collapsedCategories.delete(areaCategory(a));
+      view='project:'+data.entityId;
+      $('#structureDialog').close();
+      await load();
+      toast('Projektet är uppdaterat.');
+      return;
+    }
     if(mode==='project'){
       const created=await createProject({areaId:data.areaId,name:data.name,color:data.color});
       collapsedAreas.delete(data.areaId);
@@ -751,6 +806,8 @@ $('#projectSelect').onchange=refreshAssignees;
 $('#quickAdd').onclick=$('#addRow').onclick=$('#mobileAdd').onclick=openDialog;$('#closeInspector').onclick=()=>$('#inspector').classList.remove('open');
 document.querySelectorAll('[data-close-task-dialog]').forEach(b=>b.onclick=()=>$('#taskDialog').close());
 document.querySelectorAll('[data-close-structure-dialog]').forEach(b=>b.onclick=()=>$('#structureDialog').close());
+document.querySelectorAll('[data-icon-choice]').forEach(b=>b.onclick=()=>setStructureIcon(b.dataset.iconChoice));
+$('#structureForm')?.elements?.icon?.addEventListener('input',e=>setStructureIcon(e.target.value));
 document.querySelectorAll('[data-project-view]').forEach(b=>b.onclick=()=>{projectView=b.dataset.projectView;document.querySelectorAll('[data-project-view]').forEach(x=>x.classList.toggle('active',x===b));render()});
 $('#notificationButton').onclick=()=>$('#notificationPanel').classList.add('open');$('#closeNotifications').onclick=()=>$('#notificationPanel').classList.remove('open');
 $('#taskForm').onsubmit=async e=>{

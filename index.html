@@ -94,12 +94,14 @@
       <div class="dialog-head"><div><p class="eyebrow" id="structureEyebrow">STRUKTUR</p><h2 id="structureTitle">Ny kategori</h2></div><button type="button" data-close-structure-dialog class="close">×</button></div>
       <p class="hint structure-help" id="structureHelp">Skapa kategori, område eller projekt på rätt nivå.</p>
       <input type="hidden" name="mode">
+      <input type="hidden" name="entityId">
+      <input type="hidden" name="originalCategory">
       <label id="structureCategoryField">Kategori<input name="category" list="structureCategoryOptions" placeholder="T.ex. Privat, Jobb eller Bolag"><datalist id="structureCategoryOptions"></datalist></label>
       <label id="structureAreaField">Område<select name="areaId" id="structureAreaSelect"></select></label>
       <label id="structureNameField"><span id="structureNameLabel">Namn</span><input name="name" id="structureNameInput" placeholder="Namn" required></label>
       <div class="form-grid structure-details">
-        <label id="structureIconField">Ikon<input name="icon" maxlength="2" value="◫"></label>
-        <label>Färg<input name="color" type="color" value="#7659ef"></label>
+        <label id="structureIconField">Ikon<input name="icon" maxlength="2" value="◫"><span class="icon-picker" id="structureIconPicker"><button type="button" data-icon-choice="⌂">⌂</button><button type="button" data-icon-choice="▣">▣</button><button type="button" data-icon-choice="✦">✦</button><button type="button" data-icon-choice="☼">☼</button><button type="button" data-icon-choice="⚓">⚓</button><button type="button" data-icon-choice="⌁">⌁</button><button type="button" data-icon-choice="✉">✉</button><button type="button" data-icon-choice="◷">◷</button><button type="button" data-icon-choice="▤">▤</button><button type="button" data-icon-choice="◇">◇</button><button type="button" data-icon-choice="◎">◎</button><button type="button" data-icon-choice="◫">◫</button></span></label>
+        <label id="structureColorField">Färg<input name="color" type="color" value="#7659ef"></label>
         <label id="structureTeamField">Delas med<select name="teamId" id="structureTeamSelect"></select></label>
       </div>
       <div class="dialog-actions"><button type="button" data-close-structure-dialog class="secondary">Avbryt</button><button value="default" class="primary" id="saveStructure">Skapa</button></div>
