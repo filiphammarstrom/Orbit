@@ -102,6 +102,8 @@ Google Calendar och Slack använder dessa Vercel environment variables:
 - `GOOGLE_TOKEN_ENCRYPTION_KEY`
 - `OAUTH_STATE_SECRET`
 - `CRON_SECRET`
+- `ORBIT_WEBHOOK_SECRET`, valfritt. Om den saknas används `CRON_SECRET` för externa webhooks.
+- `ORBIT_WEBHOOK_ACTOR_ID`, valfritt. Om den saknas används områdets ägare som actor för externa triggers.
 - `APP_URL`, t.ex. `https://orbit-iota-sage.vercel.app`
 - `SLACK_CLIENT_ID`
 - `SLACK_CLIENT_SECRET`
@@ -123,6 +125,33 @@ Google Calendar-flödet:
 Google Calendar API-scope som används: `https://www.googleapis.com/auth/calendar.events`.
 
 Cron-schemat i `vercel.json` är satt till dagligen (`0 6 * * *`) för att fungera även på Vercel Hobby. På Pro kan det höjas till t.ex. varje timme.
+
+Externa triggers från andra appar:
+
+Orbit har en server-side webhook på `POST /api/external-event` för triggers som Gmail/Make/Zapier/AI-agent kan skicka när något händer i en annan app. Den kan exempelvis låsa upp dolda uppgifter som väntar på `pelle_replied_email`.
+
+Header:
+
+`Authorization: Bearer <ORBIT_WEBHOOK_SECRET>`
+
+Om `ORBIT_WEBHOOK_SECRET` inte är satt används `CRON_SECRET`.
+
+Body:
+
+```json
+{
+  "areaId": "uuid-for-området",
+  "name": "pelle_replied_email",
+  "source": "gmail",
+  "externalId": "gmail-message-id",
+  "payload": {
+    "from": "pelle@example.com",
+    "subject": "Svar på offert"
+  }
+}
+```
+
+`actorId` kan skickas i bodyn eller sättas globalt som `ORBIT_WEBHOOK_ACTOR_ID`. Om det saknas används områdets ägare.
 
 Slack-flödet:
 
