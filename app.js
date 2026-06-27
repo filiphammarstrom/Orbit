@@ -28,6 +28,8 @@ const categorySort=(a,b)=>a.localeCompare(b,'sv-SE',{sensitivity:'base'});
 const areaGroups=()=>[...new Set((state.areas||[]).map(areaCategory))].sort(categorySort).map(category=>({category,areas:state.areas.filter(a=>areaCategory(a)===category)}));
 const projectsForArea=a=>state.projects.filter(p=>p.areaId===a.id);
 const taskCountForProjects=projects=>visible().filter(t=>projects.some(p=>p.id===t.projectId)).length;
+const categoryViewId=category=>`category:${encodeURIComponent(category)}`;
+const categoryFromView=()=>decodeURIComponent(view.slice('category:'.length));
 const escapeHtml=(s='')=>String(s).replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
 const toast=text=>{$('#toast').textContent=text;$('#toast').classList.add('show');setTimeout(()=>$('#toast').classList.remove('show'),2200)};
 const avatarHtml=p=>`<span class="mini-avatar" title="${p.name}" style="background:${p.color}">${p.initials}</span>`;
@@ -138,37 +140,52 @@ function registerServiceWorker(){
 
 function renderNav(){
   $('#mainNav').innerHTML=navItems.map(([id,ico,label])=>`<button class="nav-item ${view===id?'active':''}" data-view="${id}"><span class="ico">${ico}</span><span>${label}</span><span class="count">${navCount(id)||''}</span></button>`).join('');
-  $('#projectNav').innerHTML=areaGroups().map(group=>`<div class="category-group"><div class="category-label">${escapeHtml(group.category)}</div>${group.areas.map(a=>{const projects=projectsForArea(a),count=taskCountForProjects(projects);return `<div class="area-group"><button class="nav-item area-nav ${view==='area:'+a.id?'active':''}" data-view="area:${a.id}"><span class="area-icon" style="background:${a.color}">${a.icon}</span><span>${escapeHtml(a.name)}</span><span class="count">${count||''}</span><span class="chevron">⌄</span></button>${projects.map(p=>`<button class="nav-item project-child ${view==='project:'+p.id?'active':''}" data-view="project:${p.id}"><span class="project-dot" style="background:${p.color}"></span><span>${escapeHtml(p.name)}</span><span class="count">${visible().filter(t=>t.projectId===p.id).length||''}</span></button>`).join('')}</div>`}).join('')}</div>`).join('');
-  $('#mobileNav').innerHTML=mobileItems.map(([id,ico,label])=>`<button class="mobile-nav-item ${view===id||(id==='areas'&&(view.startsWith('area:')||view.startsWith('project:')))?'active':''}" data-view="${id}"><span>${ico}</span><small>${label.replace('Gör ','')}</small>${id!=='areas'&&navCount(id)?`<i>${navCount(id)}</i>`:''}</button>`).join('');
+  $('#projectNav').innerHTML=areaGroups().map(group=>{const categoryProjects=group.areas.flatMap(projectsForArea),categoryView=categoryViewId(group.category),categoryCount=taskCountForProjects(categoryProjects);return `<div class="category-group"><button class="category-label category-nav ${view===categoryView?'active':''}" data-view="${escapeHtml(categoryView)}"><span>${escapeHtml(group.category)}</span><span class="count">${categoryCount||''}</span></button>${group.areas.map(a=>{const projects=projectsForArea(a),count=taskCountForProjects(projects);return `<div class="area-group"><button class="nav-item area-nav ${view==='area:'+a.id?'active':''}" data-view="area:${a.id}"><span class="area-icon" style="background:${a.color}">${a.icon}</span><span>${escapeHtml(a.name)}</span><span class="count">${count||''}</span><span class="chevron">⌄</span></button>${projects.map(p=>`<button class="nav-item project-child ${view==='project:'+p.id?'active':''}" data-view="project:${p.id}"><span class="project-dot" style="background:${p.color}"></span><span>${escapeHtml(p.name)}</span><span class="count">${visible().filter(t=>t.projectId===p.id).length||''}</span></button>`).join('')}</div>`}).join('')}</div>`}).join('');
+  $('#mobileNav').innerHTML=mobileItems.map(([id,ico,label])=>`<button class="mobile-nav-item ${view===id||(id==='areas'&&(view.startsWith('category:')||view.startsWith('area:')||view.startsWith('project:')))?'active':''}" data-view="${id}"><span>${ico}</span><small>${label.replace('Gör ','')}</small>${id!=='areas'&&navCount(id)?`<i>${navCount(id)}</i>`:''}</button>`).join('');
   document.querySelectorAll('[data-view]').forEach(b=>b.onclick=()=>{view=b.dataset.view;render()});
 }
 
 function render(){
   if(view==='assigned')view='today';
   if(view==='team')view='areas';
-  renderNav();let tasks=[],title,eye='MIN DAG',showAreas=false,currentProject=null;
+  renderNav();let tasks=[],title,eye='MIN DAG',showAreas=false,currentProject=null,currentCategory=null;
   const labels={inbox:'Inbox',today:'Gör idag',later:'Gör sen',someday:'Gör nån gång'};
   if(view==='areas'){title='Kategorier & områden';eye='STRUKTUR';showAreas=true}
+  else if(view.startsWith('category:')){const category=categoryFromView(),group=areaGroups().find(g=>g.category===category);if(!group){view='areas';return render()}const projects=group.areas.flatMap(projectsForArea),ids=projects.map(p=>p.id);tasks=topLevel(visible().filter(t=>ids.includes(t.projectId)));title=category;eye='KATEGORI';currentCategory=group}
   else if(view.startsWith('area:')){const a=area(view.split(':')[1]);if(!a){view='areas';return render()}const projects=projectsForArea(a),ids=projects.map(p=>p.id);tasks=topLevel(visible().filter(t=>ids.includes(t.projectId)));title=a.name;eye=areaCategory(a).toUpperCase()}
   else if(view.startsWith('project:')){const p=project(view.split(':')[1]);if(!p){view='areas';return render()}currentProject=p;const canPlan=p.ownerId===state.currentUserId||(!p.ownerId&&area(p.areaId)?.ownerId===state.currentUserId);tasks=topLevel(state.tasks.filter(t=>t.projectId===p.id&&!t.completed&&(t.visible||canPlan)));title=p.name;eye=area(p.areaId)?.name.toUpperCase()||'PROJEKT'}
   else{tasks=topLevel(tasksForBucketView(view));title=labels[view]}
   $('#pageTitle').textContent=title;$('#eyebrow').textContent=eye;
-  $('#subtitle').textContent=view==='today'?new Intl.DateTimeFormat('sv-SE',{weekday:'long',day:'numeric',month:'long'}).format(new Date()):showAreas?'Kategori → område → projekt → uppgift → underuppgift. Team styr bara åtkomst.':`${tasks.length} aktiva uppgifter`;
-  $('#sectionTitle').textContent=showAreas?'Kategori, område, projekt och åtkomst':view==='inbox'?'Okategoriserat':'Att göra';
+  $('#subtitle').textContent=view==='today'?new Intl.DateTimeFormat('sv-SE',{weekday:'long',day:'numeric',month:'long'}).format(new Date()):showAreas?'Kategori → område → projekt → uppgift → underuppgift. Team styr bara åtkomst.':currentCategory?'Grupperat efter område och projekt.':`${tasks.length} aktiva uppgifter`;
+  $('#sectionTitle').textContent=showAreas?'Kategori, område, projekt och åtkomst':currentCategory?'Områden och projekt':view==='inbox'?'Okategoriserat':'Att göra';
   $('#projectToolbar').classList.toggle('open',Boolean(currentProject));
   if(currentProject){const colors={on_track:'#42a68b',at_risk:'#e2a33d',off_track:'#d96761'},labels={on_track:'På rätt väg',at_risk:'Risk',off_track:'Försenat'};$('#projectHealth').innerHTML=`<span class="health-pill"><i style="background:${colors[currentProject.health]}"></i>${labels[currentProject.health]}</span>`}
   $('.section-head>div').style.display=showAreas?'none':'';$('#addRow').style.display=showAreas?'none':'';$('#focusCard').style.display=view==='today'?'flex':'none';
   const todayAll=state.tasks.filter(t=>t.visible&&(t.bucket==='today'||isDueToday(t)||(!t.completed&&(isOverdue(t)||isReminderDue(t))))),done=todayAll.filter(t=>t.completed).length,pct=todayAll.length?Math.round(done/todayAll.length*100):0;
   $('#todayCount').textContent=todayAll.filter(t=>!t.completed).length;$('#progressText').textContent=pct+'%';$('.done-ring').style.strokeDashoffset=100-pct;
-  $('#taskList').innerHTML=showAreas?areaCards():currentProject?projectContent(tasks):tasks.length?tasks.map(taskGroupHtml).join(''):'<div class="empty">Här är lugnt och fint.</div>';
+  $('#taskList').innerHTML=showAreas?areaCards():currentCategory?categoryContent(currentCategory,tasks):currentProject?projectContent(tasks):tasks.length?tasks.map(taskGroupHtml).join(''):'<div class="empty">Här är lugnt och fint.</div>';
   document.querySelectorAll('.task').forEach(el=>el.onclick=e=>{if(!e.target.classList.contains('check'))openInspector(el.dataset.id)});
   document.querySelectorAll('.check').forEach(b=>b.onclick=e=>{e.stopPropagation();complete(b.dataset.id)});
   document.querySelectorAll('[data-area-open]').forEach(c=>c.onclick=()=>{view='area:'+c.dataset.areaOpen;render()});
+  document.querySelectorAll('#taskList [data-view]').forEach(b=>b.onclick=()=>{view=b.dataset.view;render()});
   document.querySelectorAll('.board-card,.calendar-task,.flow-node').forEach(c=>c.onclick=()=>openInspector(c.dataset.id));
   if(showAreas)bindAreaOverview();
   renderNotifications();
   renderDailyBrief();
   renderAgentPanel();
+}
+
+function categoryContent(group,tasks){
+  return `<div class="category-task-view">
+    ${group.areas.map(a=>{
+      const projects=projectsForArea(a),areaTaskCount=tasks.filter(t=>projects.some(p=>p.id===t.projectId)).length;
+      return `<section class="category-area-block">
+        <div class="category-area-head"><button data-view="area:${a.id}"><span class="area-card-icon small" style="background:${a.color}">${a.icon}</span><strong>${escapeHtml(a.name)}</strong></button><span>${areaTaskCount} uppgift${areaTaskCount===1?'':'er'}</span></div>
+        <div class="category-project-list">${projects.length?projects.map(p=>{const projectTasks=tasks.filter(t=>t.projectId===p.id);return `<section class="category-project-block"><button class="category-project-head" data-view="project:${p.id}"><span class="project-dot" style="background:${p.color}"></span><strong>${escapeHtml(p.name)}</strong><span>${projectTasks.length}</span></button>${projectTasks.length?projectTasks.map(taskGroupHtml).join(''):'<p class="hint">Inga aktiva uppgifter i projektet.</p>'}</section>`}).join(''):'<p class="hint">Området har inga projekt ännu.</p>'}</div>
+      </section>`;
+    }).join('')}
+    ${tasks.length?'':'<div class="empty">Inga aktiva uppgifter i den här kategorin.</div>'}
+  </div>`;
 }
 
 function projectContent(tasks){if(!tasks.length)return'<div class="empty">Projektet väntar på sin första uppgift.</div>';if(projectView==='board')return boardHtml(tasks);if(projectView==='calendar')return calendarHtml(tasks);if(projectView==='flow')return flowHtml(tasks);return tasks.map(taskGroupHtml).join('')}
