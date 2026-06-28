@@ -245,6 +245,10 @@ function render(){
   document.querySelectorAll('[data-overdue-done]').forEach(b=>b.onclick=()=>complete(b.dataset.overdueDone));
   document.querySelectorAll('[data-weekly-open]').forEach(b=>b.onclick=()=>openInspector(b.dataset.weeklyOpen));
   document.querySelectorAll('[data-weekly-move]').forEach(b=>b.onclick=async()=>{b.disabled=true;try{await rescheduleTask(b.dataset.task,b.dataset.weeklyMove)}catch(error){toast(error.message);b.disabled=false}});
+  document.querySelectorAll('[data-focus-open]').forEach(b=>b.onclick=()=>openInspector(b.dataset.focusOpen));
+  document.querySelectorAll('[data-focus-start]').forEach(b=>b.onclick=async()=>{b.disabled=true;try{await startFocusTask(b.dataset.focusStart)}catch(error){toast(error.message);b.disabled=false}});
+  document.querySelectorAll('[data-focus-pause]').forEach(b=>b.onclick=async()=>{b.disabled=true;try{await pauseFocusTask(b.dataset.focusPause)}catch(error){toast(error.message);b.disabled=false}});
+  document.querySelectorAll('[data-focus-done]').forEach(b=>b.onclick=async()=>{b.disabled=true;try{await complete(b.dataset.focusDone)}catch(error){toast(error.message);b.disabled=false}});
   document.querySelectorAll('[data-approval-open]').forEach(b=>b.onclick=()=>openInspector(b.dataset.approvalOpen));
   document.querySelectorAll('[data-approval-decision]').forEach(b=>b.onclick=async()=>{b.disabled=true;try{await handleApprovalDecision(b.dataset.approvalDecision,b.dataset.approvalStatus)}catch(error){toast(error.message);b.disabled=false}});
   document.querySelectorAll('[data-plan-open]').forEach(b=>b.onclick=()=>openInspector(b.dataset.planOpen));
@@ -322,7 +326,34 @@ function openCommandPalette(){
 function todayContent(tasks){
   const overdue=tasks.filter(isOverdue),ready=tasks.filter(t=>!isOverdue(t));
   const empty=overdue.length?'När du planerat om det som släpar är dagen ren.':'Dagen är ren. Lägg in ett litet steg när du vill.';
-  return `${weeklyReviewHtml()}${approvalQueueHtml()}${overdue.length?overdueReviewHtml(overdue):''}${dailyPlanHtml(ready)}${ready.length?ready.map(taskGroupHtml).join(''):`<div class="empty">${empty}</div>`}`;
+  return `${focusModeHtml(ready)}${weeklyReviewHtml()}${approvalQueueHtml()}${overdue.length?overdueReviewHtml(overdue):''}${dailyPlanHtml(ready)}${ready.length?ready.map(taskGroupHtml).join(''):`<div class="empty">${empty}</div>`}`;
+}
+
+function focusCandidate(tasks){
+  const plan=dailyPlan(tasks,1);
+  return tasks.find(t=>t.status==='doing')||plan.focus[0]||null;
+}
+
+function focusModeHtml(tasks){
+  const task=focusCandidate(tasks);
+  if(!task)return'';
+  const p=project(task.projectId),a=areaForProject(task.projectId),subtasks=childrenOf(task.id).filter(t=>!t.completed),nextSubtask=subtasks.find(t=>t.visible)||null;
+  const active=task.status==='doing';
+  return `<section class="focus-mode-card ${active?'active':''}">
+    <div class="focus-mode-orb">${active?'▶':'●'}</div>
+    <div class="focus-mode-main">
+      <p class="eyebrow">${active?'NUVARANDE FOKUS':'FÖRESLAGET FOKUS'}</p>
+      <h3>${escapeHtml(task.title)}</h3>
+      <p>${escapeHtml([p?.name,a?areaName(a):'',scheduleLabel(task)].filter(Boolean).join(' · ')||'Inbox')}</p>
+      ${nextSubtask?`<small>Nästa delsteg: ${escapeHtml(nextSubtask.title)}</small>`:subtasks.length?`<small>${subtasks.length} delsteg kvar.</small>`:'<small>Gör klart eller pausa innan du byter fokus.</small>'}
+    </div>
+    <div class="focus-mode-actions">
+      <button class="primary" data-focus-start="${task.id}">${active?'Fortsätt':'Starta fokus'}</button>
+      <button class="secondary" data-focus-open="${task.id}">Öppna</button>
+      ${active?`<button class="secondary" data-focus-pause="${task.id}">Pausa</button>`:''}
+      <button class="secondary" data-focus-done="${task.id}">Klar</button>
+    </div>
+  </section>`;
 }
 
 function weeklyReviewHtml(){
@@ -617,6 +648,14 @@ async function startFocusTask(id){
   await api('/tasks/'+id,{method:'PATCH',body:JSON.stringify(patch)});
   await load();
   toast('Markerad som påbörjad.');
+}
+
+async function pauseFocusTask(id){
+  const t=state.tasks.find(task=>task.id===id);
+  if(!t)throw new Error('Uppgiften finns inte längre.');
+  await api('/tasks/'+id,{method:'PATCH',body:JSON.stringify({status:'planned'})});
+  await load();
+  toast('Fokus pausat. Uppgiften ligger kvar i dagens plan.');
 }
 
 async function trimTodayPlan(){
