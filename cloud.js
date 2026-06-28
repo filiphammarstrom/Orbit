@@ -27,6 +27,8 @@ const camelTask = t => ({
   activatedAt: t.activated_at,
   activationReason: t.activation_reason,
   recurrenceRule: t.recurrence_rule,
+  createdAt: t.created_at,
+  updatedAt: t.updated_at,
   trigger: t.trigger_type ? {
     type: t.trigger_type,
     taskId: t.trigger_task_id,
@@ -315,6 +317,7 @@ export async function updateCloudTask(id, patch) {
   if ('dueAt' in patch) row.due_at = nullableIso(patch.dueAt);
   if ('reminderAt' in patch) row.reminder_at = nullableIso(patch.reminderAt);
   if ('status' in patch) row.status = patch.status;
+  if ('recurrenceRule' in patch) row.recurrence_rule = patch.recurrenceRule || null;
   row.updated_at = new Date().toISOString();
 
   const { data, error } = await supabase.from('tasks').update(row).eq('id', id).select().single();

@@ -93,13 +93,18 @@
 .icon-btn b{position:absolute;right:-5px;top:-6px;background:var(--purple);color:#fff;border-radius:9px;min-width:17px;height:17px;padding:2px;font:700 8px DM Sans;display:none}
 
 .comment-section{margin-top:28px}
-.comment-section h3,.link-section h3{font:700 13px Manrope}
+.comment-section h3,.link-section h3,.activity-section h3{font:700 13px Manrope}
 .comment{display:grid;grid-template-columns:27px 1fr;gap:8px;margin:13px 0}
 .comment p{margin:0;font-size:11px;line-height:1.5}
 .comment time{font-size:8px;color:#aaa}
 .comment-form{display:flex;gap:7px;margin-top:13px}
 .comment-form input{font-size:12px}
 .comment-form button{border:0;background:var(--purple);color:#fff;border-radius:8px;padding:0 12px}
+.activity-section{margin-top:27px;padding:13px;border:1px solid var(--line);background:#fbfafc;border-radius:13px}
+.activity-row{display:grid;gap:3px;border-top:1px solid #eeeaf2;padding:9px 0}
+.activity-row:first-of-type{border-top:0}
+.activity-row span{font-size:12px;font-weight:800;color:#3b3541}
+.activity-row small{font-size:10px;color:#918b99}
 
 .activation-explain{margin-top:20px;padding:13px;border:1px solid #ded6ff;background:#f6f3ff;border-radius:10px;font-size:10px;color:#6253a4}
 .activation-explain strong{display:block;margin-bottom:4px}
@@ -166,6 +171,15 @@
 .link-form input,.link-form select{font-size:11px;padding:9px}
 .link-form button{border:0;border-radius:8px;background:var(--purple);color:#fff}
 .link-grid{align-items:end}
+.command-form{padding:26px;display:grid;gap:14px}
+.command-form .dialog-head h2{margin-bottom:8px}
+#commandSearch{font:700 17px Manrope;background:#fff;padding:14px 15px}
+.command-results{display:grid;gap:8px;max-height:min(440px,55vh);overflow:auto;padding-right:3px}
+.command-results button{width:100%;border:1px solid #eee9f4;background:#fbfafc;border-radius:13px;padding:11px;text-align:left;display:grid;grid-template-columns:34px 1fr;gap:10px;align-items:center;cursor:pointer}
+.command-results button:hover{background:#fff;border-color:#d8cdfa;box-shadow:0 8px 22px #30244d0d}
+.command-results button>span{width:34px;height:34px;border-radius:11px;background:#f0edff;color:var(--purple);display:grid;place-items:center;font-size:15px;font-weight:800}
+.command-results strong{display:block;font:800 13px Manrope;color:var(--ink)}
+.command-results small{display:block;color:#918a98;font-size:11px;margin-top:3px}
 
 @media(max-width:800px){
   .project-toolbar{display:none!important}

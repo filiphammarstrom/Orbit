@@ -243,6 +243,8 @@ function render(){
   bindStructureActions($('#taskList'));
   document.querySelectorAll('[data-overdue-open]').forEach(b=>b.onclick=()=>openInspector(b.dataset.overdueOpen));
   document.querySelectorAll('[data-overdue-done]').forEach(b=>b.onclick=()=>complete(b.dataset.overdueDone));
+  document.querySelectorAll('[data-weekly-open]').forEach(b=>b.onclick=()=>openInspector(b.dataset.weeklyOpen));
+  document.querySelectorAll('[data-weekly-move]').forEach(b=>b.onclick=async()=>{b.disabled=true;try{await rescheduleTask(b.dataset.task,b.dataset.weeklyMove)}catch(error){toast(error.message);b.disabled=false}});
   document.querySelectorAll('[data-approval-open]').forEach(b=>b.onclick=()=>openInspector(b.dataset.approvalOpen));
   document.querySelectorAll('[data-approval-decision]').forEach(b=>b.onclick=async()=>{b.disabled=true;try{await handleApprovalDecision(b.dataset.approvalDecision,b.dataset.approvalStatus)}catch(error){toast(error.message);b.disabled=false}});
   document.querySelectorAll('[data-plan-open]').forEach(b=>b.onclick=()=>openInspector(b.dataset.planOpen));
@@ -291,10 +293,50 @@ function bindTaskViewButtons(){
   if(buttons[1])buttons[1].onclick=()=>{const order=['smart','priority','due','name'];taskSort=order[(order.indexOf(taskSort)+1)%order.length];localStorage.setItem('orbitTaskSort',taskSort);render()};
 }
 
+function commandItems(){
+  const taskItems=state.tasks.filter(t=>!t.completed&&t.visible).map(t=>({type:'task',id:t.id,title:t.title,meta:taskContextLabel(t)}));
+  const projectItems=state.projects.map(p=>({type:'project',id:p.id,title:p.name,meta:areaName(area(p.areaId))}));
+  const areaItems=state.areas.map(a=>({type:'area',id:a.id,title:areaName(a),meta:areaCategory(a)}));
+  return [...taskItems,...projectItems,...areaItems];
+}
+
+function renderCommandResults(query=''){
+  const q=query.trim().toLocaleLowerCase('sv-SE'),items=commandItems().filter(item=>!q||`${item.title} ${item.meta}`.toLocaleLowerCase('sv-SE').includes(q)).slice(0,12);
+  $('#commandResults').innerHTML=items.length?items.map(item=>`<button type="button" data-command-type="${item.type}" data-command-id="${item.id}"><span>${item.type==='task'?'□':item.type==='project'?'▣':'◫'}</span><div><strong>${escapeHtml(item.title)}</strong><small>${escapeHtml(item.meta)}</small></div></button>`).join(''):'<p class="hint">Inga träffar.</p>';
+  document.querySelectorAll('[data-command-id]').forEach(b=>b.onclick=()=>{const type=b.dataset.commandType,id=b.dataset.commandId;$('#commandDialog').close();if(type==='task')openInspector(id);else{view=`${type}:${id}`;render()}});
+}
+
+function openFirstCommandResult(){
+  const first=$('#commandResults [data-command-id]');
+  if(first)first.click();
+}
+
+function openCommandPalette(){
+  if(!state)return;
+  renderCommandResults('');
+  $('#commandDialog').showModal();
+  $('#commandSearch').value='';
+  $('#commandSearch').focus();
+}
+
 function todayContent(tasks){
   const overdue=tasks.filter(isOverdue),ready=tasks.filter(t=>!isOverdue(t));
   const empty=overdue.length?'När du planerat om det som släpar är dagen ren.':'Dagen är ren. Lägg in ett litet steg när du vill.';
-  return `${approvalQueueHtml()}${overdue.length?overdueReviewHtml(overdue):''}${dailyPlanHtml(ready)}${ready.length?ready.map(taskGroupHtml).join(''):`<div class="empty">${empty}</div>`}`;
+  return `${weeklyReviewHtml()}${approvalQueueHtml()}${overdue.length?overdueReviewHtml(overdue):''}${dailyPlanHtml(ready)}${ready.length?ready.map(taskGroupHtml).join(''):`<div class="empty">${empty}</div>`}`;
+}
+
+function weeklyReviewHtml(){
+  const now=new Date(),day=(now.getDay()+6)%7,weekStart=startOfLocalDay(now);weekStart.setDate(weekStart.getDate()-day);
+  const completedThisWeek=state.tasks.filter(t=>t.completed&&t.updatedAt&&new Date(t.updatedAt)>=weekStart);
+  const active=topLevel(visible()),staleDoing=active.filter(t=>['doing','review'].includes(t.status)&&!isDueToday(t)&&!isOverdue(t)),unplanned=active.filter(t=>['later','someday'].includes(t.bucket)&&!t.dueAt),waiting=active.filter(t=>t.status==='waiting');
+  const total=staleDoing.length+unplanned.length+waiting.length;
+  if(!total&&completedThisWeek.length<3)return'';
+  const pick=[...staleDoing,...waiting,...unplanned][0];
+  return `<section class="weekly-review-card">
+    <div class="weekly-review-head"><div><p class="eyebrow">VECKOREVIEW</p><h3>${total?`${total} saker att städa upp`:'Veckan ser ren ut'}</h3><p>Fånga lösa trådar innan de blir brus: pågående, väntande och oplanerat.</p></div><span>${completedThisWeek.length} klara</span></div>
+    <div class="weekly-review-stats"><span>${staleDoing.length} pågående/review</span><span>${waiting.length} väntar</span><span>${unplanned.length} utan datum</span></div>
+    ${pick?`<article class="weekly-review-pick"><button data-weekly-open="${pick.id}"><strong>${escapeHtml(pick.title)}</strong><small>${escapeHtml(taskContextLabel(pick))}</small></button><div><button data-task="${pick.id}" data-weekly-move="today">Idag</button><button data-task="${pick.id}" data-weekly-move="nextweek">Nästa vecka</button><button data-task="${pick.id}" data-weekly-move="someday">Någon gång</button></div></article>`:''}
+  </section>`;
 }
 
 function approvalQueueHtml(){
@@ -891,6 +933,7 @@ function renderTaskEditForm(t){
         <label>Projekt<select name="projectId" id="editProjectSelect">${projectOptionsHtml(t.projectId||'')}</select></label>
         <label>Tilldelad<select name="assigneeId" id="editAssigneeSelect">${assigneeOptionsHtml(t.projectId,t.assigneeId)}</select></label>
         <label>Prioritet<select name="priority">${[[1,'P1 — Hög'],[2,'P2 — Medium'],[3,'P3 — Låg']].map(([id,label])=>option(id,label,t.priority)).join('')}</select></label>
+        <label>Återkommer<select name="recurrenceRule">${[['','Nej'],['daily','Dagligen'],['weekly','Varje vecka'],['monthly','Varje månad']].map(([id,label])=>option(id,label,t.recurrenceRule||'')).join('')}</select></label>
         <label>Snabbtext<input name="due" value="${escapeHtml(t.due||'')}" placeholder="T.ex. imorgon 09:00"></label>
         <label>Deadline<input name="dueAt" type="datetime-local" value="${toDateTimeLocalValue(t.dueAt)}"></label>
         <label>Påminnelse<input name="reminderAt" type="datetime-local" value="${toDateTimeLocalValue(t.reminderAt)}"></label>
@@ -941,6 +984,7 @@ function bindTaskEditForm(id){
       projectId,
       assigneeId,
       priority:Number(data.priority||3),
+      recurrenceRule:data.recurrenceRule||null,
       due:schedule.due,
       dueAt:schedule.dueAt,
       reminderAt:schedule.reminderAt
@@ -989,7 +1033,7 @@ function openInspector(id){
   const t=state.tasks.find(x=>x.id===id);if(!t)return;
   const p=project(t.projectId),a=person(t.assigneeId),ar=areaForProject(t.projectId),tm=team(ar?.teamId),subs=childrenOf(t.id),comments=(state.comments||[]).filter(c=>c.taskId===id);
   const when=scheduleLabel(t),remind=reminderLabel(t);
-  $('#inspectorContent').innerHTML=`<p class="eyebrow">${ar?escapeHtml(areaName(ar)).toUpperCase():'UPPGIFT'}</p><button class="check big-check p${t.priority}" id="detailCheck"></button><h2>${escapeHtml(t.title)}</h2>${subs.length?`<div class="parent-lock">Huvuduppgiften blir klar automatiskt när alla ${subs.length} delsteg är klara.</div>`:''}${t.activationReason?`<div class="activation-explain"><strong>✦ Varför ser jag detta nu?</strong>${escapeHtml(t.activationReason)}${t.activatedAt?` · ${new Date(t.activatedAt).toLocaleString('sv-SE')}`:''}</div>`:''}${t.notes?`<p style="color:#777;font-size:13px;line-height:1.6">${escapeHtml(t.notes)}</p>`:''}<div class="detail-row"><span>Status</span><strong class="status-chip">${statusLabel(t.status)}</strong></div><div class="detail-row"><span>Område</span><strong>${ar?ar.icon+' '+areaName(ar):'Inbox'}</strong></div><div class="detail-row"><span>Projekt</span><strong>${p?p.name:'Inbox'}</strong></div><div class="detail-row"><span>Tilldelad</span><strong>${a.name}</strong></div><div class="detail-row"><span>Åtkomst</span><strong>${tm?tm.name:'Endast du'}</strong></div><div class="detail-row"><span>Deadline</span><strong>${when?escapeHtml(when):'Inget datum'}</strong></div><div class="detail-row"><span>Påminnelse</span><strong>${remind?`${isReminderDue(t)?'Nu · ':''}${escapeHtml(remind)}`:'Ingen'}</strong></div>${renderTaskEditForm(t)}${renderBreakdownForm(t)}${subs.length?`<div class="inspector-subtasks"><h3>Underuppgifter · ${subs.filter(s=>s.completed).length}/${subs.length}</h3>${subs.map(s=>`<div class="inspector-subtask ${s.completed?'done':''} ${!s.visible?'waiting':''}">${s.completed?'✓':s.visible?`<button class="check p${s.priority}" data-id="${s.id}"></button>`:'⚡'}<span>${escapeHtml(s.title)}</span><small>${!s.visible?'Väntar':person(s.assigneeId).initials}</small></div>`).join('')}</div>`:''}${renderTriggerBox(t)}${renderCalendarSync(t)}${renderTaskLinks(t)}<div class="comment-section"><h3>Kommentarer · ${comments.length}</h3>${comments.map(c=>`<div class="comment">${avatarHtml(person(c.authorId))}<div><p>${escapeHtml(c.body)}</p><time>${new Date(c.createdAt).toLocaleString('sv-SE')}</time></div></div>`).join('')}<form class="comment-form" id="commentForm"><input name="comment" placeholder="Skriv en kommentar eller @nämn någon…" required><button>Skicka</button></form></div>`;
+  $('#inspectorContent').innerHTML=`<p class="eyebrow">${ar?escapeHtml(areaName(ar)).toUpperCase():'UPPGIFT'}</p><button class="check big-check p${t.priority}" id="detailCheck"></button><h2>${escapeHtml(t.title)}</h2>${subs.length?`<div class="parent-lock">Huvuduppgiften blir klar automatiskt när alla ${subs.length} delsteg är klara.</div>`:''}${t.activationReason?`<div class="activation-explain"><strong>✦ Varför ser jag detta nu?</strong>${escapeHtml(t.activationReason)}${t.activatedAt?` · ${new Date(t.activatedAt).toLocaleString('sv-SE')}`:''}</div>`:''}${t.notes?`<p style="color:#777;font-size:13px;line-height:1.6">${escapeHtml(t.notes)}</p>`:''}<div class="detail-row"><span>Status</span><strong class="status-chip">${statusLabel(t.status)}</strong></div><div class="detail-row"><span>Område</span><strong>${ar?ar.icon+' '+areaName(ar):'Inbox'}</strong></div><div class="detail-row"><span>Projekt</span><strong>${p?p.name:'Inbox'}</strong></div><div class="detail-row"><span>Tilldelad</span><strong>${a.name}</strong></div><div class="detail-row"><span>Åtkomst</span><strong>${tm?tm.name:'Endast du'}</strong></div><div class="detail-row"><span>Deadline</span><strong>${when?escapeHtml(when):'Inget datum'}</strong></div><div class="detail-row"><span>Påminnelse</span><strong>${remind?`${isReminderDue(t)?'Nu · ':''}${escapeHtml(remind)}`:'Ingen'}</strong></div><div class="detail-row"><span>Återkommer</span><strong>${recurrenceLabel(t.recurrenceRule)}</strong></div>${renderTaskEditForm(t)}${renderBreakdownForm(t)}${subs.length?`<div class="inspector-subtasks"><h3>Underuppgifter · ${subs.filter(s=>s.completed).length}/${subs.length}</h3>${subs.map(s=>`<div class="inspector-subtask ${s.completed?'done':''} ${!s.visible?'waiting':''}">${s.completed?'✓':s.visible?`<button class="check p${s.priority}" data-id="${s.id}"></button>`:'⚡'}<span>${escapeHtml(s.title)}</span><small>${!s.visible?'Väntar':person(s.assigneeId).initials}</small></div>`).join('')}</div>`:''}${renderTriggerBox(t)}${renderCalendarSync(t)}${renderTaskLinks(t)}${renderActivityLog(t.id)}<div class="comment-section"><h3>Kommentarer · ${comments.length}</h3>${comments.map(c=>`<div class="comment">${avatarHtml(person(c.authorId))}<div><p>${escapeHtml(c.body)}</p><time>${new Date(c.createdAt).toLocaleString('sv-SE')}</time></div></div>`).join('')}<form class="comment-form" id="commentForm"><input name="comment" placeholder="Skriv en kommentar eller @nämn någon…" required><button>Skicka</button></form></div>`;
   $('#detailCheck').onclick=()=>{complete(id);if(!subs.length)$('#inspector').classList.remove('open')};
   document.querySelectorAll('.inspector-subtask .check').forEach(b=>b.onclick=async()=>{await complete(b.dataset.id);openInspector(id)});
   bindTaskEditForm(id);
@@ -1000,6 +1044,15 @@ function openInspector(id){
   $('#inspector').classList.add('open')
 }
 function statusLabel(s){return({idea:'Idé',planned:'Planerad',todo:'Att göra',doing:'Pågår',waiting:'Väntar',review:'Granskning',done:'Klar'})[s]||'Att göra'}
+function recurrenceLabel(rule){return({daily:'Dagligen',weekly:'Varje vecka',monthly:'Varje månad'})[rule]||'Nej'}
+function activityLabel(a){
+  return ({created:'Skapad',completed:'Klar',assigned:'Tilldelad',status_changed:'Status ändrad',updated:'Uppdaterad',commented:'Kommentar'})[a.action]||a.action||'Händelse';
+}
+function renderActivityLog(taskId){
+  const rows=(state.activity||[]).filter(a=>a.taskId===taskId).slice(0,8);
+  if(!rows.length)return'<div class="activity-section"><h3>Aktivitet</h3><p class="hint">Ingen aktivitet loggad ännu.</p></div>';
+  return `<div class="activity-section"><h3>Aktivitet · ${rows.length}</h3>${rows.map(a=>`<div class="activity-row"><span>${escapeHtml(activityLabel(a))}</span><small>${escapeHtml(person(a.actorId).name)} · ${new Date(a.createdAt).toLocaleString('sv-SE',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}</small></div>`).join('')}</div>`;
+}
 function buildDailyBrief(){
   const active=state.tasks.filter(t=>t.visible&&!t.completed),today=topLevel(active.filter(t=>t.bucket==='today'||isDueToday(t)||isOverdue(t)||isReminderDue(t))),overdue=topLevel(active.filter(isOverdue)),p1=topLevel(active.filter(t=>t.priority===1)),doing=topLevel(active.filter(t=>t.status==='doing')),waiting=topLevel(active.filter(t=>t.status==='waiting')),inbox=topLevel(active.filter(t=>t.bucket==='inbox')),linked=active.filter(t=>linksForTask(t.id).length);
   const focus=[...new Map([...p1,...doing,...today,...inbox].map(t=>[t.id,t])).values()].slice(0,5);
@@ -1274,6 +1327,10 @@ $('#assigneeSelect').onchange=()=>updateTaskContext();
 $('#quickAdd').onclick=$('#addRow').onclick=$('#mobileAdd').onclick=openDialog;$('#closeInspector').onclick=()=>$('#inspector').classList.remove('open');
 document.querySelectorAll('[data-close-task-dialog]').forEach(b=>b.onclick=()=>$('#taskDialog').close());
 document.querySelectorAll('[data-close-structure-dialog]').forEach(b=>b.onclick=()=>$('#structureDialog').close());
+$('#commandButton').onclick=openCommandPalette;
+$('#commandSearch').oninput=e=>renderCommandResults(e.target.value);
+$('#commandForm').onsubmit=e=>{e.preventDefault();openFirstCommandResult()};
+$('#closeCommand').onclick=()=>$('#commandDialog').close();
 document.querySelectorAll('[data-icon-choice]').forEach(b=>b.onclick=()=>setStructureIcon(b.dataset.iconChoice));
 document.querySelectorAll('[data-structure-step]').forEach(b=>b.onclick=()=>{
   const form=$('#structureForm'),current=form?.elements?.mode?.value||'category';
@@ -1298,7 +1355,11 @@ $('#taskForm').onsubmit=async e=>{
   $('#taskDialog').close();e.target.reset();await load();
   toast(data.trigger?'Uppgiften väntar dolt på sitt villkor.':data.parentTaskId?'Underuppgiften är skapad.':'Uppgiften är skapad.')
 };
-document.addEventListener('keydown',e=>{if(e.key.toLowerCase()==='n'&&!['INPUT','TEXTAREA'].includes(document.activeElement.tagName)){e.preventDefault();openDialog()}});
+document.addEventListener('keydown',e=>{
+  const tag=document.activeElement.tagName;
+  if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='k'){e.preventDefault();openCommandPalette();return}
+  if(e.key.toLowerCase()==='n'&&!['INPUT','TEXTAREA','SELECT'].includes(tag)){e.preventDefault();openDialog()}
+});
 
 let authMode='signin';
 function showAuth(){ $('#authScreen').classList.add('open');$('#configHelp').classList.toggle('show',!configured);$('#authSubmit').disabled=!configured }

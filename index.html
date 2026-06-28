@@ -34,7 +34,7 @@
     <div class="sidebar-foot"><div class="avatar">FH</div><div><strong id="currentUserName">Mitt konto</strong><small>Min arbetsyta</small></div><button id="logoutButton" title="Logga ut">↪</button></div>
   </aside>
   <main>
-    <header><div><p class="eyebrow" id="eyebrow">MIN DAG</p><h1 id="pageTitle">Gör idag</h1><p id="subtitle"></p></div><div class="header-actions"><button class="icon-btn" title="Sök">⌕</button><button class="icon-btn" id="notificationButton" title="Notiser">♢<i id="notificationDot"></i><b id="notificationCount"></b></button></div></header>
+    <header><div><p class="eyebrow" id="eyebrow">MIN DAG</p><h1 id="pageTitle">Gör idag</h1><p id="subtitle"></p></div><div class="header-actions"><button class="icon-btn" id="commandButton" title="Sök">⌕</button><button class="icon-btn" id="notificationButton" title="Notiser">♢<i id="notificationDot"></i><b id="notificationCount"></b></button></div></header>
     <section class="project-toolbar" id="projectToolbar"><div id="projectHealth"></div><div class="view-switcher"><button data-project-view="list" class="active">☷ Lista</button><button data-project-view="board">▦ Tavla</button><button data-project-view="calendar">□ Kalender</button><button data-project-view="flow">⌁ Flöde</button></div></section>
     <section class="focus-card" id="focusCard"><div class="focus-icon">✦</div><div><strong>Du har <span id="todayCount">0</span> saker framför dig</strong><p>Ett tydligt nästa steg i taget.</p></div><div class="progress"><svg viewBox="0 0 42 42"><circle cx="21" cy="21" r="16"></circle><circle class="done-ring" cx="21" cy="21" r="16"></circle></svg><span id="progressText">0%</span></div></section>
     <section class="brief-card" id="briefCard"><div><p class="eyebrow">DAGLIG AI</p><h2>Dagens sammanfattning</h2><p id="briefSummary">Skapa en kort MCP/AI-brief av dagens uppgifter.</p><div id="briefFocusTasks"></div></div><button class="secondary" id="generateBrief">Uppdatera brief</button></section>
@@ -43,6 +43,13 @@
   </main>
   <aside class="inspector" id="inspector"><button class="close" id="closeInspector">×</button><div id="inspectorContent"></div></aside>
   <aside class="notification-panel" id="notificationPanel"><div class="notification-head"><div><p class="eyebrow">UPPDATERINGAR</p><h2>Notiser</h2></div><button class="close" id="closeNotifications">×</button></div><div id="notificationList"></div></aside>
+  <dialog id="commandDialog">
+    <form method="dialog" id="commandForm" class="command-form">
+      <div class="dialog-head"><div><p class="eyebrow">SÖK</p><h2>Öppna task eller projekt</h2></div><button type="button" id="closeCommand" class="close">×</button></div>
+      <input id="commandSearch" placeholder="Sök efter task, projekt, område eller person…" autocomplete="off">
+      <div id="commandResults" class="command-results"></div>
+    </form>
+  </dialog>
   <button class="mobile-fab" id="mobileAdd" aria-label="Ny uppgift">＋</button>
   <nav class="mobile-nav" id="mobileNav" aria-label="Huvudnavigation"></nav>
   <dialog id="taskDialog">

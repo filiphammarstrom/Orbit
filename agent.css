@@ -250,6 +250,117 @@
   font-size: 10px;
 }
 
+.weekly-review-card {
+  background: linear-gradient(180deg, #fff, #f8fffb);
+  border: 1px solid #dcefe7;
+  border-radius: 18px;
+  box-shadow: 0 5px 22px #34245008;
+  margin: 0 0 18px;
+  padding: 18px;
+}
+
+.weekly-review-head {
+  align-items: flex-start;
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.weekly-review-head h3 {
+  font: 800 18px Manrope;
+  margin: 0;
+}
+
+.weekly-review-head p {
+  color: #74877f;
+  font-size: 12px;
+  line-height: 1.55;
+  margin: 6px 0 0;
+}
+
+.weekly-review-head > span {
+  background: #e8f7f0;
+  border-radius: 12px;
+  color: #33866f;
+  display: grid;
+  font-size: 11px;
+  font-weight: 850;
+  min-height: 34px;
+  min-width: 62px;
+  place-items: center;
+}
+
+.weekly-review-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-bottom: 10px;
+}
+
+.weekly-review-stats span {
+  background: #fff;
+  border: 1px solid #e3f1eb;
+  border-radius: 999px;
+  color: #6f8a7e;
+  font-size: 11px;
+  padding: 6px 9px;
+}
+
+.weekly-review-pick {
+  align-items: center;
+  background: #fff;
+  border: 1px solid #e3f1eb;
+  border-radius: 14px;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: 1fr auto;
+  padding: 12px;
+}
+
+.weekly-review-pick > button {
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  display: grid;
+  gap: 4px;
+  padding: 0;
+  text-align: left;
+}
+
+.weekly-review-pick strong {
+  color: #25202d;
+  font: 800 13px Manrope;
+}
+
+.weekly-review-pick small {
+  color: #918997;
+  font-size: 11px;
+}
+
+.weekly-review-pick div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+.weekly-review-pick div button {
+  background: #edf8f3;
+  border: 0;
+  border-radius: 8px;
+  color: #357861;
+  cursor: pointer;
+  font-size: 10px;
+  font-weight: 850;
+  padding: 8px 9px;
+}
+
+.weekly-review-pick div button:first-child {
+  background: var(--purple);
+  color: #fff;
+}
+
 .assignment-badge {
   color: #5d4bc4;
   background: var(--purple-soft);
@@ -1089,6 +1200,8 @@
   }
 
   .overdue-review-head,
+  .weekly-review-head,
+  .weekly-review-pick,
   .approval-queue-head,
   .approval-card,
   .inbox-triage-head,
@@ -1127,6 +1240,15 @@
   }
 
   .approval-card div button {
+    width: 100%;
+  }
+
+  .weekly-review-pick div {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .weekly-review-pick div button {
     width: 100%;
   }
 
