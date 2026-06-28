@@ -429,6 +429,148 @@
   color: #fff;
 }
 
+.review-dashboard,
+.review-section {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  box-shadow: 0 5px 22px #34245008;
+  margin: 0 0 18px;
+  padding: 18px;
+}
+
+.review-dashboard {
+  background: linear-gradient(180deg, #fff, #fbf8ff);
+  border-color: #e3dafa;
+}
+
+.review-dashboard-head,
+.review-section-head,
+.review-item {
+  align-items: flex-start;
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+}
+
+.review-dashboard-head h3,
+.review-section-head h3 {
+  font: 800 18px Manrope;
+  margin: 0;
+}
+
+.review-dashboard-head p,
+.review-section-head p {
+  color: #8b8490;
+  font-size: 12px;
+  line-height: 1.55;
+  margin: 6px 0 0;
+}
+
+.review-dashboard-head > span,
+.review-section-head > span {
+  background: var(--purple-soft);
+  border-radius: 12px;
+  color: var(--purple);
+  display: grid;
+  font-weight: 850;
+  height: 34px;
+  min-width: 34px;
+  place-items: center;
+}
+
+.review-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.review-stats span {
+  background: #fff;
+  border: 1px solid #eee8f6;
+  border-radius: 999px;
+  color: #766f7f;
+  font-size: 11px;
+  padding: 7px 10px;
+}
+
+.review-stats strong {
+  color: var(--purple);
+  margin-right: 5px;
+}
+
+.review-section-list {
+  display: grid;
+  gap: 14px;
+}
+
+.review-section {
+  margin: 0;
+}
+
+.review-items {
+  display: grid;
+  gap: 9px;
+  margin-top: 13px;
+}
+
+.review-item {
+  background: #fbfafc;
+  border: 1px solid #eee9f4;
+  border-radius: 14px;
+  padding: 11px;
+}
+
+.review-item-main {
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  padding: 0;
+  text-align: left;
+}
+
+.review-item-main strong,
+.review-item-main small {
+  display: block;
+}
+
+.review-item-main strong {
+  color: var(--ink);
+  font: 800 13px Manrope;
+}
+
+.review-item-main small {
+  color: #938c9a;
+  font-size: 11px;
+  margin-top: 3px;
+}
+
+.review-item div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+.review-item div button {
+  background: #f0edff;
+  border: 0;
+  border-radius: 8px;
+  color: var(--purple);
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 850;
+  padding: 8px 9px;
+  white-space: nowrap;
+}
+
+.review-more {
+  color: #999;
+  font-size: 11px;
+  margin: 11px 0 0;
+}
+
 .assignment-badge {
   color: #5d4bc4;
   background: var(--purple-soft);
@@ -1271,6 +1413,9 @@
   .focus-mode-card,
   .weekly-review-head,
   .weekly-review-pick,
+  .review-dashboard-head,
+  .review-section-head,
+  .review-item,
   .approval-queue-head,
   .approval-card,
   .inbox-triage-head,
@@ -1331,6 +1476,16 @@
   }
 
   .weekly-review-pick div button {
+    width: 100%;
+  }
+
+  .review-item div {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    justify-content: stretch;
+  }
+
+  .review-item div button {
     width: 100%;
   }
 
