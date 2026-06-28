@@ -29,6 +29,8 @@ Det finns en första SwiftUI-grund i `apps/apple/` för iOS, iPadOS och macOS. D
 ```bash
 cd apps/apple
 swift test
+swift build --product OrbitMac
+swift run OrbitMac
 ```
 
 Nästa Apple-steg är att lägga Xcode-app targets ovanpå paketet: iOS-app, macOS-app, WidgetKit-extension och Share Extension.

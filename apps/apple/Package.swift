@@ -12,11 +12,19 @@ let package = Package(
         .library(
             name: "OrbitAppleKit",
             targets: ["OrbitAppleKit"]
+        ),
+        .executable(
+            name: "OrbitMac",
+            targets: ["OrbitMac"]
         )
     ],
     targets: [
         .target(
             name: "OrbitAppleKit"
+        ),
+        .executableTarget(
+            name: "OrbitMac",
+            dependencies: ["OrbitAppleKit"]
         ),
         .testTarget(
             name: "OrbitAppleKitTests",

@@ -14,6 +14,7 @@ Target direction:
 Current package contains:
 
 - `OrbitAppleKit` Swift package library.
+- `OrbitMac` SwiftUI macOS executable target.
 - shared task/area/project models.
 - `OrbitStore` with preview data and API-client injection.
 - SwiftUI Today, Inbox, Quick Add, Review and Settings views.
@@ -22,6 +23,21 @@ Current package contains:
   - `AddOrbitTaskIntent`
   - `OpenOrbitIntent`
   - `OrbitShortcutsProvider`
+
+Run checks:
+
+```bash
+swift test
+swift build --product OrbitMac
+```
+
+Run the current macOS app shell:
+
+```bash
+swift run OrbitMac
+```
+
+`OrbitMac` currently includes a normal window, a macOS menu bar extra and a Quick Add command placeholder. It still uses preview data unless a real `OrbitAPIClient` is injected by the future app target.
 
 Next step is to add an actual Xcode app project/targets that import `OrbitAppleKit`:
 
