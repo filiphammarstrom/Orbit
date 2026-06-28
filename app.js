@@ -1,6 +1,6 @@
 import { configured, session, signIn, signUp, signOut, loadCloudState, createCloudTask, updateCloudTask, subscribeToChanges, addComment, addTaskLink, startGoogleCalendarOAuth, startSlackOAuth, slackEventSummary, createTaskFromSlackEvent, syncCalendarLinkNow, queueCalendarSync, saveDailyBrief, saveAgentRun, markNotificationRead, decideApproval, createTeam, createArea, createProject, updateProject, renameCategory, upsertCategorySetting, createInvitation, shareAreaWithTeam, updateAreaDetails } from './cloud.js';
 
-let state, view = 'today', projectView='list', liveChannel;
+let state, view = 'today', projectView='list', liveChannel, deferredInstallPrompt=null, reminderTimer=null;
 const $ = s => document.querySelector(s);
 const bucketViews = ['inbox','today','later','someday'];
 const navItems = [['inbox','⌄','Inbox'],['today','☀','Gör idag'],['later','◷','Gör sen'],['someday','◇','Gör nån gång'],['review','◎','Review'],['settings','⚙','Inställningar']];
@@ -14,6 +14,8 @@ let taskScope=localStorage.getItem('orbitTaskScope')||'all';
 if(!['all','mine'].includes(taskScope))taskScope='all';
 let taskSort=localStorage.getItem('orbitTaskSort')||'smart';
 if(!['smart','priority','due','name'].includes(taskSort))taskSort='smart';
+let notifiedReminderKeys=new Set(JSON.parse(localStorage.getItem('orbitNotifiedReminders')||'[]'));
+let pendingTaskOpen = new URLSearchParams(window.location.search).get('task') || '';
 
 async function api(path, options={}) {
   if(path==='/state') return loadCloudState();
@@ -176,10 +178,75 @@ function clearCaptureUrl(){
   if(!window.location.search)return;
   window.history.replaceState({},'',`${window.location.origin}${window.location.pathname}${window.location.hash}`);
 }
+function clearQueryUrl(){
+  if(!window.location.search)return;
+  window.history.replaceState({},'',`${window.location.origin}${window.location.pathname}${window.location.hash}`);
+}
+function isStandaloneApp(){
+  return window.matchMedia?.('(display-mode: standalone)')?.matches||window.navigator.standalone===true;
+}
+function notificationStatusLabel(){
+  if(!('Notification' in window))return'Stöds inte';
+  return ({default:'Inte frågat',granted:'Tillåtet',denied:'Blockerat'})[Notification.permission]||Notification.permission;
+}
+function saveNotifiedReminderKeys(){
+  const keys=[...notifiedReminderKeys].slice(-80);
+  notifiedReminderKeys=new Set(keys);
+  localStorage.setItem('orbitNotifiedReminders',JSON.stringify(keys));
+}
+async function showLocalNotification(title,options={}){
+  if(!('Notification' in window)||Notification.permission!=='granted')return false;
+  if(navigator.serviceWorker?.ready){
+    const registration=await navigator.serviceWorker.ready;
+    await registration.showNotification(title,{badge:'/orbit-icon.svg',icon:'/orbit-icon.svg',...options});
+    return true;
+  }
+  new Notification(title,{icon:'/orbit-icon.svg',...options});
+  return true;
+}
+async function requestLocalNotifications(){
+  if(!('Notification' in window)){toast('Den här webbläsaren stödjer inte notiser.');return}
+  const permission=await Notification.requestPermission();
+  if(permission==='granted'){
+    toast('Notiser är aktiverade.');
+    await showLocalNotification('Orbit-notiser är på', { body:'Du får lokala påminnelser när appen är öppen.', tag:'orbit-notification-test' });
+  }else toast(permission==='denied'?'Notiser är blockerade i webbläsaren.':'Notiser aktiverades inte.');
+  if(view==='settings')render();
+}
+async function notifyDueReminders(){
+  if(!state||!('Notification' in window)||Notification.permission!=='granted')return;
+  const due=reminderAlerts().slice(0,5);
+  for(const task of due){
+    const key=`${task.id}:${task.reminderAt||task.dueAt||''}`;
+    if(notifiedReminderKeys.has(key))continue;
+    notifiedReminderKeys.add(key);
+    await showLocalNotification(`Orbit: ${task.title}`, {
+      body: scheduleLabel(task)?`Deadline ${scheduleLabel(task)}`:'Dags att titta på uppgiften.',
+      data: { taskId: task.id },
+      tag: `orbit-reminder-${task.id}`
+    });
+  }
+  if(due.length)saveNotifiedReminderKeys();
+}
+function startReminderLoop(){
+  if(reminderTimer)return;
+  notifyDueReminders();
+  reminderTimer=setInterval(notifyDueReminders,60_000);
+}
+async function installOrbitApp(){
+  if(isStandaloneApp()){toast('Orbit är redan installerad som app.');return}
+  if(!deferredInstallPrompt){toast('Installera via webbläsarens dela/meny: “Lägg till på hemskärmen”.');return}
+  deferredInstallPrompt.prompt();
+  const choice=await deferredInstallPrompt.userChoice.catch(()=>null);
+  deferredInstallPrompt=null;
+  toast(choice?.outcome==='accepted'?'Installationen startade.':'Installationen avbröts.');
+  if(view==='settings')render();
+}
 function registerServiceWorker(){
   if(!('serviceWorker' in navigator))return;
   window.addEventListener('load',()=>navigator.serviceWorker.register('/service-worker.js').catch(()=>{}));
 }
+window.addEventListener('beforeinstallprompt',event=>{event.preventDefault();deferredInstallPrompt=event;if(view==='settings')render()});
 
 function bindStructureActions(root=document){
   root.querySelectorAll('[data-toggle-category]').forEach(b=>b.onclick=()=>{const category=b.dataset.toggleCategory;collapsedCategories.has(category)?collapsedCategories.delete(category):collapsedCategories.add(category);render()});
@@ -813,7 +880,7 @@ function renderNotifications(){
 }
 
 function settingsContent(){
-  const me=person(state.currentUserId),google=googleCalendarIntegrations(),slack=slackIntegrations(),mcpReady=Boolean(state.currentUserId);
+  const me=person(state.currentUserId),google=googleCalendarIntegrations(),slack=slackIntegrations(),mcpReady=Boolean(state.currentUserId),installed=isStandaloneApp();
   return `<div class="settings-page">
     <section class="settings-card account">
       <div><p class="eyebrow">KONTO</p><h3>${escapeHtml(me.name)}</h3><p>Det här är din Orbit-identitet för tilldelning, team och MCP-åtgärder.</p></div>
@@ -823,6 +890,8 @@ function settingsContent(){
       <article class="settings-card"><p class="eyebrow">GOOGLE CALENDAR</p><h3>${google.length?'Ansluten':'Inte ansluten'}</h3><p>${google.length?`${google.length} kalenderkoppling${google.length===1?'':'ar'} finns.`:'Anslut Google för kalenderblock och sync.'}</p><button class="secondary" id="settingsGoogleOAuth">${google.length?'Anslut igen':'Anslut Google'}</button></article>
       <article class="settings-card"><p class="eyebrow">SLACK</p><h3>${slack.length?'Ansluten':'Inte ansluten'}</h3><p>${slack.length?`${slack.length} Slack-koppling${slack.length===1?'':'ar'} finns.`:'Anslut Slack för händelser och länkar från chattar.'}</p><button class="secondary" id="settingsSlackOAuth">${slack.length?'Anslut igen':'Anslut Slack'}</button></article>
       <article class="settings-card"><p class="eyebrow">MCP</p><h3>${mcpReady?'Redo för AI-styrning':'Saknar användare'}</h3><p>Starta MCP-servern lokalt med rätt secrets och ORBIT_USER_ID.</p><code>npm run mcp</code></article>
+      <article class="settings-card"><p class="eyebrow">MOBIL/PWA</p><h3>${installed?'Installerad':'Kan installeras'}</h3><p>Installera Orbit som app på mobil/desktop. Share Sheet-stöd finns för länkar från andra appar.</p><button class="secondary" id="installOrbitButton">${installed?'Installerad':'Installera app'}</button></article>
+      <article class="settings-card"><p class="eyebrow">NOTISER</p><h3>${notificationStatusLabel()}</h3><p>Lokala påminnelser visas när appen är öppen. Riktig push kan byggas senare med servernycklar.</p><button class="secondary" id="enableNotificationsButton">${'Notification' in window&&Notification.permission==='granted'?'Skicka testnotis':'Aktivera notiser'}</button></article>
     </section>
     ${teamSharingContent()}
   </div>`;
@@ -832,6 +901,8 @@ function bindSettings(){
   bindTeamSharing();
   $('#settingsGoogleOAuth')?.addEventListener('click',async e=>{try{e.currentTarget.disabled=true;const url=await startGoogleCalendarOAuth();window.location.href=url}catch(error){e.currentTarget.disabled=false;toast(error.message)}});
   $('#settingsSlackOAuth')?.addEventListener('click',async e=>{try{e.currentTarget.disabled=true;const url=await startSlackOAuth();window.location.href=url}catch(error){e.currentTarget.disabled=false;toast(error.message)}});
+  $('#installOrbitButton')?.addEventListener('click',installOrbitApp);
+  $('#enableNotificationsButton')?.addEventListener('click',async()=>{if('Notification' in window&&Notification.permission==='granted')await showLocalNotification('Orbit testnotis',{body:'Notiser fungerar.',tag:'orbit-test'});else await requestLocalNotifications()});
 }
 
 function teamSharingContent(){
@@ -1456,6 +1527,6 @@ function hideAuth(){ $('#authScreen').classList.remove('open') }
 $('#authSwitch').onclick=()=>{authMode=authMode==='signin'?'signup':'signin';const signup=authMode==='signup';$('#nameLabel').classList.toggle('show',signup);$('#authTitle').textContent=signup?'Skapa ditt konto':'Välkommen tillbaka';$('#authSubmit').textContent=signup?'Skapa konto':'Logga in';$('#authSwitch').textContent=signup?'Har du redan ett konto? Logga in':'Inget konto? Skapa ett';$('#authError').textContent=''};
 $('#authForm').onsubmit=async e=>{e.preventDefault();const f=new FormData(e.target);$('#authError').textContent='';$('#authSubmit').disabled=true;try{if(authMode==='signup')await signUp(f.get('name'),f.get('email'),f.get('password'));else await signIn(f.get('email'),f.get('password'));await boot()}catch(err){$('#authError').textContent=err.message}finally{$('#authSubmit').disabled=false}};
 $('#logoutButton').onclick=async()=>{if(liveChannel)await liveChannel.unsubscribe();await signOut();showAuth()};
-async function boot(){if(!configured){showAuth();return}const current=await session();if(!current){showAuth();return}hideAuth();$('#currentUserName').textContent=current.user.user_metadata?.name||current.user.email.split('@')[0];await load();state.currentUserId=current.user.id;render();if(pendingCapture){const capture=pendingCapture;pendingCapture=null;openDialog(capture);clearCaptureUrl();toast('Länken är fångad. Spara för att skapa uppgiften.')}if(liveChannel)await liveChannel.unsubscribe();liveChannel=subscribeToChanges(()=>load())}
+async function boot(){if(!configured){showAuth();return}const current=await session();if(!current){showAuth();return}hideAuth();$('#currentUserName').textContent=current.user.user_metadata?.name||current.user.email.split('@')[0];await load();state.currentUserId=current.user.id;render();startReminderLoop();if(pendingTaskOpen){const id=pendingTaskOpen;pendingTaskOpen='';openInspector(id);clearQueryUrl()}if(pendingCapture){const capture=pendingCapture;pendingCapture=null;openDialog(capture);clearCaptureUrl();toast('Länken är fångad. Spara för att skapa uppgiften.')}if(liveChannel)await liveChannel.unsubscribe();liveChannel=subscribeToChanges(()=>load())}
 registerServiceWorker();
 boot();
