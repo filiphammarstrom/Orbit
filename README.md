@@ -22,6 +22,17 @@ Orbit är en molnbaserad fleranvändarapp för kategorier, områden, projekt, te
 - Återkommande uppgifter och databasgrund för projektmallar
 - Förklaring av varför och när en villkorsstyrd uppgift aktiverades
 
+## Apple-native klient
+
+Det finns en första SwiftUI-grund i `apps/apple/` för iOS, iPadOS och macOS. Den är byggd som ett separat Swift Package (`OrbitAppleKit`) med delade modeller, store, SwiftUI-vyer, Supabase REST-klient-skelett och App Intents för Siri/Shortcuts.
+
+```bash
+cd apps/apple
+swift test
+```
+
+Nästa Apple-steg är att lägga Xcode-app targets ovanpå paketet: iOS-app, macOS-app, WidgetKit-extension och Share Extension.
+
 ## Sätt upp molndatabasen
 
 1. Skapa ett Supabase-projekt.
