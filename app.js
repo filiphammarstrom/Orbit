@@ -3,11 +3,17 @@ import { configured, session, signIn, signUp, signOut, loadCloudState, createClo
 let state, view = 'today', projectView='list', liveChannel;
 const $ = s => document.querySelector(s);
 const bucketViews = ['inbox','today','later','someday'];
-const navItems = [['inbox','⌄','Inbox'],['today','☀','Gör idag'],['later','◷','Gör sen'],['someday','◇','Gör nån gång']];
-const mobileItems = [['inbox','⌄','Inbox'],['today','☀','Idag'],['later','◷','Sen'],['someday','◇','Nån gång'],['areas','▦','Områden']];
+const navItems = [['inbox','⌄','Inbox'],['today','☀','Gör idag'],['later','◷','Gör sen'],['someday','◇','Gör nån gång'],['settings','⚙','Inställningar']];
+const mobileItems = [['inbox','⌄','Inbox'],['today','☀','Idag'],['later','◷','Sen'],['someday','◇','Nån gång'],['areas','▦','Områden'],['settings','⚙','Mer']];
 let pendingCapture = readCaptureIntent();
 const collapsedCategories = new Set();
 const collapsedAreas = new Set();
+let dailyCapacity = Number(localStorage.getItem('orbitDailyCapacity') || 3);
+if(![1,3,5].includes(dailyCapacity))dailyCapacity=3;
+let taskScope=localStorage.getItem('orbitTaskScope')||'all';
+if(!['all','mine'].includes(taskScope))taskScope='all';
+let taskSort=localStorage.getItem('orbitTaskSort')||'smart';
+if(!['smart','priority','due','name'].includes(taskSort))taskSort='smart';
 
 async function api(path, options={}) {
   if(path==='/state') return loadCloudState();
@@ -108,6 +114,21 @@ const projectOptionsHtml=selected=>'<option value="">Inbox / inget projekt</opti
 const assigneesForProject=projectId=>{const p=project(projectId);return p?membersForArea(area(p.areaId)):[person(state.currentUserId)]};
 const assigneeOptionsHtml=(projectId,selected)=>{const list=assigneesForProject(projectId);if(selected&&!list.some(p=>p.id===selected))list.push(person(selected));return list.map(p=>option(p.id,p.name,selected||list[0]?.id)).join('')};
 const defaultAssigneeForProject=projectId=>assigneesForProject(projectId)[0]?.id||state.currentUserId;
+function taskContextHtml(projectId='',assigneeId=''){
+  const p=project(projectId),a=p?area(p.areaId):null,tm=a?.teamId?team(a.teamId):null,assignee=person(assigneeId||defaultAssigneeForProject(projectId));
+  if(!p||!a)return `<div class="task-context-path"><span class="context-node inbox">Inbox</span></div><p>Uppgiften saknar projekt och blir privat för dig tills du placerar den i ett projekt.</p>`;
+  return `<div class="task-context-path">
+    <span class="context-node">${categoryIconHtml(areaCategory(a))}${escapeHtml(areaCategory(a))}</span>
+    <span class="context-arrow">›</span>
+    <span class="context-node"><span class="area-icon" style="background:${escapeHtml(a.color)}">${escapeHtml(a.icon)}</span>${escapeHtml(areaName(a))}</span>
+    <span class="context-arrow">›</span>
+    <span class="context-node">${projectIconHtml(p)}${escapeHtml(p.name)}</span>
+  </div><p>${tm?`Delas med teamet ${escapeHtml(tm.name)}.`:'Privat område.'} Tilldelas: ${escapeHtml(assignee.name)}.</p>`;
+}
+function updateTaskContext(selectId='projectSelect',assigneeId='assigneeSelect',cardId='taskContextCard'){
+  const projectValue=$('#'+selectId)?.value||'',assigneeValue=$('#'+assigneeId)?.value||defaultAssigneeForProject(projectValue),card=$('#'+cardId);
+  if(card)card.innerHTML=taskContextHtml(projectValue,assigneeValue);
+}
 const firstParam=(params,names)=>names.map(name=>params.get(name)).find(Boolean)||'';
 const firstUrl=text=>String(text||'').match(/\b(?:https?:\/\/|mailto:|message:|slack:\/\/|googlegmail:\/\/|ms-outlook:\/\/)[^\s<>"']+/i)?.[0]||'';
 const withoutUrl=(text,url)=>url?String(text||'').replace(url,'').trim():String(text||'').trim();
@@ -158,6 +179,7 @@ function bindStructureActions(root=document){
   root.querySelectorAll('[data-create-structure]').forEach(b=>b.onclick=()=>openStructureDialog(b.dataset.createStructure));
   root.querySelectorAll('[data-create-area]').forEach(b=>b.onclick=()=>openStructureDialog('area',{category:b.dataset.createArea}));
   root.querySelectorAll('[data-create-project]').forEach(b=>b.onclick=()=>openStructureDialog('project',{areaId:b.dataset.createProject}));
+  root.querySelectorAll('[data-create-task-project]').forEach(b=>b.onclick=()=>openDialog({projectId:b.dataset.createTaskProject}));
   root.querySelectorAll('[data-edit-category]').forEach(b=>b.onclick=()=>openStructureDialog('edit-category',{category:b.dataset.editCategory}));
   root.querySelectorAll('[data-edit-area]').forEach(b=>b.onclick=()=>openStructureDialog('edit-area',{areaId:b.dataset.editArea}));
   root.querySelectorAll('[data-edit-project]').forEach(b=>b.onclick=()=>openStructureDialog('edit-project',{projectId:b.dataset.editProject}));
@@ -165,13 +187,12 @@ function bindStructureActions(root=document){
 
 function renderNav(){
   $('#mainNav').innerHTML=navItems.map(([id,ico,label])=>`<button class="nav-item ${view===id?'active':''}" data-view="${id}"><span class="ico">${ico}</span><span>${label}</span><span class="count">${navCount(id)||''}</span></button>`).join('');
-  $('#projectNav').innerHTML=`<button class="structure-overview ${view==='areas'?'active':''}" data-view="areas">▦ Strukturöversikt</button><button class="structure-create" data-create-structure="category">＋ Ny kategori / område</button>${areaGroups().map(group=>{
+  $('#projectNav').innerHTML=`<button class="structure-overview ${view==='areas'?'active':''}" data-view="areas">▦ Struktur</button>${areaGroups().map(group=>{
     const categoryProjects=group.areas.flatMap(projectsForArea),categoryView=categoryViewId(group.category),categoryCount=taskCountForProjects(categoryProjects),open=categoryIsOpen(group);
     return `<div class="tree-category ${open?'open':'closed'}">
       <div class="tree-row category-row ${categoryIsActive(group)?'active':''}">
         <button class="tree-toggle" data-toggle-category="${escapeHtml(group.category)}">${open?'▾':'▸'}</button>
         <button class="tree-main" data-view="${escapeHtml(categoryView)}">${categoryIconHtml(group.category)}<span>${escapeHtml(group.category)}</span><small>${group.areas.length} område${group.areas.length===1?'':'n'}</small><i>${categoryCount||''}</i></button>
-        <button class="tree-edit" title="Redigera kategori" data-edit-category="${escapeHtml(group.category)}">✎</button>
         <button class="tree-add" title="Nytt område i ${escapeHtml(group.category)}" data-create-area="${escapeHtml(group.category)}">＋</button>
       </div>
       ${open?`<div class="tree-children">${group.areas.map(a=>{
@@ -180,12 +201,11 @@ function renderNav(){
           <div class="tree-row area-row ${areaIsActive(a)?'active':''}">
             <button class="tree-toggle" data-toggle-area="${a.id}">${areaOpen?'▾':'▸'}</button>
             <button class="tree-main" data-view="area:${a.id}"><span class="area-icon" style="background:${a.color}">${a.icon}</span><span>${escapeHtml(areaName(a))}</span><small>${projects.length} projekt</small><i>${count||''}</i></button>
-            <button class="tree-edit" title="Redigera område" data-edit-area="${a.id}">✎</button>
             <button class="tree-add" title="Nytt projekt i ${escapeHtml(areaName(a))}" data-create-project="${a.id}">＋</button>
           </div>
-          ${areaOpen?`<div class="tree-projects">${projects.map(p=>`<div class="tree-project-line"><button class="tree-project ${view==='project:'+p.id?'active':''}" data-view="project:${p.id}">${projectIconHtml(p)}<span>${escapeHtml(p.name)}</span><i>${visible().filter(t=>t.projectId===p.id).length||''}</i></button><button class="tree-edit project-edit" title="Redigera projekt" data-edit-project="${p.id}">✎</button></div>`).join('')}${projects.length?'':`<button class="tree-empty-project" data-create-project="${a.id}">＋ Skapa första projektet</button>`}</div>`:''}
+          ${areaOpen?`<div class="tree-projects">${projects.map(p=>`<div class="tree-project-line"><span class="tree-project-spacer"></span><button class="tree-project ${view==='project:'+p.id?'active':''}" data-view="project:${p.id}">${projectIconHtml(p)}<span>${escapeHtml(p.name)}</span><i>${visible().filter(t=>t.projectId===p.id).length||''}</i></button><button class="tree-add project-add" title="Ny uppgift i ${escapeHtml(p.name)}" data-create-task-project="${p.id}">＋</button></div>`).join('')}${projects.length?'':`<button class="tree-empty-project" data-create-project="${a.id}">＋ Skapa första projektet</button>`}</div>`:''}
         </div>`;
-      }).join('')}<button class="tree-create-under" data-create-area="${escapeHtml(group.category)}">＋ Nytt område i ${escapeHtml(group.category)}</button></div>`:''}
+      }).join('')}</div>`:''}
     </div>`;
   }).join('')}`;
   $('#mobileNav').innerHTML=mobileItems.map(([id,ico,label])=>`<button class="mobile-nav-item ${view===id||(id==='areas'&&(view.startsWith('category:')||view.startsWith('area:')||view.startsWith('project:')))?'active':''}" data-view="${id}"><span>${ico}</span><small>${label.replace('Gör ','')}</small>${id!=='areas'&&navCount(id)?`<i>${navCount(id)}</i>`:''}</button>`).join('');
@@ -195,45 +215,194 @@ function renderNav(){
 
 function render(){
   if(view==='assigned')view='today';
-  if(view==='team')view='areas';
+  if(view==='team')view='settings';
   renderNav();let tasks=[],title,eye='MIN DAG',showAreas=false,currentProject=null,currentCategory=null;
   const labels={inbox:'Inbox',today:'Gör idag',later:'Gör sen',someday:'Gör nån gång'};
-  if(view==='areas'){title='Kategorier & områden';eye='STRUKTUR';showAreas=true}
+  if(view==='settings'){title='Inställningar';eye='ADMIN';showAreas=true}
+  else if(view==='areas'){title='Kategorier & områden';eye='STRUKTUR';showAreas=true}
   else if(view.startsWith('category:')){const category=categoryFromView(),group=areaGroups().find(g=>g.category===category);if(!group){view='areas';return render()}const projects=group.areas.flatMap(projectsForArea),ids=projects.map(p=>p.id);tasks=topLevel(visible().filter(t=>ids.includes(t.projectId)));title=category;eye='KATEGORI';currentCategory=group}
   else if(view.startsWith('area:')){const a=area(view.split(':')[1]);if(!a){view='areas';return render()}const projects=projectsForArea(a),ids=projects.map(p=>p.id);tasks=topLevel(visible().filter(t=>ids.includes(t.projectId)));title=areaName(a);eye=areaCategory(a).toUpperCase()}
   else if(view.startsWith('project:')){const p=project(view.split(':')[1]);if(!p){view='areas';return render()}currentProject=p;const canPlan=p.ownerId===state.currentUserId||(!p.ownerId&&area(p.areaId)?.ownerId===state.currentUserId);tasks=topLevel(state.tasks.filter(t=>t.projectId===p.id&&!t.completed&&(t.visible||canPlan)));title=p.name;eye=areaName(area(p.areaId)).toUpperCase()||'PROJEKT'}
   else{tasks=topLevel(tasksForBucketView(view));title=labels[view]}
+  if(!showAreas)tasks=applyTaskViewControls(tasks);
   $('#pageTitle').textContent=title;$('#eyebrow').textContent=eye;
-  $('#subtitle').textContent=view==='today'?new Intl.DateTimeFormat('sv-SE',{weekday:'long',day:'numeric',month:'long'}).format(new Date()):showAreas?'Kategori → område → projekt → uppgift → underuppgift. Team styr bara åtkomst.':currentCategory?'Grupperat efter område och projekt.':`${tasks.length} aktiva uppgifter`;
-  $('#sectionTitle').textContent=showAreas?'Kategori, område, projekt och åtkomst':currentCategory?'Områden och projekt':view==='inbox'?'Okategoriserat':'Att göra';
+  $('#subtitle').textContent=view==='today'?new Intl.DateTimeFormat('sv-SE',{weekday:'long',day:'numeric',month:'long'}).format(new Date()):view==='settings'?'Konto, team, integrationer, MCP och appstatus.':showAreas?'Kategori → område → projekt → uppgift → underuppgift. Team styr bara åtkomst.':currentCategory?'Grupperat efter område och projekt.':`${tasks.length} aktiva uppgifter`;
+  $('#sectionTitle').textContent=view==='settings'?'App och åtkomst':showAreas?'Kategori, område, projekt och åtkomst':currentCategory?'Områden och projekt':view==='inbox'?'Okategoriserat':'Att göra';
   $('#projectToolbar').classList.toggle('open',Boolean(currentProject));
   if(currentProject){const colors={on_track:'#42a68b',at_risk:'#e2a33d',off_track:'#d96761'},labels={on_track:'På rätt väg',at_risk:'Risk',off_track:'Försenat'};$('#projectHealth').innerHTML=`<span class="health-pill"><i style="background:${colors[currentProject.health]}"></i>${labels[currentProject.health]}</span>`}
   $('.section-head>div').style.display=showAreas?'none':'';$('#addRow').style.display=showAreas?'none':'';$('#focusCard').style.display=view==='today'?'flex':'none';
+  updateTaskViewButtons();
   const todayAll=state.tasks.filter(t=>t.visible&&(t.bucket==='today'||isDueToday(t)||(!t.completed&&(isOverdue(t)||isReminderDue(t))))),done=todayAll.filter(t=>t.completed).length,pct=todayAll.length?Math.round(done/todayAll.length*100):0;
   $('#todayCount').textContent=todayAll.filter(t=>!t.completed).length;$('#progressText').textContent=pct+'%';$('.done-ring').style.strokeDashoffset=100-pct;
-  $('#taskList').innerHTML=showAreas?areaCards():currentCategory?categoryContent(currentCategory,tasks):currentProject?projectContent(tasks):view==='today'?todayContent(tasks):tasks.length?tasks.map(taskGroupHtml).join(''):'<div class="empty">Här är lugnt och fint.</div>';
+  $('#taskList').innerHTML=view==='settings'?settingsContent():showAreas?areaCards():currentCategory?categoryContent(currentCategory,tasks):currentProject?projectContent(tasks):view==='today'?todayContent(tasks):view==='inbox'?inboxContent(tasks):view==='later'?laterContent(tasks):view==='someday'?somedayContent(tasks):tasks.length?tasks.map(taskGroupHtml).join(''):'<div class="empty">Här är lugnt och fint.</div>';
   document.querySelectorAll('.task').forEach(el=>el.onclick=e=>{if(!e.target.classList.contains('check'))openInspector(el.dataset.id)});
   document.querySelectorAll('.check').forEach(b=>b.onclick=e=>{e.stopPropagation();complete(b.dataset.id)});
   document.querySelectorAll('[data-area-open]').forEach(c=>c.onclick=()=>{view='area:'+c.dataset.areaOpen;render()});
   document.querySelectorAll('#taskList [data-view]').forEach(b=>b.onclick=()=>{view=b.dataset.view;render()});
+  bindTaskViewButtons();
   bindStructureActions($('#taskList'));
   document.querySelectorAll('[data-overdue-open]').forEach(b=>b.onclick=()=>openInspector(b.dataset.overdueOpen));
   document.querySelectorAll('[data-overdue-done]').forEach(b=>b.onclick=()=>complete(b.dataset.overdueDone));
+  document.querySelectorAll('[data-approval-open]').forEach(b=>b.onclick=()=>openInspector(b.dataset.approvalOpen));
+  document.querySelectorAll('[data-approval-decision]').forEach(b=>b.onclick=async()=>{b.disabled=true;try{await handleApprovalDecision(b.dataset.approvalDecision,b.dataset.approvalStatus)}catch(error){toast(error.message);b.disabled=false}});
   document.querySelectorAll('[data-plan-open]').forEach(b=>b.onclick=()=>openInspector(b.dataset.planOpen));
   document.querySelectorAll('[data-plan-start]').forEach(b=>b.onclick=async()=>{b.disabled=true;try{await startFocusTask(b.dataset.planStart)}catch(error){toast(error.message);b.disabled=false}});
+  document.querySelectorAll('[data-next-open]').forEach(b=>b.onclick=()=>openInspector(b.dataset.nextOpen));
+  document.querySelectorAll('[data-next-start]').forEach(b=>b.onclick=async()=>{b.disabled=true;try{await startFocusTask(b.dataset.nextStart)}catch(error){toast(error.message);b.disabled=false}});
+  document.querySelectorAll('[data-project-template]').forEach(b=>b.onclick=async()=>{b.disabled=true;try{await applyProjectStarter(b.dataset.projectTemplate)}catch(error){toast(error.message);b.disabled=false}});
   document.querySelectorAll('[data-plan-trim]').forEach(b=>b.onclick=async()=>{b.disabled=true;try{await trimTodayPlan()}catch(error){toast(error.message);b.disabled=false}});
+  document.querySelectorAll('[data-capacity]').forEach(b=>b.onclick=()=>{dailyCapacity=Number(b.dataset.capacity);localStorage.setItem('orbitDailyCapacity',String(dailyCapacity));render()});
   document.querySelectorAll('[data-reschedule]').forEach(b=>b.onclick=async()=>{b.disabled=true;try{await rescheduleTask(b.dataset.task,b.dataset.reschedule)}catch(error){toast(error.message);b.disabled=false}});
+  document.querySelectorAll('[data-inbox-move]').forEach(b=>b.onclick=async()=>{b.disabled=true;try{await triageInboxTask(b.dataset.task,b.dataset.inboxMove)}catch(error){toast(error.message);b.disabled=false}});
+  document.querySelectorAll('[data-inbox-open]').forEach(b=>b.onclick=()=>openInspector(b.dataset.inboxOpen));
+  document.querySelectorAll('[data-later-move]').forEach(b=>b.onclick=async()=>{b.disabled=true;try{await rescheduleTask(b.dataset.task,b.dataset.laterMove)}catch(error){toast(error.message);b.disabled=false}});
+  document.querySelectorAll('[data-later-open]').forEach(b=>b.onclick=()=>openInspector(b.dataset.laterOpen));
+  document.querySelectorAll('[data-someday-move]').forEach(b=>b.onclick=async()=>{b.disabled=true;try{await reviewSomedayTask(b.dataset.task,b.dataset.somedayMove)}catch(error){toast(error.message);b.disabled=false}});
+  document.querySelectorAll('[data-someday-priority]').forEach(b=>b.onclick=async()=>{b.disabled=true;try{await setTaskPriority(b.dataset.task,Number(b.dataset.somedayPriority))}catch(error){toast(error.message);b.disabled=false}});
+  document.querySelectorAll('[data-someday-open]').forEach(b=>b.onclick=()=>openInspector(b.dataset.somedayOpen));
   document.querySelectorAll('.board-card,.calendar-task,.flow-node').forEach(c=>c.onclick=()=>openInspector(c.dataset.id));
-  if(showAreas)bindAreaOverview();
+  if(view==='settings')bindSettings();
+  else if(showAreas)bindAreaOverview();
   renderNotifications();
   renderDailyBrief();
   renderAgentPanel();
 }
 
+function applyTaskViewControls(tasks){
+  const scoped=taskScope==='mine'?tasks.filter(t=>t.assigneeId===state.currentUserId):tasks;
+  const score=t=>{
+    if(taskSort==='priority')return[Number(t.priority||4),t.dueAt?new Date(t.dueAt).getTime():Number.MAX_SAFE_INTEGER,String(t.title)];
+    if(taskSort==='due')return[t.dueAt?new Date(t.dueAt).getTime():Number.MAX_SAFE_INTEGER,Number(t.priority||4),String(t.title)];
+    if(taskSort==='name')return[String(t.title).toLocaleLowerCase('sv-SE')];
+    return [t.status==='doing'?0:1,isOverdue(t)?0:1,isReminderDue(t)?0:1,Number(t.priority||4),t.dueAt?new Date(t.dueAt).getTime():Number.MAX_SAFE_INTEGER,String(t.title)];
+  };
+  return [...scoped].sort((a,b)=>{const as=score(a),bs=score(b);for(let i=0;i<as.length;i++){if(as[i]!==bs[i])return typeof as[i]==='string'?String(as[i]).localeCompare(String(bs[i]),'sv-SE'):as[i]-bs[i]}return 0});
+}
+
+function updateTaskViewButtons(){
+  const buttons=document.querySelectorAll('.section-head .filter');
+  if(buttons[0])buttons[0].textContent=taskScope==='mine'?'◎ Mina':'☷ Alla';
+  if(buttons[1])buttons[1].textContent=({smart:'↕ Smart',priority:'↕ Prio',due:'↕ Datum',name:'↕ Namn'})[taskSort]||'↕ Sortera';
+}
+
+function bindTaskViewButtons(){
+  const buttons=document.querySelectorAll('.section-head .filter');
+  if(buttons[0])buttons[0].onclick=()=>{taskScope=taskScope==='all'?'mine':'all';localStorage.setItem('orbitTaskScope',taskScope);render()};
+  if(buttons[1])buttons[1].onclick=()=>{const order=['smart','priority','due','name'];taskSort=order[(order.indexOf(taskSort)+1)%order.length];localStorage.setItem('orbitTaskSort',taskSort);render()};
+}
+
 function todayContent(tasks){
   const overdue=tasks.filter(isOverdue),ready=tasks.filter(t=>!isOverdue(t));
   const empty=overdue.length?'När du planerat om det som släpar är dagen ren.':'Dagen är ren. Lägg in ett litet steg när du vill.';
-  return `${overdue.length?overdueReviewHtml(overdue):''}${dailyPlanHtml(ready)}${ready.length?ready.map(taskGroupHtml).join(''):`<div class="empty">${empty}</div>`}`;
+  return `${approvalQueueHtml()}${overdue.length?overdueReviewHtml(overdue):''}${dailyPlanHtml(ready)}${ready.length?ready.map(taskGroupHtml).join(''):`<div class="empty">${empty}</div>`}`;
+}
+
+function approvalQueueHtml(){
+  const pending=(state.approvals||[]).filter(a=>a.status==='pending');
+  const mine=pending.filter(a=>a.requestedFrom===state.currentUserId).map(a=>({approval:a,task:state.tasks.find(t=>t.id===a.taskId)})).filter(x=>x.task&&!x.task.completed);
+  const sent=pending.filter(a=>a.requestedBy===state.currentUserId&&a.requestedFrom!==state.currentUserId).map(a=>({approval:a,task:state.tasks.find(t=>t.id===a.taskId)})).filter(x=>x.task&&!x.task.completed);
+  if(!mine.length&&!sent.length)return'';
+  return `<section class="approval-queue-card">
+    <div class="approval-queue-head"><div><p class="eyebrow">GODKÄNNANDEN</p><h3>${mine.length?`${mine.length} väntar på ditt beslut`:'Väntar på andra'}</h3><p>${mine.length?'Godkänn eller avvisa direkt.':'Du har skickat saker för godkännande och kan följa läget här.'}</p></div><span>${mine.length+sent.length}</span></div>
+    ${mine.length?`<div class="approval-list">${mine.map(approvalCardHtml).join('')}</div>`:''}
+    ${sent.length?`<div class="approval-sent"><strong>Skickat för godkännande</strong>${sent.slice(0,4).map(({approval,task})=>`<button data-approval-open="${task.id}"><span>${escapeHtml(task.title)}</span><small>${escapeHtml(person(approval.requestedFrom).name)}</small></button>`).join('')}</div>`:''}
+  </section>`;
+}
+
+function approvalCardHtml({approval,task}){
+  return `<article class="approval-card">
+    <button data-approval-open="${task.id}"><strong>${escapeHtml(task.title)}</strong><small>${escapeHtml([taskContextLabel(task),`Från ${person(approval.requestedBy).name}`].join(' · '))}</small></button>
+    <div><button class="primary" data-approval-decision="${approval.id}" data-approval-status="approved">Godkänn</button><button class="secondary" data-approval-decision="${approval.id}" data-approval-status="rejected">Avvisa</button></div>
+  </article>`;
+}
+
+function inboxContent(tasks){
+  if(!tasks.length)return'<div class="empty">Inbox är tom. Bra.</div>';
+  const uncategorized=tasks.filter(t=>!t.projectId),withProject=tasks.filter(t=>t.projectId);
+  return `<section class="inbox-triage-card">
+    <div class="inbox-triage-head"><div><p class="eyebrow">INBOX TRIAGE</p><h3>Bestäm vad varje sak betyder</h3><p>Inbox är bara en fångstplats. Ta ett snabbt beslut: gör idag, parkera, eller öppna och placera i projekt.</p></div><span>${tasks.length}</span></div>
+    <div class="inbox-triage-list">${tasks.slice(0,8).map(t=>`<article class="inbox-triage-item ${t.projectId?'has-project':''}">
+      <button class="inbox-triage-title" data-inbox-open="${t.id}"><strong>${escapeHtml(t.title)}</strong><small>${escapeHtml(taskContextLabel(t))}</small></button>
+      <div class="inbox-triage-actions">
+        <button data-task="${t.id}" data-inbox-move="today">Idag</button>
+        <button data-task="${t.id}" data-inbox-move="later">Senare</button>
+        <button data-task="${t.id}" data-inbox-move="someday">Någon gång</button>
+        <button data-inbox-open="${t.id}">${t.projectId?'Öppna':'Placera'}</button>
+      </div>
+    </article>`).join('')}</div>
+    ${tasks.length>8?`<p class="inbox-triage-more">${tasks.length-8} till visas i listan nedanför.</p>`:''}
+    <div class="inbox-triage-summary"><span>${uncategorized.length} utan projekt</span><span>${withProject.length} redan placerade</span></div>
+  </section>${tasks.map(taskGroupHtml).join('')}`;
+}
+
+function laterContent(tasks){
+  if(!tasks.length)return'<div class="empty">Gör sen är tom. Bra.</div>';
+  const now=startOfLocalDay(),weekEnd=dayAt(7,23,59);
+  const sorted=[...tasks].sort((a,b)=>{
+    const ad=a.dueAt?new Date(a.dueAt).getTime():Number.MAX_SAFE_INTEGER,bd=b.dueAt?new Date(b.dueAt).getTime():Number.MAX_SAFE_INTEGER;
+    if(ad!==bd)return ad-bd;
+    if(Number(a.priority||4)!==Number(b.priority||4))return Number(a.priority||4)-Number(b.priority||4);
+    return String(a.title).localeCompare(String(b.title),'sv-SE');
+  });
+  const groups=[
+    ['overdue','Släpar efter',sorted.filter(isOverdue),'Bestäm nytt datum eller flytta bort.'],
+    ['week','Kommande vecka',sorted.filter(t=>t.dueAt&&!isOverdue(t)&&new Date(t.dueAt)<=weekEnd),'Det här är nära nog att vara planering.'],
+    ['future','Senare',sorted.filter(t=>t.dueAt&&!isOverdue(t)&&new Date(t.dueAt)>weekEnd),'Ligger längre fram.'],
+    ['unscheduled','Utan datum',sorted.filter(t=>!t.dueAt),'Behöver ett beslut för att inte försvinna.']
+  ].filter(([, ,items])=>items.length);
+  const next=groups[0]?.[2]?.[0];
+  return `<section class="later-planner-card">
+    <div class="later-planner-head"><div><p class="eyebrow">GÖR SEN</p><h3>Planera framåt utan att fylla idag</h3><p>Här ska saker ha ett ungefärligt nästa datum. Om något är viktigt nog: lyft till idag.</p></div><span>${tasks.length}</span></div>
+    ${next?`<article class="later-next-card"><button data-later-open="${next.id}"><small>Närmast beslut</small><strong>${escapeHtml(next.title)}</strong><span>${escapeHtml(taskContextLabel(next))}</span></button><div><button class="primary" data-task="${next.id}" data-later-move="today">Idag</button><button class="secondary" data-task="${next.id}" data-later-move="someday">Någon gång</button></div></article>`:''}
+  </section>
+  <div class="later-timeline">${groups.map(([key,label,items,help])=>`<section class="later-group ${key}">
+    <h3>${label}<span>${items.length}</span></h3>
+    <p>${help}</p>
+    <div>${items.map(laterCardHtml).join('')}</div>
+  </section>`).join('')}</div>`;
+}
+
+function laterCardHtml(t){
+  return `<article class="later-card ${isOverdue(t)?'late':''}">
+    <button class="later-card-main" data-later-open="${t.id}"><strong>${escapeHtml(t.title)}</strong><small>${escapeHtml(taskContextLabel(t))}</small></button>
+    <div class="later-card-actions">
+      <button data-task="${t.id}" data-later-move="today">Idag</button>
+      <button data-task="${t.id}" data-later-move="tomorrow">Imorgon</button>
+      <button data-task="${t.id}" data-later-move="nextweek">Nästa vecka</button>
+      <button data-task="${t.id}" data-later-move="someday">Någon gång</button>
+    </div>
+  </article>`;
+}
+
+function somedayContent(tasks){
+  if(!tasks.length)return'<div class="empty">Gör nån gång är tom. Bra.</div>';
+  const sorted=[...tasks].sort((a,b)=>Number(a.priority||4)-Number(b.priority||4)||String(a.title).localeCompare(String(b.title),'sv-SE'));
+  const pick=sorted[0],groups=[[1,'P1 · Viktigt'],[2,'P2 · Bra att göra'],[3,'P3 · Låg energi'],[4,'P4 · Parkering']];
+  return `<section class="someday-review-card">
+    <div class="someday-review-head">
+      <div><p class="eyebrow">SOMEDAY REVIEW</p><h3>Plocka upp en sak eller låt den vila</h3><p>Den här listan ska vara en parkering, inte ett svart hål. Välj en sak om något faktiskt ska framåt.</p></div>
+      <span>${tasks.length}</span>
+    </div>
+    <article class="someday-pick">
+      <button data-someday-open="${pick.id}"><small>Föreslagen att lyfta</small><strong>${escapeHtml(pick.title)}</strong><span>${escapeHtml(taskContextLabel(pick))}</span></button>
+      <div><button class="primary" data-task="${pick.id}" data-someday-move="today">Gör idag</button><button class="secondary" data-task="${pick.id}" data-someday-move="later">Gör senare</button></div>
+    </article>
+  </section>
+  <div class="someday-priority-board">${groups.map(([priority,label])=>{
+    const cards=sorted.filter(t=>Number(t.priority||4)===priority);
+    return `<section class="someday-priority-column"><h3>${label}<span>${cards.length}</span></h3>${cards.length?cards.map(somedayCardHtml).join(''):'<p class="hint">Tomt.</p>'}</section>`;
+  }).join('')}</div>`;
+}
+
+function somedayCardHtml(t){
+  return `<article class="someday-card">
+    <button class="someday-card-main" data-someday-open="${t.id}"><strong>${escapeHtml(t.title)}</strong><small>${escapeHtml(taskContextLabel(t))}</small></button>
+    <div class="someday-card-actions">
+      <button data-task="${t.id}" data-someday-move="today">Idag</button>
+      <button data-task="${t.id}" data-someday-move="later">Senare</button>
+      <span>${[1,2,3].map(p=>`<button class="${Number(t.priority||4)===p?'active':''}" data-task="${t.id}" data-someday-priority="${p}">P${p}</button>`).join('')}</span>
+    </div>
+  </article>`;
 }
 
 function todayNudgeHtml(tasks){
@@ -242,7 +411,7 @@ function todayNudgeHtml(tasks){
   return `<section class="execution-nudge"><div><p class="eyebrow">${doing?'PÅBÖRJAT':p1?'PRIO':'LITET STEG'}</p><h3>${doing?'Fortsätt där du redan börjat':'Välj ett tydligt nästa steg'}</h3><p>${doing?'Du har redan startat den här. Det är ofta lättare att avsluta än att starta om.':'Håll dagen liten: en konkret sak först, sedan nästa.'}</p></div><button class="secondary" data-overdue-open="${candidate.id}">${escapeHtml(candidate.title)}</button></section>`;
 }
 
-function dailyPlan(tasks){
+function dailyPlan(tasks,limit=dailyCapacity){
   const score=t=>[
     t.status==='doing'?0:1,
     isReminderDue(t)?0:1,
@@ -253,9 +422,9 @@ function dailyPlan(tasks){
   ];
   const sorted=[...tasks].sort((a,b)=>{const as=score(a),bs=score(b);for(let i=0;i<as.length;i++){if(as[i]!==bs[i])return as[i]-bs[i]}return String(a.title).localeCompare(String(b.title),'sv-SE')});
   const doing=sorted.filter(t=>t.status==='doing');
-  const focus=[...doing,...sorted.filter(t=>t.status!=='doing')].filter((t,i,self)=>self.findIndex(x=>x.id===t.id)===i).slice(0,3);
+  const focus=[...doing,...sorted.filter(t=>t.status!=='doing')].filter((t,i,self)=>self.findIndex(x=>x.id===t.id)===i).slice(0,limit);
   const overflow=sorted.filter(t=>!focus.some(f=>f.id===t.id));
-  return{focus,overflow,total:sorted.length,tooMuch:sorted.length>5||overflow.length>0};
+  return{focus,overflow,total:sorted.length,limit,tooMuch:sorted.length>limit||overflow.length>0};
 }
 
 function dailyPlanReason(t){
@@ -266,6 +435,55 @@ function dailyPlanReason(t){
   return'Litet nästa steg';
 }
 
+function projectActionPlan(tasks,limit=3){
+  const candidates=[],waiting=[];
+  tasks.forEach(parent=>{
+    const openChildren=childrenOf(parent.id).filter(c=>!c.completed);
+    const visibleChildren=openChildren.filter(c=>c.visible);
+    const hiddenChildren=openChildren.filter(c=>!c.visible);
+    if(visibleChildren.length){
+      visibleChildren.forEach(child=>candidates.push({...child,parentTitle:parent.title,parentId:parent.id}));
+    }else if(hiddenChildren.length){
+      waiting.push(parent);
+    }else if(parent.visible){
+      candidates.push(parent);
+    }
+  });
+  const scored=[...candidates].sort((a,b)=>{
+    const as=[a.status==='doing'?0:1,isReminderDue(a)?0:1,Number(a.priority||4),a.dueAt?new Date(a.dueAt).getTime():Number.MAX_SAFE_INTEGER,a.createdAt?new Date(a.createdAt).getTime():0];
+    const bs=[b.status==='doing'?0:1,isReminderDue(b)?0:1,Number(b.priority||4),b.dueAt?new Date(b.dueAt).getTime():Number.MAX_SAFE_INTEGER,b.createdAt?new Date(b.createdAt).getTime():0];
+    for(let i=0;i<as.length;i++){if(as[i]!==bs[i])return as[i]-bs[i]}
+    return String(a.title).localeCompare(String(b.title),'sv-SE');
+  });
+  return {steps:scored.slice(0,limit),total:scored.length,waiting:waiting.length};
+}
+
+function nextStepReason(t){
+  if(t.status==='doing')return'Påbörjad';
+  if(t.parentTitle)return`Delsteg i ${t.parentTitle}`;
+  if(t.priority===1)return'Prio 1';
+  if(isReminderDue(t))return'Påminnelse';
+  if(isDueToday(t))return'Planerad';
+  return'Nästa steg';
+}
+
+function projectNextStepsHtml(tasks,compact=false){
+  const plan=projectActionPlan(tasks,compact?1:3);
+  if(!plan.total&&!plan.waiting)return'';
+  if(compact){
+    const t=plan.steps[0];
+    return t?`<button class="project-next-mini" data-next-open="${t.id}"><span>Nästa</span><strong>${escapeHtml(t.title)}</strong></button>`:`<div class="project-next-mini waiting"><span>Väntar</span><strong>${plan.waiting} låsta steg</strong></div>`;
+  }
+  return `<section class="project-next-card">
+    <div class="project-next-head"><div><p class="eyebrow">NÄSTA STEG</p><h3>${plan.steps.length?`${plan.steps.length} konkreta steg att göra nu`:'Projektet väntar på villkor'}</h3><p>${plan.steps.length?'Börja här i stället för att läsa hela projektlistan.':'Det finns steg, men de är låsta av andra uppgifter eller triggers.'}</p></div><span>${plan.total}${plan.waiting?` +${plan.waiting}`:''}</span></div>
+    ${plan.steps.length?`<div class="project-next-list">${plan.steps.map(t=>`<article class="project-next-item ${t.status==='doing'?'active':''}">
+      <button data-next-open="${t.id}"><small>${escapeHtml(nextStepReason(t))}</small><strong>${escapeHtml(t.title)}</strong><span>${escapeHtml([t.parentTitle,scheduleLabel(t)].filter(Boolean).join(' · ')||taskContextLabel(t))}</span></button>
+      <button class="primary" data-next-start="${t.id}">${t.status==='doing'?'Fortsätt':'Starta'}</button>
+    </article>`).join('')}</div>`:''}
+    ${plan.waiting?`<p class="project-next-waiting">⚡ ${plan.waiting} större uppgift${plan.waiting===1?'':'er'} har bara låsta delsteg just nu.</p>`:''}
+  </section>`;
+}
+
 function taskContextLabel(t){
   const p=project(t.projectId),a=areaForProject(t.projectId);
   return [p?.name,a?areaName(a):'',scheduleLabel(t)].filter(Boolean).join(' · ')||'Inbox';
@@ -274,12 +492,14 @@ function taskContextLabel(t){
 function dailyPlanHtml(tasks){
   const plan=dailyPlan(tasks);
   if(!plan.total)return'';
-  const title=plan.focus.length===1?'Dagens lilla steg':'Dagens 3 små steg';
+  const title=plan.focus.length===1?'Dagens lilla steg':`Dagens ${plan.focus.length} små steg`;
+  const capacityLabels={1:'Låg',3:'Normal',5:'Hög'};
   return `<section class="daily-plan-card ${plan.tooMuch?'too-much':''}">
     <div class="daily-plan-head">
-      <div><p class="eyebrow">DAGLIG PLANERING</p><h3>${title}</h3><p>${plan.tooMuch?'Dagen är för tung. Välj max tre saker och flytta resten.':'Lagom nivå. Gör en sak, checka av, ta nästa.'}</p></div>
+      <div><p class="eyebrow">DAGLIG PLANERING</p><h3>${title}</h3><p>${plan.tooMuch?`Dagen är för tung för ${capacityLabels[plan.limit].toLowerCase()} kapacitet. Flytta resten.`:'Lagom nivå. Gör en sak, checka av, ta nästa.'}</p></div>
       <span>${plan.focus.length}/${plan.total}</span>
     </div>
+    <div class="daily-capacity"><span>Min kapacitet idag</span><div>${[[1,'Låg'],[3,'Normal'],[5,'Hög']].map(([value,label])=>`<button class="${dailyCapacity===value?'active':''}" data-capacity="${value}">${label}</button>`).join('')}</div></div>
     <div class="daily-focus-list">${plan.focus.map((t,i)=>`<article class="daily-focus-card ${t.status==='doing'?'active':''}">
       <button class="daily-focus-main" data-plan-open="${t.id}"><small>${i+1}. ${dailyPlanReason(t)}</small><strong>${escapeHtml(t.title)}</strong><span>${escapeHtml(taskContextLabel(t))}</span></button>
       <button class="daily-focus-action" data-plan-start="${t.id}">${t.status==='doing'?'Fortsätt':'Starta'}</button>
@@ -301,12 +521,50 @@ async function rescheduleTask(id,preset){
   if(preset==='today'){dueAt=todayPlanTime();bucket='today';due=formatDateTime(dueAt)}
   else if(preset==='tomorrow'){dueAt=dayAt(1,9).toISOString();bucket='later';due=formatDateTime(dueAt)}
   else if(preset==='week'){dueAt=dayAt(3,9).toISOString();bucket='later';due=formatDateTime(dueAt)}
+  else if(preset==='nextweek'){dueAt=dayAt(7,9).toISOString();bucket='later';due=formatDateTime(dueAt)}
   else if(preset==='someday'){bucket='someday';dueAt=null;due='';reminderAt=null}
   else throw new Error('Okänt planeringsval.');
   const patch={bucket,due,dueAt,reminderAt};
   await api('/tasks/'+id,{method:'PATCH',body:JSON.stringify(patch)});
   await load();
   toast(preset==='someday'?'Flyttad till Gör nån gång.':'Uppgiften har fått nytt datum.');
+}
+
+async function triageInboxTask(id,target){
+  const patch={};
+  if(target==='today'){patch.bucket='today';patch.dueAt=todayPlanTime();patch.due=formatDateTime(patch.dueAt)}
+  else if(target==='later'){patch.bucket='later';patch.dueAt=null;patch.due='';patch.reminderAt=null}
+  else if(target==='someday'){patch.bucket='someday';patch.dueAt=null;patch.due='';patch.reminderAt=null}
+  else throw new Error('Okänt inbox-val.');
+  await api('/tasks/'+id,{method:'PATCH',body:JSON.stringify(patch)});
+  await load();
+  toast(target==='today'?'Flyttad till Gör idag.':target==='later'?'Flyttad till Gör sen.':'Flyttad till Gör nån gång.');
+}
+
+async function reviewSomedayTask(id,target){
+  const patch={};
+  if(target==='today'){patch.bucket='today';patch.dueAt=todayPlanTime();patch.due=formatDateTime(patch.dueAt);patch.status='planned'}
+  else if(target==='later'){const dueAt=dayAt(7,9).toISOString();patch.bucket='later';patch.dueAt=dueAt;patch.due=formatDateTime(dueAt);patch.status='planned';patch.reminderAt=null}
+  else throw new Error('Okänt review-val.');
+  await api('/tasks/'+id,{method:'PATCH',body:JSON.stringify(patch)});
+  await load();
+  toast(target==='today'?'Flyttad till Gör idag.':'Flyttad till Gör sen.');
+}
+
+async function setTaskPriority(id,priority){
+  if(![1,2,3].includes(priority))throw new Error('Okänd prioritet.');
+  await api('/tasks/'+id,{method:'PATCH',body:JSON.stringify({priority})});
+  await load();
+  toast(`Prioritet ändrad till P${priority}.`);
+}
+
+async function handleApprovalDecision(id,status){
+  const approval=(state.approvals||[]).find(a=>a.id===id);
+  if(!approval)throw new Error('Godkännandet finns inte längre.');
+  await decideApproval(id,status);
+  if(status==='rejected')await api('/tasks/'+approval.taskId,{method:'PATCH',body:JSON.stringify({status:'review',bucket:'today'})});
+  await load();
+  toast(status==='approved'?'Godkänt.':'Avvisat och flyttat till granskning.');
 }
 
 async function startFocusTask(id){
@@ -338,14 +596,78 @@ function categoryContent(group,tasks){
       const projects=projectsForArea(a),areaTaskCount=tasks.filter(t=>projects.some(p=>p.id===t.projectId)).length;
       return `<section class="category-area-block">
         <div class="category-area-head"><button data-view="area:${a.id}"><span class="area-card-icon small" style="background:${a.color}">${a.icon}</span><strong>${escapeHtml(areaName(a))}</strong></button><span>${areaTaskCount} uppgift${areaTaskCount===1?'':'er'}</span></div>
-        <div class="category-project-list">${projects.length?projects.map(p=>{const projectTasks=tasks.filter(t=>t.projectId===p.id);return `<section class="category-project-block"><button class="category-project-head" data-view="project:${p.id}">${projectIconHtml(p)}<strong>${escapeHtml(p.name)}</strong><span>${projectTasks.length}</span></button>${projectTasks.length?projectTasks.map(taskGroupHtml).join(''):'<p class="hint">Inga aktiva uppgifter i projektet.</p>'}</section>`}).join(''):'<p class="hint">Området har inga projekt ännu.</p>'}</div>
+        <div class="category-project-list">${projects.length?projects.map(p=>categoryProjectBlock(p,tasks.filter(t=>t.projectId===p.id))).join(''):'<p class="hint">Området har inga projekt ännu.</p>'}</div>
       </section>`;
     }).join('')}
     ${tasks.length?'':'<div class="empty">Inga aktiva uppgifter i den här kategorin.</div>'}
   </div>`;
 }
 
-function projectContent(tasks){if(!tasks.length)return'<div class="empty">Projektet väntar på sin första uppgift.</div>';if(projectView==='board')return boardHtml(tasks);if(projectView==='calendar')return calendarHtml(tasks);if(projectView==='flow')return flowHtml(tasks);return tasks.map(taskGroupHtml).join('')}
+function categoryProjectBlock(p,projectTasks){
+  return `<section class="category-project-block"><button class="category-project-head" data-view="project:${p.id}">${projectIconHtml(p)}<strong>${escapeHtml(p.name)}</strong><span>${projectTasks.length}</span></button>${projectNextStepsHtml(projectTasks,true)}${projectTasks.length?projectTasks.map(taskGroupHtml).join(''):'<p class="hint">Inga aktiva uppgifter i projektet.</p>'}</section>`;
+}
+
+const projectStarterTemplates={
+  simple:['Definiera målet','Lista första konkreta stegen','Bestäm vem som äger nästa steg','Sätt första datumet'],
+  launch:['Skriv kort målbild','Skapa första versionen','Testa med en person','Samla feedback','Planera lansering'],
+  home:['Mät och dokumentera nuläge','Välj lösning eller material','Köp eller boka det som behövs','Gör första praktiska momentet','Följ upp och avsluta']
+};
+
+function projectStarterHtml(){
+  return `<section class="project-starter-card">
+    <div><p class="eyebrow">NYTT PROJEKT</p><h3>Starta med färdiga första steg</h3><p>Välj en lätt mall. Du kan ändra allt efteråt.</p></div>
+    <div class="project-starter-options">
+      <button data-project-template="simple"><strong>Enkel plan</strong><small>Mål, steg, ägare, datum</small></button>
+      <button data-project-template="launch"><strong>Lansering</strong><small>Bygga, testa, feedback</small></button>
+      <button data-project-template="home"><strong>Praktiskt projekt</strong><small>Mäta, välja, köpa, göra</small></button>
+    </div>
+  </section>`;
+}
+
+async function applyProjectStarter(templateName){
+  const p=view.startsWith('project:')?project(view.split(':')[1]):null;
+  if(!p)throw new Error('Öppna ett projekt först.');
+  const titles=projectStarterTemplates[templateName]||projectStarterTemplates.simple;
+  for(const [index,title] of titles.entries()){
+    const dueAt=index===0?todayPlanTime():null;
+    await createCloudTask({
+      title,
+      notes:'',
+      projectId:p.id,
+      assigneeId:defaultAssigneeForProject(p.id),
+      bucket:index===0?'today':'later',
+      priority:index===0?2:3,
+      due:dueAt?formatDateTime(dueAt):'',
+      dueAt,
+      status:'todo'
+    });
+  }
+  await load();
+  toast(`${titles.length} startsteg skapade.`);
+}
+
+function projectHealthCardHtml(tasks){
+  const projectId=view.startsWith('project:')?view.split(':')[1]:tasks[0]?.projectId,all=state.tasks.filter(t=>t.projectId===projectId),active=all.filter(t=>!t.completed),done=all.filter(t=>t.completed),overdue=active.filter(isOverdue),waiting=active.filter(t=>t.status==='waiting'||(!t.visible&&!t.completed)),unplanned=active.filter(t=>t.visible&&!t.dueAt&&t.bucket!=='someday'),p1=active.filter(t=>t.priority===1),people=[...new Set(active.map(t=>t.assigneeId).filter(Boolean))].map(person),pct=all.length?Math.round(done.length/all.length*100):0;
+  const risk=overdue.length?'risk':waiting.length||unplanned.length>3?'warn':'ok';
+  const riskText=risk==='risk'?'Risk':risk==='warn'?'Behöver planering':'På rätt väg';
+  return `<section class="project-health-card ${risk}">
+    <div class="project-health-main">
+      <div><p class="eyebrow">PROJEKTSTATUS</p><h3>${riskText}</h3><p>${overdue.length?`${overdue.length} försenad${overdue.length===1?' uppgift':'e uppgifter'} behöver nytt beslut.`:waiting.length?`${waiting.length} uppgift${waiting.length===1?'':'er'} väntar på någon eller något.`:'Projektet har tydliga nästa steg.'}</p></div>
+      <div class="project-health-progress"><svg viewBox="0 0 42 42"><circle cx="21" cy="21" r="16"></circle><circle style="stroke-dashoffset:${100-pct}" cx="21" cy="21" r="16"></circle></svg><span>${pct}%</span></div>
+    </div>
+    <div class="project-health-stats">
+      <span><strong>${active.length}</strong> aktiva</span>
+      <span><strong>${done.length}</strong> klara</span>
+      <span class="${overdue.length?'bad':''}"><strong>${overdue.length}</strong> sena</span>
+      <span class="${waiting.length?'warn':''}"><strong>${waiting.length}</strong> väntar</span>
+      <span><strong>${unplanned.length}</strong> utan datum</span>
+      <span><strong>${p1.length}</strong> P1</span>
+    </div>
+    ${people.length?`<div class="project-health-people"><small>Aktiva personer</small><div>${people.slice(0,6).map(avatarHtml).join('')}</div></div>`:''}
+  </section>`;
+}
+
+function projectContent(tasks){if(!tasks.length)return projectStarterHtml();if(projectView==='board')return boardHtml(tasks);if(projectView==='calendar')return calendarHtml(tasks);if(projectView==='flow')return flowHtml(tasks);return `${projectHealthCardHtml(tasks)}${projectNextStepsHtml(tasks)}${tasks.map(taskGroupHtml).join('')}`}
 function boardHtml(tasks){const columns=[[['idea','planned','todo'],'ATT GÖRA'],[['doing'],'PÅGÅR'],[['waiting'],'VÄNTAR'],[['review'],'GRANSKNING']];return `<div class="board">${columns.map(([statuses,label])=>{const cards=tasks.filter(t=>statuses.includes(t.status||'todo'));return `<div class="board-column"><h3>${label} · ${cards.length}</h3>${cards.map(t=>`<button class="board-card" data-id="${t.id}"><strong>${escapeHtml(t.title)}</strong><span class="mini-avatar" style="background:${person(t.assigneeId).color}">${person(t.assigneeId).initials}</span></button>`).join('')}</div>`}).join('')}</div>`}
 function calendarHtml(tasks){const start=startOfLocalDay();start.setDate(start.getDate()-((start.getDay()+6)%7));const days=Array.from({length:7},(_,i)=>{const d=new Date(start);d.setDate(d.getDate()+i);return d});const undated=tasks.filter(t=>!t.dueAt&&t.due);return `<div class="calendar-view">${days.map(d=>{const iso=localDateISO(d),cards=tasks.filter(t=>t.dueAt&&sameLocalDate(t.dueAt,d));return `<div class="calendar-day"><h3>${new Intl.DateTimeFormat('sv-SE',{weekday:'short'}).format(d).toUpperCase()}<small>${new Intl.DateTimeFormat('sv-SE',{day:'numeric',month:'short'}).format(d)}</small></h3>${cards.map(t=>`<div class="calendar-task" data-id="${t.id}"><strong>${escapeHtml(formatTime(t.dueAt))}</strong>${escapeHtml(t.title)}</div>`).join('')}${!cards.length?`<p>${iso===localDateISO()?'Inget planerat idag':'—'}</p>`:''}</div>`}).join('')}</div>${undated.length?`<p class="hint">${undated.length} uppgift${undated.length===1?'':'er'} har bara datumtext. Öppna uppgiften och spara en deadline för att lägga den i kalendern.</p>`:''}`}
 function flowHtml(tasks){const sorted=[...tasks].sort((a,b)=>state.dependencies.some(d=>d.taskId===b.id&&d.dependsOnTaskId===a.id)?-1:0);return `<div class="flow-view">${sorted.map(t=>`<button class="flow-node ${t.visible?'':'waiting'}" data-id="${t.id}"><strong>${escapeHtml(t.title)}</strong><small>${t.visible?'Redo att göra':`Väntar på ${state.dependencies.filter(d=>d.taskId===t.id).length} steg`}</small></button>`).join('')}</div>`}
@@ -357,6 +679,28 @@ function renderNotifications(){
   const itemHtml=items.map(n=>`<button class="notification-item ${n.readAt?'':'unread'}" data-notification="${n.id}" data-task="${n.taskId||''}"><span><strong>${escapeHtml(n.title)}</strong><p>${escapeHtml(n.body)}</p><time>${new Date(n.createdAt).toLocaleString('sv-SE',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}</time></span></button>`).join('');
   $('#notificationList').innerHTML=reminderHtml||itemHtml?reminderHtml+itemHtml:'<div class="empty">Inga notiser ännu.</div>';
   document.querySelectorAll('[data-notification]').forEach(n=>n.onclick=async()=>{if(n.dataset.notification.startsWith('reminder:')){openInspector(n.dataset.task);return}await markNotificationRead(n.dataset.notification);if(n.dataset.task)openInspector(n.dataset.task);await load()})
+}
+
+function settingsContent(){
+  const me=person(state.currentUserId),google=googleCalendarIntegrations(),slack=slackIntegrations(),mcpReady=Boolean(state.currentUserId);
+  return `<div class="settings-page">
+    <section class="settings-card account">
+      <div><p class="eyebrow">KONTO</p><h3>${escapeHtml(me.name)}</h3><p>Det här är din Orbit-identitet för tilldelning, team och MCP-åtgärder.</p></div>
+      <div class="settings-avatar">${avatarHtml(me)}<span>${escapeHtml(me.id)}</span></div>
+    </section>
+    <section class="settings-grid">
+      <article class="settings-card"><p class="eyebrow">GOOGLE CALENDAR</p><h3>${google.length?'Ansluten':'Inte ansluten'}</h3><p>${google.length?`${google.length} kalenderkoppling${google.length===1?'':'ar'} finns.`:'Anslut Google för kalenderblock och sync.'}</p><button class="secondary" id="settingsGoogleOAuth">${google.length?'Anslut igen':'Anslut Google'}</button></article>
+      <article class="settings-card"><p class="eyebrow">SLACK</p><h3>${slack.length?'Ansluten':'Inte ansluten'}</h3><p>${slack.length?`${slack.length} Slack-koppling${slack.length===1?'':'ar'} finns.`:'Anslut Slack för händelser och länkar från chattar.'}</p><button class="secondary" id="settingsSlackOAuth">${slack.length?'Anslut igen':'Anslut Slack'}</button></article>
+      <article class="settings-card"><p class="eyebrow">MCP</p><h3>${mcpReady?'Redo för AI-styrning':'Saknar användare'}</h3><p>Starta MCP-servern lokalt med rätt secrets och ORBIT_USER_ID.</p><code>npm run mcp</code></article>
+    </section>
+    ${teamSharingContent()}
+  </div>`;
+}
+
+function bindSettings(){
+  bindTeamSharing();
+  $('#settingsGoogleOAuth')?.addEventListener('click',async e=>{try{e.currentTarget.disabled=true;const url=await startGoogleCalendarOAuth();window.location.href=url}catch(error){e.currentTarget.disabled=false;toast(error.message)}});
+  $('#settingsSlackOAuth')?.addEventListener('click',async e=>{try{e.currentTarget.disabled=true;const url=await startSlackOAuth();window.location.href=url}catch(error){e.currentTarget.disabled=false;toast(error.message)}});
 }
 
 function teamSharingContent(){
@@ -474,6 +818,14 @@ function areaCards(){
   const groups=areaGroups();
   return `<div class="hierarchy-page">
     <section class="hierarchy-intro"><div><p class="eyebrow">MODELLEN</p><h3>Kategori → Område → Projekt → Task → Subtask</h3><p>Kategorier är översta nivån, t.ex. Privat, Bolag eller Jobb. Team kopplas till områden för åtkomst och är därför inte en egen uppgiftslista.</p></div><button class="primary" data-create-structure="category">＋ Ny kategori</button></section>
+    <section class="structure-builder">
+      <div><p class="eyebrow">BYGG STRUKTUR</p><h3>Skapa på rätt nivå</h3><p>Välj först om du vill skapa en helt ny kategori, ett område under en kategori eller ett projekt under ett område.</p></div>
+      <div class="structure-builder-grid">
+        <button type="button" data-create-structure="category"><strong>1</strong><span>Ny kategori</span><small>Ex. Privat, Jobb, Bolag. Skapar också första området.</small></button>
+        <button type="button" data-create-structure="area"><strong>2</strong><span>Nytt område</span><small>Ex. Huset, Båten, Foreshadow under vald kategori.</small></button>
+        <button type="button" data-create-structure="project" ${state.areas.length?'':'disabled'}><strong>3</strong><span>Nytt projekt</span><small>Ex. Bygga v1, Ny landing page under valt område.</small></button>
+      </div>
+    </section>
     ${groups.length?groups.map(group=>`<section class="category-card"><div class="category-head"><div class="category-title">${categoryIconHtml(group.category)}<div><p class="eyebrow">KATEGORI</p><h3>${escapeHtml(group.category)}</h3><p>${group.areas.length} område${group.areas.length===1?'':'n'}</p></div></div><div class="category-head-actions"><button class="secondary" data-edit-category="${escapeHtml(group.category)}">✎ Redigera kategori</button><button class="secondary" data-create-area="${escapeHtml(group.category)}">＋ Nytt område</button></div></div><div class="area-grid">${group.areas.map(areaHierarchyCard).join('')}</div></section>`).join(''):'<div class="empty">Inga områden ännu. Skapa första kategorin ovan.</div>'}
     ${areaAccessContent()}
   </div>`;
@@ -543,7 +895,27 @@ function renderTaskEditForm(t){
         <label>Deadline<input name="dueAt" type="datetime-local" value="${toDateTimeLocalValue(t.dueAt)}"></label>
         <label>Påminnelse<input name="reminderAt" type="datetime-local" value="${toDateTimeLocalValue(t.reminderAt)}"></label>
       </div>
+      <div class="task-context-card" id="editTaskContextCard">${taskContextHtml(t.projectId||'',t.assigneeId)}</div>
       <button class="primary" type="submit">Spara ändringar</button>
+    </form>
+  </details>`;
+}
+
+function renderBreakdownForm(t){
+  const existing=childrenOf(t.id).length;
+  return `<details class="breakdown-card" ${existing?'':'open'}>
+    <summary>☷ Bryt ner i små steg</summary>
+    <form id="breakdownForm" class="breakdown-form">
+      <p>Skriv ett konkret nästa steg per rad. Använd små verb: “Maila…”, “Välj…”, “Boka…”, “Testa…”.</p>
+      <textarea name="steps" placeholder="Exempel:
+Skriv första utkastet
+Skicka till Pelle
+Följ upp svaret"></textarea>
+      <div class="breakdown-options">
+        <label><input type="checkbox" name="sequential" checked> Lås upp ett steg i taget</label>
+        <label><input type="checkbox" name="today" checked> Lägg första steget i Gör idag</label>
+      </div>
+      <button class="primary" type="submit">Skapa underuppgifter</button>
     </form>
   </details>`;
 }
@@ -552,7 +924,8 @@ function bindTaskEditForm(id){
   const form=$('#taskEditForm');if(!form)return;
   const projectSelect=$('#editProjectSelect'),assigneeSelect=$('#editAssigneeSelect');
   bindScheduleAssist(form);
-  projectSelect.onchange=()=>{assigneeSelect.innerHTML=assigneeOptionsHtml(projectSelect.value,defaultAssigneeForProject(projectSelect.value))};
+  projectSelect.onchange=()=>{assigneeSelect.innerHTML=assigneeOptionsHtml(projectSelect.value,defaultAssigneeForProject(projectSelect.value));updateTaskContext('editProjectSelect','editAssigneeSelect','editTaskContextCard')};
+  assigneeSelect.onchange=()=>updateTaskContext('editProjectSelect','editAssigneeSelect','editTaskContextCard');
   form.onsubmit=async e=>{
     e.preventDefault();
     const data=Object.fromEntries(new FormData(form));
@@ -578,14 +951,49 @@ function bindTaskEditForm(id){
   };
 }
 
+function bindBreakdownForm(id){
+  const form=$('#breakdownForm'),parent=state.tasks.find(t=>t.id===id);if(!form||!parent)return;
+  form.onsubmit=async e=>{
+    e.preventDefault();
+    const data=Object.fromEntries(new FormData(form));
+    const lines=String(data.steps||'').split('\n').map(s=>s.trim()).filter(Boolean).slice(0,12);
+    if(!lines.length){toast('Skriv minst ett steg.');return}
+    const submit=form.querySelector('button[type="submit"]');submit.disabled=true;
+    try{
+      let previousId=null;
+      for(const [index,title] of lines.entries()){
+        const bucket=data.today&&index===0?'today':parent.bucket||'inbox';
+        const child=await createCloudTask({
+          title,
+          notes:'',
+          projectId:parent.projectId||null,
+          assigneeId:parent.assigneeId||state.currentUserId,
+          parentTaskId:parent.id,
+          bucket,
+          priority:parent.priority||3,
+          due:bucket==='today'?formatDateTime(todayPlanTime()):'',
+          dueAt:bucket==='today'?todayPlanTime():null,
+          status:'todo',
+          dependencyTaskIds:data.sequential&&previousId?[previousId]:[]
+        });
+        previousId=child.id;
+      }
+      await load();
+      openInspector(id);
+      toast(lines.length===1?'Underuppgiften är skapad.':`${lines.length} underuppgifter är skapade.`);
+    }catch(error){toast(error.message);submit.disabled=false}
+  };
+}
+
 function openInspector(id){
   const t=state.tasks.find(x=>x.id===id);if(!t)return;
   const p=project(t.projectId),a=person(t.assigneeId),ar=areaForProject(t.projectId),tm=team(ar?.teamId),subs=childrenOf(t.id),comments=(state.comments||[]).filter(c=>c.taskId===id);
   const when=scheduleLabel(t),remind=reminderLabel(t);
-  $('#inspectorContent').innerHTML=`<p class="eyebrow">${ar?escapeHtml(areaName(ar)).toUpperCase():'UPPGIFT'}</p><button class="check big-check p${t.priority}" id="detailCheck"></button><h2>${escapeHtml(t.title)}</h2>${subs.length?`<div class="parent-lock">Huvuduppgiften blir klar automatiskt när alla ${subs.length} delsteg är klara.</div>`:''}${t.activationReason?`<div class="activation-explain"><strong>✦ Varför ser jag detta nu?</strong>${escapeHtml(t.activationReason)}${t.activatedAt?` · ${new Date(t.activatedAt).toLocaleString('sv-SE')}`:''}</div>`:''}${t.notes?`<p style="color:#777;font-size:13px;line-height:1.6">${escapeHtml(t.notes)}</p>`:''}<div class="detail-row"><span>Status</span><strong class="status-chip">${statusLabel(t.status)}</strong></div><div class="detail-row"><span>Område</span><strong>${ar?ar.icon+' '+areaName(ar):'Inbox'}</strong></div><div class="detail-row"><span>Projekt</span><strong>${p?p.name:'Inbox'}</strong></div><div class="detail-row"><span>Tilldelad</span><strong>${a.name}</strong></div><div class="detail-row"><span>Åtkomst</span><strong>${tm?tm.name:'Endast du'}</strong></div><div class="detail-row"><span>Deadline</span><strong>${when?escapeHtml(when):'Inget datum'}</strong></div><div class="detail-row"><span>Påminnelse</span><strong>${remind?`${isReminderDue(t)?'Nu · ':''}${escapeHtml(remind)}`:'Ingen'}</strong></div>${renderTaskEditForm(t)}${subs.length?`<div class="inspector-subtasks"><h3>Underuppgifter · ${subs.filter(s=>s.completed).length}/${subs.length}</h3>${subs.map(s=>`<div class="inspector-subtask ${s.completed?'done':''} ${!s.visible?'waiting':''}">${s.completed?'✓':s.visible?`<button class="check p${s.priority}" data-id="${s.id}"></button>`:'⚡'}<span>${escapeHtml(s.title)}</span><small>${!s.visible?'Väntar':person(s.assigneeId).initials}</small></div>`).join('')}</div>`:''}${renderTriggerBox(t)}${renderCalendarSync(t)}${renderTaskLinks(t)}<div class="comment-section"><h3>Kommentarer · ${comments.length}</h3>${comments.map(c=>`<div class="comment">${avatarHtml(person(c.authorId))}<div><p>${escapeHtml(c.body)}</p><time>${new Date(c.createdAt).toLocaleString('sv-SE')}</time></div></div>`).join('')}<form class="comment-form" id="commentForm"><input name="comment" placeholder="Skriv en kommentar eller @nämn någon…" required><button>Skicka</button></form></div>`;
+  $('#inspectorContent').innerHTML=`<p class="eyebrow">${ar?escapeHtml(areaName(ar)).toUpperCase():'UPPGIFT'}</p><button class="check big-check p${t.priority}" id="detailCheck"></button><h2>${escapeHtml(t.title)}</h2>${subs.length?`<div class="parent-lock">Huvuduppgiften blir klar automatiskt när alla ${subs.length} delsteg är klara.</div>`:''}${t.activationReason?`<div class="activation-explain"><strong>✦ Varför ser jag detta nu?</strong>${escapeHtml(t.activationReason)}${t.activatedAt?` · ${new Date(t.activatedAt).toLocaleString('sv-SE')}`:''}</div>`:''}${t.notes?`<p style="color:#777;font-size:13px;line-height:1.6">${escapeHtml(t.notes)}</p>`:''}<div class="detail-row"><span>Status</span><strong class="status-chip">${statusLabel(t.status)}</strong></div><div class="detail-row"><span>Område</span><strong>${ar?ar.icon+' '+areaName(ar):'Inbox'}</strong></div><div class="detail-row"><span>Projekt</span><strong>${p?p.name:'Inbox'}</strong></div><div class="detail-row"><span>Tilldelad</span><strong>${a.name}</strong></div><div class="detail-row"><span>Åtkomst</span><strong>${tm?tm.name:'Endast du'}</strong></div><div class="detail-row"><span>Deadline</span><strong>${when?escapeHtml(when):'Inget datum'}</strong></div><div class="detail-row"><span>Påminnelse</span><strong>${remind?`${isReminderDue(t)?'Nu · ':''}${escapeHtml(remind)}`:'Ingen'}</strong></div>${renderTaskEditForm(t)}${renderBreakdownForm(t)}${subs.length?`<div class="inspector-subtasks"><h3>Underuppgifter · ${subs.filter(s=>s.completed).length}/${subs.length}</h3>${subs.map(s=>`<div class="inspector-subtask ${s.completed?'done':''} ${!s.visible?'waiting':''}">${s.completed?'✓':s.visible?`<button class="check p${s.priority}" data-id="${s.id}"></button>`:'⚡'}<span>${escapeHtml(s.title)}</span><small>${!s.visible?'Väntar':person(s.assigneeId).initials}</small></div>`).join('')}</div>`:''}${renderTriggerBox(t)}${renderCalendarSync(t)}${renderTaskLinks(t)}<div class="comment-section"><h3>Kommentarer · ${comments.length}</h3>${comments.map(c=>`<div class="comment">${avatarHtml(person(c.authorId))}<div><p>${escapeHtml(c.body)}</p><time>${new Date(c.createdAt).toLocaleString('sv-SE')}</time></div></div>`).join('')}<form class="comment-form" id="commentForm"><input name="comment" placeholder="Skriv en kommentar eller @nämn någon…" required><button>Skicka</button></form></div>`;
   $('#detailCheck').onclick=()=>{complete(id);if(!subs.length)$('#inspector').classList.remove('open')};
   document.querySelectorAll('.inspector-subtask .check').forEach(b=>b.onclick=async()=>{await complete(b.dataset.id);openInspector(id)});
   bindTaskEditForm(id);
+  bindBreakdownForm(id);
   bindCalendarSync(id);
   $('#taskLinkForm').onsubmit=async e=>{e.preventDefault();const f=new FormData(e.target);await addTaskLink(id,{kind:f.get('kind'),title:f.get('title'),url:f.get('url')});await load();openInspector(id);toast('Länken är tillagd.')};
   $('#commentForm').onsubmit=async e=>{e.preventDefault();const body=new FormData(e.target).get('comment');await addComment(id,body);await load();openInspector(id)};
@@ -645,9 +1053,22 @@ function renderAgentPanel(){
   card.style.display=view==='today'?'block':'none';
   const latest=[...(state.agentRuns||[])].sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt))[0],actions=latest?.result?.proposedActions||[];
   $('#agentSummary').textContent=latest?.result?.summary||'Kör agenten för att få konkreta nästa steg baserat på prioritet, inbox, kalenderläge, väntelägen och app-länkar.';
-  $('#agentActions').innerHTML=actions.length?actions.slice(0,5).map(a=>`<button class="agent-action" ${a.taskId?`data-agent-task="${a.taskId}"`:''}><span>${escapeHtml((a.type||'next').toUpperCase())}</span><strong>${escapeHtml(a.text||'Föreslagen åtgärd')}</strong>${a.taskTitle?`<small>${escapeHtml(a.taskTitle)}</small>`:''}</button>`).join(''):'<p class="hint">Inga agentförslag sparade ännu.</p>';
+  $('#agentActions').innerHTML=`${waitingInsightHtml()}${actions.length?actions.slice(0,5).map(a=>`<button class="agent-action" ${a.taskId?`data-agent-task="${a.taskId}"`:''}><span>${escapeHtml((a.type||'next').toUpperCase())}</span><strong>${escapeHtml(a.text||'Föreslagen åtgärd')}</strong>${a.taskTitle?`<small>${escapeHtml(a.taskTitle)}</small>`:''}</button>`).join(''):'<p class="hint">Inga agentförslag sparade ännu.</p>'}`;
   $('#agentActions').querySelectorAll('[data-agent-task]').forEach(b=>b.onclick=()=>openInspector(b.dataset.agentTask));
+  $('#agentActions').querySelectorAll('[data-waiting-task]').forEach(b=>b.onclick=()=>openInspector(b.dataset.waitingTask));
   $('#runAgent').onclick=async()=>{const plan=buildAgentPlan();await saveAgentRun(plan);await load();toast('Agenten har föreslagit nästa steg.')};
+}
+
+function waitingInsightHtml(){
+  const visibleWaiting=topLevel(visible().filter(t=>t.status==='waiting'));
+  const hiddenWaiting=state.tasks.filter(t=>!t.visible&&!t.completed);
+  const parentWaiting=topLevel(visible().filter(t=>hiddenWaiting.some(h=>h.parentTaskId===t.id)));
+  const items=[...visibleWaiting.map(t=>({task:t,label:t.activationReason||t.trigger?.label||'Markerad som väntar'})),...parentWaiting.map(t=>({task:t,label:`${hiddenWaiting.filter(h=>h.parentTaskId===t.id).length} dolt nästa steg väntar på villkor`}))].filter((item,index,self)=>self.findIndex(x=>x.task.id===item.task.id)===index).slice(0,4);
+  if(!items.length&&!hiddenWaiting.length)return'';
+  return `<section class="waiting-insight">
+    <div class="waiting-insight-head"><div><span>VÄNTAR</span><strong>${items.length||hiddenWaiting.length} blockerad${(items.length||hiddenWaiting.length)===1?'':'e'} sak${(items.length||hiddenWaiting.length)===1?'':'er'}</strong></div><small>${hiddenWaiting.length} dold${hiddenWaiting.length===1?'':'a'} trigger-task${hiddenWaiting.length===1?'':'s'}</small></div>
+    <div class="waiting-insight-list">${items.length?items.map(({task,label})=>`<button data-waiting-task="${task.id}"><strong>${escapeHtml(task.title)}</strong><small>${escapeHtml(label)}</small></button>`).join(''):`<p class="hint">${hiddenWaiting.length} dolda uppgifter väntar på externa triggers eller kedjor.</p>`}</div>
+  </section>`;
 }
 
 function currentCategory(){
@@ -681,9 +1102,40 @@ function setStructureIcon(icon='◫'){
   document.querySelectorAll('[data-icon-choice]').forEach(b=>b.classList.toggle('active',b.dataset.iconChoice===value));
 }
 
+function structureLevel(mode='category'){
+  if(mode.includes('project'))return'project';
+  if(mode.includes('area'))return'area';
+  return'category';
+}
+
+function updateStructureStepper(mode='category'){
+  const level=structureLevel(mode),editing=mode.startsWith('edit-');
+  const stepper=$('#structureStepper'),hint=$('#structureNextHint');
+  if(stepper)stepper.classList.toggle('editing',editing);
+  document.querySelectorAll('[data-structure-step]').forEach(b=>{
+    const step=b.dataset.structureStep;
+    b.classList.toggle('active',step===level);
+    b.disabled=editing||(step==='project'&&!state.areas.length);
+  });
+  if(!hint)return;
+  const copy={
+    category:'Du skapar översta nivån. För att kategorin ska synas skapas också ett första område i den.',
+    area:'Du skapar ett område under vald kategori. Området kan delas med ett team och innehålla flera projekt.',
+    project:state.areas.length?'Du skapar ett projekt under valt område. Uppgifter i projektet följer områdets åtkomst.':'Skapa minst ett område först, sedan kan projekt läggas under det.',
+    'edit-category':'Ändringen påverkar kategorin som gruppering. Områdena ligger kvar under det nya namnet.',
+    'edit-area':'Om du byter kategori flyttas området i vänsterspalten. Teamdelning gäller allt under området.',
+    'edit-project':'Om du flyttar projektet till annat område följer projektets uppgifter det nya områdets åtkomst.'
+  };
+  hint.textContent=copy[mode]||copy[level]||'';
+}
+
 function openStructureDialog(mode='category',context={}){
   const dialog=$('#structureDialog'),form=$('#structureForm');
   if(!dialog||!form)return;
+  if(mode==='project'&&!state.areas.length){
+    toast('Skapa ett område först. Projekt måste ligga under ett område.');
+    mode='category';
+  }
   form.reset();
   const editingCategory=mode==='edit-category',editingArea=mode==='edit-area',editingProject=mode==='edit-project',editing=editingCategory||editingArea||editingProject;
   const currentArea=editingArea?area(context.areaId):null,currentProject=editingProject?project(context.projectId):null,projectArea=currentProject?area(currentProject.areaId):null;
@@ -698,6 +1150,7 @@ function openStructureDialog(mode='category',context={}){
   form.elements.category.value=editingCategory?category:(category==='Privat'&&mode==='category'?'':category);
   form.elements.areaId.value=areaId;
   form.elements.name.value=editingCategory?category:currentArea?areaName(currentArea):currentProject?.name||'';
+  form.elements.areaId.disabled=mode==='project'||editingProject?!state.areas.length:false;
   showStructureField('#structureCategoryField',mode!=='project'&&!editingCategory&&mode!=='edit-project');
   showStructureField('#structureAreaField',mode==='project'||editingProject);
   showStructureField('#structureIconField',true);
@@ -718,7 +1171,8 @@ function openStructureDialog(mode='category',context={}){
   $('#structureNameLabel').textContent=editingCategory?'Kategorins namn':mode.includes('project')?'Projektets namn':mode.includes('area')?'Områdets namn':'Första området i kategorin';
   $('#structureNameInput').placeholder=editingCategory?'T.ex. Privat, Jobb eller Bolag':mode.includes('project')?'T.ex. Bygga v1':mode.includes('area')?'T.ex. Huset, Barnen eller Båten':'T.ex. Allmänt, Huset eller Foreshadow';
   $('#saveStructure').textContent=editing?'Spara ändringar':mode==='project'?'Skapa projekt':mode==='area'?'Skapa område':'Skapa kategori';
-  dialog.showModal();
+  updateStructureStepper(mode);
+  if(!dialog.open)dialog.showModal();
   setTimeout(()=>editing||mode==='project'?$('#structureNameInput').focus():form.elements.category.focus(),50);
 }
 
@@ -786,12 +1240,18 @@ $('#structureForm').onsubmit=async e=>{
   finally{save.disabled=false}
 };
 
-function refreshAssignees(){const projectId=$('#projectSelect').value;$('#assigneeSelect').innerHTML=assigneeOptionsHtml(projectId,defaultAssigneeForProject(projectId))}
+function refreshAssignees(){
+  const projectId=$('#projectSelect').value;
+  $('#assigneeSelect').innerHTML=assigneeOptionsHtml(projectId,defaultAssigneeForProject(projectId));
+  updateTaskContext();
+}
 function openDialog(prefill={}){
   $('#taskForm').reset();
   $('#linkDetails').open=false;
   $('#projectSelect').innerHTML=projectOptionsHtml('');
-  if(view.startsWith('project:'))$('#projectSelect').value=view.split(':')[1]; else if(bucketViews.includes(view))$('#taskForm').elements.bucket.value=view;
+  if(prefill.projectId)$('#projectSelect').value=prefill.projectId;
+  else if(view.startsWith('project:'))$('#projectSelect').value=view.split(':')[1];
+  else if(bucketViews.includes(view))$('#taskForm').elements.bucket.value=view;
   const candidates=state.tasks.filter(t=>!t.completed&&t.visible);
   $('#parentTaskSelect').innerHTML='<option value="">Ingen — fristående uppgift</option>'+candidates.map(t=>`<option value="${t.id}">${escapeHtml(t.title)}</option>`).join('');
   $('#dependencyTaskSelect').innerHTML=candidates.map(t=>`<option value="${t.id}">${escapeHtml(t.title)}</option>`).join('');
@@ -810,10 +1270,16 @@ function openDialog(prefill={}){
   $('#taskDialog').showModal();setTimeout(()=>$('#newTitle').focus(),50)
 }
 $('#projectSelect').onchange=refreshAssignees;
+$('#assigneeSelect').onchange=()=>updateTaskContext();
 $('#quickAdd').onclick=$('#addRow').onclick=$('#mobileAdd').onclick=openDialog;$('#closeInspector').onclick=()=>$('#inspector').classList.remove('open');
 document.querySelectorAll('[data-close-task-dialog]').forEach(b=>b.onclick=()=>$('#taskDialog').close());
 document.querySelectorAll('[data-close-structure-dialog]').forEach(b=>b.onclick=()=>$('#structureDialog').close());
 document.querySelectorAll('[data-icon-choice]').forEach(b=>b.onclick=()=>setStructureIcon(b.dataset.iconChoice));
+document.querySelectorAll('[data-structure-step]').forEach(b=>b.onclick=()=>{
+  const form=$('#structureForm'),current=form?.elements?.mode?.value||'category';
+  if(current.startsWith('edit-'))return;
+  openStructureDialog(b.dataset.structureStep,{category:form?.elements?.category?.value||currentCategory(),areaId:form?.elements?.areaId?.value||currentAreaId()});
+});
 $('#structureForm')?.elements?.icon?.addEventListener('input',e=>setStructureIcon(e.target.value));
 document.querySelectorAll('[data-project-view]').forEach(b=>b.onclick=()=>{projectView=b.dataset.projectView;document.querySelectorAll('[data-project-view]').forEach(x=>x.classList.toggle('active',x===b));render()});
 $('#notificationButton').onclick=()=>$('#notificationPanel').classList.add('open');$('#closeNotifications').onclick=()=>$('#notificationPanel').classList.remove('open');

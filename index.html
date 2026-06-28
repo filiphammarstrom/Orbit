@@ -30,7 +30,7 @@
     <div class="brand"><span class="brandmark">O</span><span>orbit</span><button class="collapse">‹</button></div>
     <button class="quick-add" id="quickAdd"><span>＋</span> Ny uppgift <kbd>N</kbd></button>
     <nav id="mainNav"></nav>
-    <div class="nav-section"><div class="nav-label"><span>KATEGORIER</span><button title="Ny kategori eller område" data-create-structure="category">＋</button></div><div id="projectNav"></div></div>
+    <div class="nav-section"><div class="nav-label"><span>Kategori</span><button title="Ny kategori" data-create-structure="category">＋</button></div><div id="projectNav"></div></div>
     <div class="sidebar-foot"><div class="avatar">FH</div><div><strong id="currentUserName">Mitt konto</strong><small>Min arbetsyta</small></div><button id="logoutButton" title="Logga ut">↪</button></div>
   </aside>
   <main>
@@ -60,6 +60,7 @@
         <label>Underuppgift till<select name="parentTaskId" id="parentTaskSelect"><option value="">Ingen — fristående uppgift</option></select></label>
         <label>Återkommer<select name="recurrenceRule"><option value="">Nej</option><option value="daily">Dagligen</option><option value="weekly">Varje vecka</option><option value="monthly">Varje månad</option></select></label>
       </div>
+      <div class="task-context-card" id="taskContextCard"></div>
       <div class="form-grid schedule-grid">
         <label>Snabbtext<input name="due" placeholder="T.ex. imorgon 09:00 eller fredag 14:00"></label>
         <label>Deadline<input name="dueAt" type="datetime-local"></label>
@@ -93,6 +94,11 @@
     <form method="dialog" id="structureForm" class="structure-form">
       <div class="dialog-head"><div><p class="eyebrow" id="structureEyebrow">STRUKTUR</p><h2 id="structureTitle">Ny kategori</h2></div><button type="button" data-close-structure-dialog class="close">×</button></div>
       <p class="hint structure-help" id="structureHelp">Skapa kategori, område eller projekt på rätt nivå.</p>
+      <div class="structure-stepper" id="structureStepper" aria-label="Strukturnivå">
+        <button type="button" data-structure-step="category"><strong>1</strong><span>Kategori</span><small>Privat, Jobb, Bolag</small></button>
+        <button type="button" data-structure-step="area"><strong>2</strong><span>Område</span><small>Huset, Båten, Foreshadow</small></button>
+        <button type="button" data-structure-step="project"><strong>3</strong><span>Projekt</span><small>Bygga v1, Nytt ljudsystem</small></button>
+      </div>
       <input type="hidden" name="mode">
       <input type="hidden" name="entityId">
       <input type="hidden" name="originalCategory">
@@ -104,6 +110,7 @@
         <label id="structureColorField">Färg<input name="color" type="color" value="#7659ef"></label>
         <label id="structureTeamField">Delas med<select name="teamId" id="structureTeamSelect"></select></label>
       </div>
+      <div class="structure-next" id="structureNextHint"></div>
       <div class="dialog-actions"><button type="button" data-close-structure-dialog class="secondary">Avbryt</button><button value="default" class="primary" id="saveStructure">Skapa</button></div>
     </form>
   </dialog>
