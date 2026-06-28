@@ -21,7 +21,18 @@ create table if not exists public.areas (
 );
 create table if not exists public.projects (
   id uuid primary key default gen_random_uuid(), area_id uuid not null references public.areas(id) on delete cascade,
-  name text not null, color text not null default '#8b70ff', archived_at timestamptz, created_at timestamptz not null default now()
+  name text not null, icon text not null default '▣', color text not null default '#8b70ff', archived_at timestamptz, created_at timestamptz not null default now()
+);
+create table if not exists public.category_settings (
+  id uuid primary key default gen_random_uuid(),
+  owner_id uuid not null references public.profiles(id) on delete cascade,
+  name text not null,
+  icon text not null default '▣',
+  color text not null default '#7659ef',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique(owner_id, name),
+  check (char_length(trim(name)) > 0)
 );
 create table if not exists public.tasks (
   id uuid primary key default gen_random_uuid(), project_id uuid references public.projects(id) on delete cascade,
@@ -77,6 +88,9 @@ alter table public.profiles enable row level security; alter table public.teams 
 alter table public.team_members enable row level security; alter table public.areas enable row level security;
 alter table public.projects enable row level security; alter table public.tasks enable row level security;
 alter table public.task_events enable row level security; alter table public.invitations enable row level security;
+alter table public.category_settings enable row level security;
+
+grant select, insert, update, delete on public.category_settings to authenticated;
 
 create policy "profile self or teammate read" on public.profiles for select to authenticated using (
  id=(select auth.uid()) or exists(select 1 from public.team_members mine join public.team_members theirs on theirs.team_id=mine.team_id where mine.user_id=(select auth.uid()) and theirs.user_id=profiles.id and mine.status='active')
@@ -92,6 +106,10 @@ create policy "areas owner insert" on public.areas for insert to authenticated w
 create policy "areas owner update" on public.areas for update to authenticated using(owner_id=(select auth.uid())) with check(owner_id=(select auth.uid()));
 create policy "projects area read" on public.projects for select to authenticated using(private.can_access_area(area_id));
 create policy "projects area write" on public.projects for all to authenticated using(private.can_access_area(area_id)) with check(private.can_access_area(area_id));
+create policy "category settings owner read" on public.category_settings for select to authenticated using(owner_id=(select auth.uid()));
+create policy "category settings owner insert" on public.category_settings for insert to authenticated with check(owner_id=(select auth.uid()));
+create policy "category settings owner update" on public.category_settings for update to authenticated using(owner_id=(select auth.uid())) with check(owner_id=(select auth.uid()));
+create policy "category settings owner delete" on public.category_settings for delete to authenticated using(owner_id=(select auth.uid()));
 create policy "tasks permitted read" on public.tasks for select to authenticated using(created_by=(select auth.uid()) or project_id in (select p.id from public.projects p where private.can_access_area(p.area_id)));
 create policy "tasks permitted insert" on public.tasks for insert to authenticated with check(created_by=(select auth.uid()) and (project_id is null or exists(select 1 from public.projects p where p.id=project_id and private.can_access_area(p.area_id) and (assignee_id is null or private.user_can_access_area(assignee_id,p.area_id)))));
 create policy "tasks permitted update" on public.tasks for update to authenticated using(created_by=(select auth.uid()) or project_id in (select p.id from public.projects p where private.can_access_area(p.area_id))) with check(project_id is null or exists(select 1 from public.projects p where p.id=project_id and private.can_access_area(p.area_id) and (assignee_id is null or private.user_can_access_area(assignee_id,p.area_id))));
@@ -104,6 +122,8 @@ begin
   insert into public.profiles(id,name,initials)
   values(new.id,coalesce(new.raw_user_meta_data->>'name',split_part(new.email,'@',1)),upper(left(coalesce(new.raw_user_meta_data->>'name',new.email),2)))
   on conflict (id) do nothing;
+  insert into public.category_settings(owner_id,name,icon,color) values(new.id,'Privat','⌂','#49a58f')
+  on conflict (owner_id,name) do nothing;
   insert into public.areas(name,icon,color,category,owner_id) values('Allmänt','⌂','#49a58f','Privat',new.id);
   insert into public.team_members(team_id,user_id,role,status)
   select i.team_id,new.id,i.role,'active' from public.invitations i

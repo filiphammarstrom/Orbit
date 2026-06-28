@@ -138,6 +138,7 @@ export async function loadCloudState() {
     teams,
     members,
     areas,
+    categorySettings,
     projects,
     tasks,
     dependencies,
@@ -157,6 +158,7 @@ export async function loadCloudState() {
     supabase.from('teams').select('*'),
     supabase.from('team_members').select('*'),
     supabase.from('areas').select('*').order('created_at'),
+    supabase.from('category_settings').select('*').order('name'),
     supabase.from('projects').select('*').is('archived_at', null).order('created_at'),
     supabase.from('tasks').select('*').order('created_at', { ascending: false }),
     supabase.from('task_dependencies').select('*'),
@@ -173,7 +175,7 @@ export async function loadCloudState() {
     supabase.from('integration_events').select('*').order('created_at', { ascending: false }).limit(100)
   ]);
 
-  const failed = [profiles, teams, members, areas, projects, tasks, dependencies, comments, notifications, activity, approvals, taskLinks, dailyBriefs, agentRuns, invitations, integrations, calendarLinks, integrationEvents].find(r => r.error);
+  const failed = [profiles, teams, members, areas, categorySettings, projects, tasks, dependencies, comments, notifications, activity, approvals, taskLinks, dailyBriefs, agentRuns, invitations, integrations, calendarLinks, integrationEvents].find(r => r.error);
   if (failed) throw failed.error;
 
   return {
@@ -186,9 +188,11 @@ export async function loadCloudState() {
     })),
     teamMembers: members.data.map(m => ({ teamId: m.team_id, userId: m.user_id, role: m.role, status: m.status })),
     areas: areas.data.map(a => ({ id: a.id, name: a.name, icon: a.icon, color: a.color, category: a.category || 'Privat', ownerId: a.owner_id, teamId: a.team_id })),
+    categorySettings: categorySettings.data.map(c => ({ id: c.id, ownerId: c.owner_id, name: c.name, icon: c.icon || '▣', color: c.color || '#7659ef' })),
     projects: projects.data.map(p => ({
       id: p.id,
       name: p.name,
+      icon: p.icon || '▣',
       color: p.color,
       areaId: p.area_id,
       objective: p.objective,
@@ -332,6 +336,7 @@ export function subscribeToChanges(onChange) {
     .on('postgres_changes', { event: '*', schema: 'public', table: 'teams' }, onChange)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'team_members' }, onChange)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'areas' }, onChange)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'category_settings' }, onChange)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'projects' }, onChange)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'invitations' }, onChange)
     .subscribe();
@@ -587,6 +592,7 @@ export async function updateProject(id, patch) {
     row.name = name.slice(0, 120);
   }
   if (Object.prototype.hasOwnProperty.call(patch, 'color')) row.color = patch.color || '#8b70ff';
+  if (Object.prototype.hasOwnProperty.call(patch, 'icon')) row.icon = String(patch.icon || '▣').trim().slice(0, 2) || '▣';
   if (Object.prototype.hasOwnProperty.call(patch, 'areaId')) {
     if (!patch.areaId) throw new Error('Välj vilket område projektet ska ligga under.');
     row.area_id = patch.areaId;
@@ -652,19 +658,38 @@ export async function createProject(input = {}) {
   const { data, error } = await supabase.from('projects').insert({
     area_id: input.areaId,
     name: name.slice(0, 120),
+    icon: String(input.icon || '▣').trim().slice(0, 2) || '▣',
     color: input.color || '#8b70ff'
   }).select().single();
   if (error) throw error;
   return data;
 }
 
-export async function renameCategory(oldCategory, newCategory) {
+export async function upsertCategorySetting(input = {}) {
+  const user = (await session())?.user;
+  if (!user) throw new Error('Du är inte inloggad.');
+  const name = String(input.name || '').trim() || 'Privat';
+  const { data, error } = await supabase.from('category_settings').upsert({
+    owner_id: user.id,
+    name: name.slice(0, 80),
+    icon: String(input.icon || '▣').trim().slice(0, 2) || '▣',
+    color: input.color || '#7659ef',
+    updated_at: new Date().toISOString()
+  }, { onConflict: 'owner_id,name' }).select().single();
+  if (error) throw error;
+  return data;
+}
+
+export async function renameCategory(oldCategory, newCategory, visual = {}) {
   const user = (await session())?.user;
   if (!user) throw new Error('Du är inte inloggad.');
   const from = String(oldCategory || '').trim() || 'Privat';
   const to = String(newCategory || '').trim() || 'Privat';
   if (!to) throw new Error('Kategorin behöver ett namn.');
-  if (from === to) return [];
+  if (from === to) {
+    await upsertCategorySetting({ name: to, icon: visual.icon, color: visual.color });
+    return [];
+  }
 
   const { data, error } = await supabase.from('areas')
     .update({ category: to.slice(0, 80) })
@@ -673,6 +698,8 @@ export async function renameCategory(oldCategory, newCategory) {
     .select();
   if (error) throw error;
   if (!data?.length) throw new Error('Du kan bara byta namn på kategorier som innehåller egna områden.');
+  await upsertCategorySetting({ name: to, icon: visual.icon, color: visual.color });
+  await supabase.from('category_settings').delete().eq('owner_id', user.id).eq('name', from);
   return data;
 }
 

@@ -74,6 +74,7 @@ const tools = [
       properties: {
         areaId: { type: 'string' },
         name: { type: 'string' },
+        icon: { type: 'string' },
         color: { type: 'string' },
         objective: { type: 'string' },
         ownerId: { type: 'string' },
@@ -93,6 +94,7 @@ const tools = [
       properties: {
         projectId: { type: 'string' },
         name: { type: 'string' },
+        icon: { type: 'string' },
         color: { type: 'string' },
         objective: { type: 'string' },
         ownerId: { type: 'string' },
@@ -781,6 +783,7 @@ async function call(name, a = {}) {
     const { data, error } = await db.from('projects').insert({
       area_id: a.areaId,
       name: a.name,
+      icon: String(a.icon || '▣').trim().slice(0, 2) || '▣',
       color: a.color || '#8b70ff',
       objective: a.objective || '',
       owner_id: ownerId,
@@ -800,6 +803,7 @@ async function call(name, a = {}) {
     if (a.ownerId && !canUserAccessArea(ctx, ownerId, project.area_id)) throw new Error('Projektägaren har inte åtkomst till området.');
     const row = compactRow({
       name: a.name,
+      icon: a.icon ? String(a.icon).trim().slice(0, 2) || '▣' : undefined,
       color: a.color,
       objective: a.objective,
       owner_id: a.ownerId,

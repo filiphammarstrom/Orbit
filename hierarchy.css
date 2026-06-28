@@ -133,11 +133,30 @@
   font-weight: 800;
 }
 
-.tree-main span:not(.area-icon),
+.tree-main span:not(.area-icon):not(.category-icon),
 .tree-project span:last-of-type {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.category-icon,
+.project-icon {
+  color: #fff;
+  display: grid;
+  font-size: 11px;
+  font-weight: 900;
+  height: 22px;
+  place-items: center;
+  width: 22px;
+}
+
+.category-icon {
+  border-radius: 8px;
+}
+
+.project-icon {
+  border-radius: 7px;
 }
 
 .tree-main small {
@@ -282,6 +301,18 @@
   justify-content: flex-end;
 }
 
+.category-title {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+}
+
+.category-title .category-icon {
+  font-size: 15px;
+  height: 38px;
+  width: 38px;
+}
+
 .category-head .secondary {
   align-self: flex-start;
 }
@@ -289,6 +320,12 @@
 .project-chip {
   display: inline-flex;
   gap: 2px;
+}
+
+.area-card-projects .project-chip {
+  background: transparent;
+  color: inherit;
+  padding: 0;
 }
 
 .area-card-projects button {
@@ -306,6 +343,19 @@
 
 .area-card-projects .chip-edit {
   padding: 6px 8px;
+}
+
+.area-card-projects .project-icon {
+  flex: 0 0 auto;
+  height: 19px;
+  padding: 0;
+  width: 19px;
+}
+
+.category-project-head .project-icon {
+  font-size: 10px;
+  height: 20px;
+  width: 20px;
 }
 
 .area-card-projects button:hover {
