@@ -109,7 +109,12 @@ Länkar från andra appar:
 - Orbit är förberedd som PWA med Web Share Target. När appen installeras på en enhet som stödjer detta kan användaren dela en webbsida/länk till Orbit och få “Ny uppgift”-dialogen förifylld.
 - Installerad PWA har också genvägar för Ny uppgift, Gör idag, Inbox och Review. `/?quick=task` öppnar snabb uppgift och `/?view=today|inbox|review|later|someday|areas` öppnar rätt vy direkt.
 - Samma flöde kan öppnas manuellt med query-parametrar, t.ex. `https://orbit-iota-sage.vercel.app/?capture=1&title=Svara%20Pelle&url=https%3A%2F%2Fmail.google.com%2F...`
-- Stödda parametrar: `title`, `text`, `url`, eller `captureTitle`, `captureText`, `captureUrl`.
+- Stödda capture-parametrar:
+  - innehåll: `title`, `text`, `url`, eller `captureTitle`, `captureText`, `captureUrl`
+  - planering: `bucket`/`view` (`inbox`, `today`, `later`, `someday`), `priority`/`prio` (`p1`, `p2`, `p3`), `due`/`when`, `dueAt`, `reminderAt`
+  - placering: `projectId` eller `project`/`projectName`, samt `assigneeId` eller `assignee`/`to`
+  - styrning: `status`, `taskType`, `recurrence`, `trigger`/`event`
+  - exempel: `/?quick=task&title=Ring%20Pelle&bucket=today&prio=p1&due=imorgon%2009:00&project=Foreshadow&to=Filip`
 - Orbit försöker känna igen Gmail, Outlook, Google Docs, Google Calendar och Slack-länkar och sätter rätt länktyp/app i uppgiften.
 - Kommandopaletten (`⌘K`/`Ctrl+K`) kan öppna tasks/projekt/områden och köra snabbactions som Ny uppgift, Ny kategori, Gå till Inbox/Review/Struktur, Uppdatera dagens brief och Kör Orbit-agenten.
 

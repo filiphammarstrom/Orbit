@@ -137,6 +137,45 @@ const projectOptionsHtml=selected=>'<option value="">Inbox / inget projekt</opti
 const assigneesForProject=projectId=>{const p=project(projectId);return p?membersForArea(area(p.areaId)):[person(state.currentUserId)]};
 const assigneeOptionsHtml=(projectId,selected)=>{const list=assigneesForProject(projectId);if(selected&&!list.some(p=>p.id===selected))list.push(person(selected));return list.map(p=>option(p.id,p.name,selected||list[0]?.id)).join('')};
 const defaultAssigneeForProject=projectId=>assigneesForProject(projectId)[0]?.id||state.currentUserId;
+const normalizeTextKey=value=>String(value||'').trim().toLocaleLowerCase('sv-SE');
+function normalizeBucket(value){
+  const key=normalizeTextKey(value);
+  if(['today','idag','gör idag','gor idag','do today'].includes(key))return'today';
+  if(['later','sen','gör sen','gor sen','next','soon'].includes(key))return'later';
+  if(['someday','någon gång','nagon gang','gör nån gång','gor nan gang','sometime'].includes(key))return'someday';
+  if(['inbox','inkorg','quick','capture'].includes(key))return'inbox';
+  return bucketViews.includes(key)?key:'';
+}
+function normalizePriority(value){
+  const key=normalizeTextKey(value).replace(/^prio\s*/,'p');
+  if(['1','p1','hög','hog','high','urgent','akut'].includes(key))return'1';
+  if(['2','p2','medium','medel'].includes(key))return'2';
+  if(['3','p3','låg','lag','low'].includes(key))return'3';
+  return'';
+}
+function resolveProjectId(value){
+  const raw=String(value||'').trim();if(!raw)return'';
+  const key=normalizeTextKey(raw);
+  return state.projects.find(p=>p.id===raw||normalizeTextKey(p.name)===key||normalizeTextKey(`${areaName(area(p.areaId))} ${p.name}`)===key||normalizeTextKey(`${areaCategory(area(p.areaId))} ${areaName(area(p.areaId))} ${p.name}`)===key)?.id||'';
+}
+function resolveAssigneeId(projectId,value){
+  const raw=String(value||'').trim();if(!raw)return'';
+  const key=normalizeTextKey(raw);
+  return assigneesForProject(projectId).find(p=>p.id===raw||normalizeTextKey(p.name)===key||normalizeTextKey(p.initials)===key)?.id||'';
+}
+function setSelectValue(form,name,value){
+  if(!value)return;
+  const field=form.elements[name];if(!field)return;
+  const allowed=[...field.options].some(o=>o.value===String(value));
+  if(allowed)field.value=String(value);
+}
+function captureDateTimeValue(value){
+  const raw=String(value||'').trim();if(!raw)return'';
+  const parsed=parseNaturalDateTime(raw);
+  if(parsed.dueAt)return toDateTimeLocalValue(parsed.dueAt);
+  const date=new Date(raw);
+  return Number.isNaN(date.getTime())?'':toDateTimeLocalValue(date.toISOString());
+}
 function taskContextHtml(projectId='',assigneeId=''){
   const p=project(projectId),a=p?area(p.areaId):null,tm=a?.teamId?team(a.teamId):null,assignee=person(assigneeId||defaultAssigneeForProject(projectId));
   if(!p||!a)return `<div class="task-context-path"><span class="context-node inbox">Inbox</span></div><p>Uppgiften saknar projekt och blir privat för dig tills du placerar den i ett projekt.</p>`;
@@ -178,14 +217,38 @@ function readCaptureIntent(){
   const sharedText=firstParam(params,['text','captureText','body','note']);
   const titleParam=firstParam(params,['title','captureTitle','name']);
   const quick=firstParam(params,['quick','capture']);
-  if(!sharedUrl&&!sharedText&&!titleParam&&['task','new-task','quick-add'].includes(quick))return {};
+  const hasOnlyQuick=!sharedUrl&&!sharedText&&!titleParam&&['task','new-task','quick-add'].includes(quick)&&['bucket','list','view','destination','where','priority','prio','p','due','when','date','deadline','dueAt','due_at','datetime','start','reminderAt','reminder_at','reminder','remind','projectId','project_id','project','projectName','assigneeId','assignee_id','assignee','assigneeName','person','to','status','taskType','type','recurrence','recurrenceRule','repeat','trigger','triggerValue','event'].every(name=>!params.has(name));
+  if(hasOnlyQuick)return {};
   const url=sharedUrl||firstUrl(sharedText);
   const text=withoutUrl(sharedText,url);
   const meta=linkMeta(url,firstParam(params,['provider','app']));
   const title=(titleParam||text||url||'Ny uppgift från annan app').trim();
+  const bucket=normalizeBucket(firstParam(params,['bucket','list','view','destination','where']));
+  const priority=normalizePriority(firstParam(params,['priority','prio','p']));
+  const due=firstParam(params,['due','when','date','deadline']);
+  const dueAt=firstParam(params,['dueAt','due_at','datetime','start']);
+  const reminderAt=firstParam(params,['reminderAt','reminder_at','reminder','remind']);
+  const status=firstParam(params,['status']);
+  const taskType=firstParam(params,['taskType','type']);
+  const recurrenceRule=firstParam(params,['recurrence','recurrenceRule','repeat']);
+  const triggerValue=firstParam(params,['trigger','triggerValue','event']);
   return {
     title:title.length>100?`${title.slice(0,97)}…`:title,
     notes:text&&text!==title?`Delad text:\n${text}`:'',
+    bucket,
+    priority,
+    due,
+    dueAt:captureDateTimeValue(dueAt),
+    reminderAt:captureDateTimeValue(reminderAt),
+    projectId:firstParam(params,['projectId','project_id']),
+    project:firstParam(params,['project','projectName']),
+    assigneeId:firstParam(params,['assigneeId','assignee_id']),
+    assignee:firstParam(params,['assignee','assigneeName','person','to']),
+    status,
+    taskType,
+    recurrenceRule,
+    triggerType:triggerValue?'external_event':'',
+    triggerValue,
     link:url?{...meta,title:titleParam||text||url,url}:null
   };
 }
@@ -1620,10 +1683,12 @@ function refreshAssignees(){
 }
 function openDialog(prefill={}){
   if($('#authScreen')?.classList.contains('open'))return;
+  const form=$('#taskForm');
   $('#taskForm').reset();
   $('#linkDetails').open=false;
   $('#projectSelect').innerHTML=projectOptionsHtml('');
-  if(prefill.projectId)$('#projectSelect').value=prefill.projectId;
+  const resolvedProjectId=resolveProjectId(prefill.projectId||prefill.project);
+  if(resolvedProjectId)$('#projectSelect').value=resolvedProjectId;
   else if(view.startsWith('project:'))$('#projectSelect').value=view.split(':')[1];
   else if(bucketViews.includes(view))$('#taskForm').elements.bucket.value=view;
   const candidates=state.tasks.filter(t=>!t.completed&&t.visible);
@@ -1631,9 +1696,21 @@ function openDialog(prefill={}){
   $('#dependencyTaskSelect').innerHTML=candidates.map(t=>`<option value="${t.id}">${escapeHtml(t.title)}</option>`).join('');
   bindScheduleAssist($('#taskForm'));
   refreshAssignees();
+  const resolvedAssigneeId=resolveAssigneeId($('#projectSelect').value,prefill.assigneeId||prefill.assignee);
+  if(resolvedAssigneeId)$('#assigneeSelect').value=resolvedAssigneeId;
+  updateTaskContext();
   if(prefill.title)$('#taskForm').elements.title.value=prefill.title;
   if(prefill.notes)$('#taskForm').elements.notes.value=prefill.notes;
   if(prefill.bucket)$('#taskForm').elements.bucket.value=prefill.bucket;
+  setSelectValue(form,'priority',prefill.priority);
+  setSelectValue(form,'status',prefill.status);
+  setSelectValue(form,'taskType',prefill.taskType);
+  setSelectValue(form,'recurrenceRule',prefill.recurrenceRule);
+  setSelectValue(form,'triggerType',prefill.triggerType);
+  if(prefill.triggerValue)form.elements.triggerValue.value=prefill.triggerValue;
+  if(prefill.due)form.elements.due.value=prefill.due;
+  if(prefill.dueAt)form.elements.dueAt.value=prefill.dueAt;
+  if(prefill.reminderAt)form.elements.reminderAt.value=prefill.reminderAt;
   if(prefill.link){
     $('#linkDetails').open=true;
     $('#taskForm').elements.linkKind.value=prefill.link.kind||'other';
