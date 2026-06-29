@@ -59,5 +59,31 @@ private struct TaskRowView: View {
         }
         .padding()
         .background(.background, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .contextMenu {
+            Button("Starta fokus", systemImage: "target") {
+                Task { await store.startFocus(task) }
+            }
+            Menu("Planera") {
+                ForEach(OrbitSchedulePreset.allCases) { preset in
+                    Button(preset.title) {
+                        Task { await store.reschedule(task, to: preset) }
+                    }
+                }
+            }
+            Button("Klar", systemImage: "checkmark.circle") {
+                Task { await store.complete(task) }
+            }
+        }
+        .swipeActions(edge: .trailing) {
+            Button("Klar") {
+                Task { await store.complete(task) }
+            }
+            .tint(.green)
+
+            Button("Idag") {
+                Task { await store.reschedule(task, to: .today) }
+            }
+            .tint(.purple)
+        }
     }
 }

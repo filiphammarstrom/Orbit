@@ -82,6 +82,27 @@ public final class OrbitStore {
         }
     }
 
+    public func reschedule(_ task: OrbitTask, to preset: OrbitSchedulePreset, calendar: Calendar = .current) async {
+        await update(task) { draft in
+            switch preset {
+            case .today:
+                draft.bucket = .today
+                draft.dueAt = Self.day(at: 18, adding: 0, calendar: calendar)
+            case .tomorrow:
+                draft.bucket = .later
+                draft.dueAt = Self.day(at: 9, adding: 1, calendar: calendar)
+            case .nextWeek:
+                draft.bucket = .later
+                draft.dueAt = Self.day(at: 9, adding: 7, calendar: calendar)
+            case .someday:
+                draft.bucket = .someday
+                draft.dueAt = nil
+                draft.reminderAt = nil
+            }
+            draft.status = draft.status == .doing ? .doing : .planned
+        }
+    }
+
     public func complete(_ task: OrbitTask) async {
         await update(task) { draft in
             draft.completed = true
@@ -108,6 +129,12 @@ public final class OrbitStore {
         if lhs.status == .doing, rhs.status != .doing { return true }
         if lhs.priority != rhs.priority { return lhs.priority < rhs.priority }
         return lhs.title.localizedStandardCompare(rhs.title) == .orderedAscending
+    }
+
+    private static func day(at hour: Int, adding days: Int, calendar: Calendar) -> Date {
+        let base = calendar.startOfDay(for: Date())
+        let shifted = calendar.date(byAdding: .day, value: days, to: base) ?? base
+        return calendar.date(bySettingHour: hour, minute: 0, second: 0, of: shifted) ?? shifted
     }
 }
 

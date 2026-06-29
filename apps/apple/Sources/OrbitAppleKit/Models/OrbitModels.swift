@@ -26,6 +26,24 @@ public enum OrbitTaskStatus: String, Codable, CaseIterable, Sendable {
     case review
 }
 
+public enum OrbitSchedulePreset: String, CaseIterable, Identifiable, Sendable {
+    case today
+    case tomorrow
+    case nextWeek
+    case someday
+
+    public var id: String { rawValue }
+
+    public var title: String {
+        switch self {
+        case .today: "Idag"
+        case .tomorrow: "Imorgon"
+        case .nextWeek: "Nästa vecka"
+        case .someday: "Någon gång"
+        }
+    }
+}
+
 public struct OrbitTask: Identifiable, Codable, Hashable, Sendable {
     public var id: UUID
     public var title: String

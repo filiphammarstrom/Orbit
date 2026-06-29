@@ -565,6 +565,15 @@
   white-space: nowrap;
 }
 
+.review-section.assignments {
+  border-color: #efd9ad;
+}
+
+.assignment-review-item {
+  background: #fffaf1;
+  border-color: #f0dfbd;
+}
+
 .review-more {
   color: #999;
   font-size: 11px;
@@ -676,6 +685,81 @@
 .assignment-decision-item div button {
   font-size: 11px;
   padding: 8px 9px;
+}
+
+.assignment-today-nudge {
+  align-items: center;
+  background: linear-gradient(135deg, #fff9ed, #fff);
+  border: 1px solid #efd9ad;
+  border-radius: 20px;
+  box-shadow: 0 8px 26px #5d3b120a;
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+  margin: 0 0 18px;
+  padding: 18px;
+}
+
+.assignment-today-nudge h3 {
+  color: var(--ink);
+  font: 850 18px Manrope;
+  margin: 0;
+}
+
+.assignment-today-nudge p {
+  color: #92743d;
+  font-size: 12px;
+  line-height: 1.55;
+  margin: 6px 0 0;
+}
+
+.assignment-today-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.quick-schedule-card {
+  background: #fbfafc;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  margin: 18px 0 0;
+  padding: 13px;
+}
+
+.quick-schedule-card strong,
+.quick-schedule-card small {
+  display: block;
+}
+
+.quick-schedule-card strong {
+  color: var(--ink);
+  font: 800 13px Manrope;
+}
+
+.quick-schedule-card small {
+  color: #918a98;
+  font-size: 11px;
+  margin-top: 3px;
+}
+
+.quick-schedule-card > div:last-child {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-top: 10px;
+}
+
+.quick-schedule-card button {
+  background: #f0edff;
+  border: 0;
+  border-radius: 9px;
+  color: var(--purple);
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 850;
+  padding: 8px 10px;
 }
 
 .trigger-box code {

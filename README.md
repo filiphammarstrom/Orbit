@@ -11,10 +11,15 @@ Orbit är en molnbaserad fleranvändarapp för kategorier, områden, projekt, te
 - Redigering av uppgifter direkt i sidopanelen: titel, anteckningar, status, prioritet, bucket, projekt, tilldelad person, deadline och påminnelse
 - Strukturerade datumfält (`due_at`, `reminder_at`) används i listor, kalender, AI-brief och MCP — med enkel svensk snabbtolkning som “imorgon 09:00”
 - Overdue-flöde med individuella och bulk-beslut så försenade uppgifter snabbt får nytt datum eller flyttas bort
+- Uppgiftspanelen har snabbplanering till idag, imorgon, nästa vecka eller någon gång utan att öppna hela redigeringsformuläret
+- Uppgiftspanelen kan starta nästa synliga delsteg direkt och kopiera en Orbit-länk tillbaka till uppgiften
+- Quick Add kan tolka enkla tokens i titeln: `#idag`, `#sen`, `#someday`, `p1/p2/p3` och `@namn`
 - Parkeringsnudges i “Gör sen” och “Gör nån gång” när uppgifter utan datum eller hög prio riskerar att fastna
 - Externa MCP-händelser och tidsbaserad aktivering
 - Kontextlänkar från andra appar, t.ex. mail, dokument, chattar och kalenderposter
 - Uppgifter som tilldelats dig ligger kvar i sina vanliga listor/projekt men markeras med “Tilldelat till dig”
+- Nya tilldelningar hamnar i Inbox som beslut: acceptera och planera idag/imorgon/nästa vecka, neka, eller öppna och ändra detaljer först
+- Review samlar även väntande tilldelningar, så beslut om andras uppgifter inte bara ligger gömda i Inbox
 - Strukturvy för kategori → område → projekt, där team bara styr åtkomst/delning
 - Teamadministration med inbjudningar, rolländring, borttagning av medlemmar och möjlighet att dra tillbaka väntande inbjudningar
 - Google Calendar-sektion på uppgifter: manuell “öppna i Google Calendar”-länk, direkt-sync, retry och köad sync-status
@@ -28,6 +33,7 @@ Orbit är en molnbaserad fleranvändarapp för kategorier, områden, projekt, te
 ## Apple-native klient
 
 Det finns en första SwiftUI-grund i `apps/apple/` för iOS, iPadOS och macOS. Den är byggd som ett separat Swift Package (`OrbitAppleKit`) med delade modeller, store, SwiftUI-vyer, Supabase REST-klient-skelett och App Intents för Siri/Shortcuts.
+Task-raderna i Apple-grunden har även snabbactions/context menu för fokus, klar och planering till idag/imorgon/nästa vecka/någon gång.
 
 ```bash
 cd apps/apple
