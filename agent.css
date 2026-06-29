@@ -579,6 +579,105 @@
   font-weight: 700;
 }
 
+.assignment-badge.pending {
+  background: #fff4da;
+  color: #9a6a16;
+}
+
+.assignment-badge.declined {
+  background: #ffe8e4;
+  color: #bf5149;
+}
+
+.assignment-decision-card {
+  background: linear-gradient(180deg, #fff, #fffaf3);
+  border: 1px solid #eee0bf;
+  border-radius: 18px;
+  box-shadow: 0 5px 22px #34245008;
+  margin: 0 0 18px;
+  padding: 18px;
+}
+
+.assignment-decision-head,
+.assignment-decision-item {
+  align-items: flex-start;
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+}
+
+.assignment-decision-head h3 {
+  font: 800 18px Manrope;
+  margin: 0;
+}
+
+.assignment-decision-head p {
+  color: #9a7b44;
+  font-size: 12px;
+  line-height: 1.55;
+  margin: 6px 0 0;
+}
+
+.assignment-decision-head > span {
+  background: #fff0c7;
+  border-radius: 12px;
+  color: #9a6a16;
+  display: grid;
+  font-weight: 850;
+  height: 34px;
+  min-width: 34px;
+  place-items: center;
+}
+
+.assignment-decision-list {
+  display: grid;
+  gap: 9px;
+  margin-top: 13px;
+}
+
+.assignment-decision-item {
+  background: #fff;
+  border: 1px solid #efe4cf;
+  border-radius: 14px;
+  padding: 11px;
+}
+
+.assignment-decision-item > button {
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  padding: 0;
+  text-align: left;
+}
+
+.assignment-decision-item strong,
+.assignment-decision-item small {
+  display: block;
+}
+
+.assignment-decision-item strong {
+  color: var(--ink);
+  font: 800 13px Manrope;
+}
+
+.assignment-decision-item small {
+  color: #9d8a67;
+  font-size: 11px;
+  margin-top: 3px;
+}
+
+.assignment-decision-item div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+.assignment-decision-item div button {
+  font-size: 11px;
+  padding: 8px 9px;
+}
+
 .trigger-box code {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   background: #ffffff9c;
@@ -1413,6 +1512,8 @@
   .focus-mode-card,
   .weekly-review-head,
   .weekly-review-pick,
+  .assignment-decision-head,
+  .assignment-decision-item,
   .review-dashboard-head,
   .review-section-head,
   .review-item,
@@ -1476,6 +1577,16 @@
   }
 
   .weekly-review-pick div button {
+    width: 100%;
+  }
+
+  .assignment-decision-item div {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    justify-content: stretch;
+  }
+
+  .assignment-decision-item div button {
     width: 100%;
   }
 

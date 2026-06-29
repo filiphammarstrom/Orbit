@@ -1,4 +1,4 @@
-import { configured, session, signIn, signUp, signOut, loadCloudState, createCloudTask, updateCloudTask, subscribeToChanges, addComment, addTaskLink, startGoogleCalendarOAuth, startSlackOAuth, slackEventSummary, createTaskFromSlackEvent, syncCalendarLinkNow, queueCalendarSync, saveDailyBrief, saveAgentRun, markNotificationRead, decideApproval, createTeam, createArea, createProject, updateProject, renameCategory, upsertCategorySetting, createInvitation, shareAreaWithTeam, updateAreaDetails } from './cloud.js';
+import { configured, session, signIn, signUp, signOut, loadCloudState, createCloudTask, updateCloudTask, respondToAssignment, subscribeToChanges, addComment, addTaskLink, startGoogleCalendarOAuth, startSlackOAuth, slackEventSummary, createTaskFromSlackEvent, syncCalendarLinkNow, queueCalendarSync, saveDailyBrief, saveAgentRun, markNotificationRead, decideApproval, createTeam, createArea, createProject, updateProject, renameCategory, upsertCategorySetting, createInvitation, shareAreaWithTeam, updateAreaDetails } from './cloud.js';
 
 let state, view = 'today', projectView='list', liveChannel, deferredInstallPrompt=null, reminderTimer=null;
 const $ = s => document.querySelector(s);
@@ -76,7 +76,8 @@ const googleDate=iso=>new Date(iso).toISOString().replace(/[-:]/g,'').replace(/\
 const googleCalendarTemplateUrl=t=>{if(!t.dueAt)return'';const details=[t.notes||'',`Orbit task: ${t.id}`].filter(Boolean).join('\n\n');const params=new URLSearchParams({action:'TEMPLATE',text:t.title,details,dates:`${googleDate(t.dueAt)}/${googleDate(addMinutes(t.dueAt,30))}`});return `https://calendar.google.com/calendar/render?${params.toString()}`};
 const scheduleLabel=t=>t.dueAt?formatDateTime(t.dueAt):(t.due||'');
 const reminderLabel=t=>t.reminderAt?formatDateTime(t.reminderAt):'';
-const tasksForBucketView=id=>id==='today'?visible().filter(t=>t.bucket==='today'||isDueToday(t)||isOverdue(t)||isReminderDue(t)):visible().filter(t=>t.bucket===id);
+const isPendingAssignmentForMe=t=>t.assigneeId===state.currentUserId&&t.createdBy&&t.createdBy!==state.currentUserId&&t.assignmentStatus==='pending';
+const tasksForBucketView=id=>id==='today'?visible().filter(t=>t.bucket==='today'||isDueToday(t)||isOverdue(t)||isReminderDue(t)):id==='inbox'?visible().filter(t=>t.bucket==='inbox'||isPendingAssignmentForMe(t)):visible().filter(t=>t.bucket===id);
 const reminderAlerts=()=>visible().filter(isReminderDue).sort((a,b)=>new Date(a.reminderAt)-new Date(b.reminderAt)).slice(0,20);
 const parseClock=text=>{let m=text.match(/\b(?:kl\.?\s*)?([01]?\d|2[0-3])[:.]([0-5]\d)\b/);if(m)return{h:Number(m[1]),m:Number(m[2])};m=text.match(/\bkl\.?\s*([01]?\d|2[0-3])\b/);return m?{h:Number(m[1]),m:0}:null};
 const weekdayIndex={söndag:0,sondag:0,sön:0,son:0,måndag:1,mandag:1,mån:1,man:1,tisdag:2,tis:2,onsdag:3,ons:3,torsdag:4,tor:4,fredag:5,fre:5,lördag:6,lordag:6,lör:6,lor:6};
@@ -339,6 +340,8 @@ function render(){
   document.querySelectorAll('[data-reschedule]').forEach(b=>b.onclick=async()=>{b.disabled=true;try{await rescheduleTask(b.dataset.task,b.dataset.reschedule)}catch(error){toast(error.message);b.disabled=false}});
   document.querySelectorAll('[data-inbox-move]').forEach(b=>b.onclick=async()=>{b.disabled=true;try{await triageInboxTask(b.dataset.task,b.dataset.inboxMove)}catch(error){toast(error.message);b.disabled=false}});
   document.querySelectorAll('[data-inbox-open]').forEach(b=>b.onclick=()=>openInspector(b.dataset.inboxOpen));
+  document.querySelectorAll('[data-assignment-open]').forEach(b=>b.onclick=()=>openInspector(b.dataset.assignmentOpen));
+  document.querySelectorAll('[data-assignment-response]').forEach(b=>b.onclick=async()=>{b.disabled=true;try{await handleAssignmentResponse(b.dataset.task,b.dataset.assignmentResponse)}catch(error){toast(error.message);b.disabled=false}});
   document.querySelectorAll('[data-later-move]').forEach(b=>b.onclick=async()=>{b.disabled=true;try{await rescheduleTask(b.dataset.task,b.dataset.laterMove)}catch(error){toast(error.message);b.disabled=false}});
   document.querySelectorAll('[data-later-open]').forEach(b=>b.onclick=()=>openInspector(b.dataset.laterOpen));
   document.querySelectorAll('[data-someday-move]').forEach(b=>b.onclick=async()=>{b.disabled=true;try{await reviewSomedayTask(b.dataset.task,b.dataset.somedayMove)}catch(error){toast(error.message);b.disabled=false}});
@@ -508,10 +511,10 @@ function approvalCardHtml({approval,task}){
 
 function inboxContent(tasks){
   if(!tasks.length)return'<div class="empty">Inbox är tom. Bra.</div>';
-  const uncategorized=tasks.filter(t=>!t.projectId),withProject=tasks.filter(t=>t.projectId);
-  return `<section class="inbox-triage-card">
+  const assignmentDecisions=tasks.filter(isPendingAssignmentForMe),normalTasks=tasks.filter(t=>!isPendingAssignmentForMe(t)),uncategorized=normalTasks.filter(t=>!t.projectId),withProject=normalTasks.filter(t=>t.projectId);
+  return `${assignmentDecisions.length?assignmentDecisionInboxHtml(assignmentDecisions):''}<section class="inbox-triage-card">
     <div class="inbox-triage-head"><div><p class="eyebrow">INBOX TRIAGE</p><h3>Bestäm vad varje sak betyder</h3><p>Inbox är bara en fångstplats. Ta ett snabbt beslut: gör idag, parkera, eller öppna och placera i projekt.</p></div><span>${tasks.length}</span></div>
-    <div class="inbox-triage-list">${tasks.slice(0,8).map(t=>`<article class="inbox-triage-item ${t.projectId?'has-project':''}">
+    <div class="inbox-triage-list">${normalTasks.slice(0,8).map(t=>`<article class="inbox-triage-item ${t.projectId?'has-project':''}">
       <button class="inbox-triage-title" data-inbox-open="${t.id}"><strong>${escapeHtml(t.title)}</strong><small>${escapeHtml(taskContextLabel(t))}</small></button>
       <div class="inbox-triage-actions">
         <button data-task="${t.id}" data-inbox-move="today">Idag</button>
@@ -520,9 +523,19 @@ function inboxContent(tasks){
         <button data-inbox-open="${t.id}">${t.projectId?'Öppna':'Placera'}</button>
       </div>
     </article>`).join('')}</div>
-    ${tasks.length>8?`<p class="inbox-triage-more">${tasks.length-8} till visas i listan nedanför.</p>`:''}
+    ${normalTasks.length>8?`<p class="inbox-triage-more">${normalTasks.length-8} till visas i listan nedanför.</p>`:''}
     <div class="inbox-triage-summary"><span>${uncategorized.length} utan projekt</span><span>${withProject.length} redan placerade</span></div>
-  </section>${tasks.map(taskGroupHtml).join('')}`;
+  </section>${normalTasks.map(taskGroupHtml).join('')}`;
+}
+
+function assignmentDecisionInboxHtml(tasks){
+  return `<section class="assignment-decision-card">
+    <div class="assignment-decision-head"><div><p class="eyebrow">TILLDELAT TILL DIG</p><h3>${tasks.length} uppgift${tasks.length===1?'':'er'} väntar på svar</h3><p>Acceptera, neka eller öppna och ändra tid/projekt innan du svarar. De ligger kvar här tills du bestämmer.</p></div><span>${tasks.length}</span></div>
+    <div class="assignment-decision-list">${tasks.map(t=>`<article class="assignment-decision-item">
+      <button data-assignment-open="${t.id}"><strong>${escapeHtml(t.title)}</strong><small>${escapeHtml([`Från ${person(t.createdBy).name}`,taskContextLabel(t)].filter(Boolean).join(' · '))}</small></button>
+      <div><button class="primary" data-assignment-response="accepted" data-task="${t.id}">Acceptera</button><button class="secondary" data-assignment-response="declined" data-task="${t.id}">Neka</button><button class="secondary" data-assignment-open="${t.id}">Ändra</button></div>
+    </article>`).join('')}</div>
+  </section>`;
 }
 
 function laterContent(tasks){
@@ -755,6 +768,15 @@ async function handleApprovalDecision(id,status){
   if(status==='rejected')await api('/tasks/'+approval.taskId,{method:'PATCH',body:JSON.stringify({status:'review',bucket:'today'})});
   await load();
   toast(status==='approved'?'Godkänt.':'Avvisat och flyttat till granskning.');
+}
+
+async function handleAssignmentResponse(id,status){
+  const task=state.tasks.find(t=>t.id===id);
+  if(!task)throw new Error('Uppgiften finns inte längre.');
+  const note=status==='accepted'?'Accepterad från Inbox.':'Nekad från Inbox.';
+  await respondToAssignment(id,status,note);
+  await load();
+  toast(status==='accepted'?'Uppgiften är accepterad.':'Uppgiften är nekad och avsändaren får besked.');
 }
 
 async function startFocusTask(id){
@@ -1033,7 +1055,12 @@ function areaCards(){
   </div>`;
 }
 function taskGroupHtml(t){const all=childrenOf(t.id),shown=all.filter(c=>c.visible&&!c.completed),done=all.filter(c=>c.completed).length;return `<div class="task-group">${taskHtml(t,all.length?`${done}/${all.length}`:'')}${shown.length?`<div class="subtasks">${shown.map(c=>taskHtml(c)).join('')}</div>`:''}${all.some(c=>!c.visible&&!c.completed)?`<div class="subtask-waiting">⚡ ${all.filter(c=>!c.visible&&!c.completed).length} nästa steg väntar på ett villkor</div>`:''}</div>`}
-function assignmentBadge(t){return t.assigneeId===state.currentUserId&&t.createdBy&&t.createdBy!==state.currentUserId?'<span class="assignment-badge mine">◎ Tilldelat till dig</span>':''}
+function assignmentBadge(t){
+  if(t.assigneeId!==state.currentUserId||!t.createdBy||t.createdBy===state.currentUserId)return'';
+  if(t.assignmentStatus==='pending')return'<span class="assignment-badge pending">◎ Väntar på ditt svar</span>';
+  if(t.assignmentStatus==='declined')return'<span class="assignment-badge declined">◎ Nekad</span>';
+  return'<span class="assignment-badge mine">◎ Tilldelat till dig</span>';
+}
 function taskHtml(t,progress=''){
   const p=project(t.projectId),a=person(t.assigneeId),ar=areaForProject(t.projectId),linkCount=linksForTask(t.id).length,when=scheduleLabel(t),remind=reminderLabel(t);
   return `<article class="task ${progress?'has-children':''}" data-id="${t.id}"><button class="check p${t.priority}" data-id="${t.id}" aria-label="${t.taskType==='approval'?'Godkänn':'Markera klar'}"></button><div><div class="task-title">${t.taskType==='milestone'?'◆ ':t.taskType==='approval'?'✓ ':''}${escapeHtml(t.title)}</div><div class="task-meta">${assignmentBadge(t)}${progress?`<span class="subtask-progress">☷ ${progress} delsteg</span>`:''}${linkCount?`<span class="context-count">↗ ${linkCount}</span>`:''}${when?`<span class="due ${isOverdue(t)?'overdue':''}">◷ ${escapeHtml(when)}</span>`:''}${remind?`<span class="reminder ${isReminderDue(t)?'due-now':''}">⏰ ${isReminderDue(t)?'Nu':escapeHtml(remind)}</span>`:''}${p?`<span class="project-tag"><i class="project-dot" style="background:${p.color}"></i>${p.name}</span>`:''}${ar&&!t.parentTaskId?`<span class="area-badge"><i style="background:${ar.color}"></i>${areaName(ar)}</span>`:''}</div></div>${avatarHtml(a)}</article>`
@@ -1193,7 +1220,7 @@ function openInspector(id){
   const t=state.tasks.find(x=>x.id===id);if(!t)return;
   const p=project(t.projectId),a=person(t.assigneeId),ar=areaForProject(t.projectId),tm=team(ar?.teamId),subs=childrenOf(t.id),comments=(state.comments||[]).filter(c=>c.taskId===id);
   const when=scheduleLabel(t),remind=reminderLabel(t);
-  $('#inspectorContent').innerHTML=`<p class="eyebrow">${ar?escapeHtml(areaName(ar)).toUpperCase():'UPPGIFT'}</p><button class="check big-check p${t.priority}" id="detailCheck"></button><h2>${escapeHtml(t.title)}</h2>${subs.length?`<div class="parent-lock">Huvuduppgiften blir klar automatiskt när alla ${subs.length} delsteg är klara.</div>`:''}${t.activationReason?`<div class="activation-explain"><strong>✦ Varför ser jag detta nu?</strong>${escapeHtml(t.activationReason)}${t.activatedAt?` · ${new Date(t.activatedAt).toLocaleString('sv-SE')}`:''}</div>`:''}${t.notes?`<p style="color:#777;font-size:13px;line-height:1.6">${escapeHtml(t.notes)}</p>`:''}<div class="detail-row"><span>Status</span><strong class="status-chip">${statusLabel(t.status)}</strong></div><div class="detail-row"><span>Område</span><strong>${ar?ar.icon+' '+areaName(ar):'Inbox'}</strong></div><div class="detail-row"><span>Projekt</span><strong>${p?p.name:'Inbox'}</strong></div><div class="detail-row"><span>Tilldelad</span><strong>${a.name}</strong></div><div class="detail-row"><span>Åtkomst</span><strong>${tm?tm.name:'Endast du'}</strong></div><div class="detail-row"><span>Deadline</span><strong>${when?escapeHtml(when):'Inget datum'}</strong></div><div class="detail-row"><span>Påminnelse</span><strong>${remind?`${isReminderDue(t)?'Nu · ':''}${escapeHtml(remind)}`:'Ingen'}</strong></div><div class="detail-row"><span>Återkommer</span><strong>${recurrenceLabel(t.recurrenceRule)}</strong></div>${renderTaskEditForm(t)}${renderBreakdownForm(t)}${subs.length?`<div class="inspector-subtasks"><h3>Underuppgifter · ${subs.filter(s=>s.completed).length}/${subs.length}</h3>${subs.map(s=>`<div class="inspector-subtask ${s.completed?'done':''} ${!s.visible?'waiting':''}">${s.completed?'✓':s.visible?`<button class="check p${s.priority}" data-id="${s.id}"></button>`:'⚡'}<span>${escapeHtml(s.title)}</span><small>${!s.visible?'Väntar':person(s.assigneeId).initials}</small></div>`).join('')}</div>`:''}${renderTriggerBox(t)}${renderCalendarSync(t)}${renderTaskLinks(t)}${renderActivityLog(t.id)}<div class="comment-section"><h3>Kommentarer · ${comments.length}</h3>${comments.map(c=>`<div class="comment">${avatarHtml(person(c.authorId))}<div><p>${escapeHtml(c.body)}</p><time>${new Date(c.createdAt).toLocaleString('sv-SE')}</time></div></div>`).join('')}<form class="comment-form" id="commentForm"><input name="comment" placeholder="Skriv en kommentar eller @nämn någon…" required><button>Skicka</button></form></div>`;
+  $('#inspectorContent').innerHTML=`<p class="eyebrow">${ar?escapeHtml(areaName(ar)).toUpperCase():'UPPGIFT'}</p><button class="check big-check p${t.priority}" id="detailCheck"></button><h2>${escapeHtml(t.title)}</h2>${subs.length?`<div class="parent-lock">Huvuduppgiften blir klar automatiskt när alla ${subs.length} delsteg är klara.</div>`:''}${t.activationReason?`<div class="activation-explain"><strong>✦ Varför ser jag detta nu?</strong>${escapeHtml(t.activationReason)}${t.activatedAt?` · ${new Date(t.activatedAt).toLocaleString('sv-SE')}`:''}</div>`:''}${t.notes?`<p style="color:#777;font-size:13px;line-height:1.6">${escapeHtml(t.notes)}</p>`:''}<div class="detail-row"><span>Status</span><strong class="status-chip">${statusLabel(t.status)}</strong></div><div class="detail-row"><span>Område</span><strong>${ar?ar.icon+' '+areaName(ar):'Inbox'}</strong></div><div class="detail-row"><span>Projekt</span><strong>${p?p.name:'Inbox'}</strong></div><div class="detail-row"><span>Tilldelad</span><strong>${a.name}</strong></div><div class="detail-row"><span>Svar</span><strong>${assignmentStatusLabel(t)}</strong></div><div class="detail-row"><span>Åtkomst</span><strong>${tm?tm.name:'Endast du'}</strong></div><div class="detail-row"><span>Deadline</span><strong>${when?escapeHtml(when):'Inget datum'}</strong></div><div class="detail-row"><span>Påminnelse</span><strong>${remind?`${isReminderDue(t)?'Nu · ':''}${escapeHtml(remind)}`:'Ingen'}</strong></div><div class="detail-row"><span>Återkommer</span><strong>${recurrenceLabel(t.recurrenceRule)}</strong></div>${renderTaskEditForm(t)}${renderBreakdownForm(t)}${subs.length?`<div class="inspector-subtasks"><h3>Underuppgifter · ${subs.filter(s=>s.completed).length}/${subs.length}</h3>${subs.map(s=>`<div class="inspector-subtask ${s.completed?'done':''} ${!s.visible?'waiting':''}">${s.completed?'✓':s.visible?`<button class="check p${s.priority}" data-id="${s.id}"></button>`:'⚡'}<span>${escapeHtml(s.title)}</span><small>${!s.visible?'Väntar':person(s.assigneeId).initials}</small></div>`).join('')}</div>`:''}${renderTriggerBox(t)}${renderCalendarSync(t)}${renderTaskLinks(t)}${renderActivityLog(t.id)}<div class="comment-section"><h3>Kommentarer · ${comments.length}</h3>${comments.map(c=>`<div class="comment">${avatarHtml(person(c.authorId))}<div><p>${escapeHtml(c.body)}</p><time>${new Date(c.createdAt).toLocaleString('sv-SE')}</time></div></div>`).join('')}<form class="comment-form" id="commentForm"><input name="comment" placeholder="Skriv en kommentar eller @nämn någon…" required><button>Skicka</button></form></div>`;
   $('#detailCheck').onclick=()=>{complete(id);if(!subs.length)$('#inspector').classList.remove('open')};
   document.querySelectorAll('.inspector-subtask .check').forEach(b=>b.onclick=async()=>{await complete(b.dataset.id);openInspector(id)});
   bindTaskEditForm(id);
@@ -1204,9 +1231,13 @@ function openInspector(id){
   $('#inspector').classList.add('open')
 }
 function statusLabel(s){return({idea:'Idé',planned:'Planerad',todo:'Att göra',doing:'Pågår',waiting:'Väntar',review:'Granskning',done:'Klar'})[s]||'Att göra'}
+function assignmentStatusLabel(t){
+  if(!t.createdBy||t.createdBy===t.assigneeId)return'Inte extern tilldelning';
+  return ({pending:'Väntar på svar',accepted:'Accepterad',declined:'Nekad'})[t.assignmentStatus||'accepted']||'Accepterad';
+}
 function recurrenceLabel(rule){return({daily:'Dagligen',weekly:'Varje vecka',monthly:'Varje månad'})[rule]||'Nej'}
 function activityLabel(a){
-  return ({created:'Skapad',completed:'Klar',assigned:'Tilldelad',status_changed:'Status ändrad',updated:'Uppdaterad',commented:'Kommentar'})[a.action]||a.action||'Händelse';
+  return ({created:'Skapad',completed:'Klar',assigned:'Tilldelad',assignment_accepted:'Tilldelning accepterad',assignment_declined:'Tilldelning nekad',status_changed:'Status ändrad',updated:'Uppdaterad',commented:'Kommentar'})[a.action]||a.action||'Händelse';
 }
 function renderActivityLog(taskId){
   const rows=(state.activity||[]).filter(a=>a.taskId===taskId).slice(0,8);
