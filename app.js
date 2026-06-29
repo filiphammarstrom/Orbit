@@ -272,23 +272,23 @@ function bindStructureActions(root=document){
 
 function renderNav(){
   $('#mainNav').innerHTML=navItems.map(([id,ico,label])=>`<button class="nav-item ${view===id?'active':''}" data-view="${id}"><span class="ico">${ico}</span><span>${label}</span><span class="count">${navCount(id)||''}</span></button>`).join('');
-  $('#projectNav').innerHTML=`<button class="structure-overview ${view==='areas'?'active':''}" data-view="areas">▦ Struktur</button>${areaGroups().map(group=>{
+  $('#projectNav').innerHTML=`${areaGroups().map(group=>{
     const categoryProjects=group.areas.flatMap(projectsForArea),categoryView=categoryViewId(group.category),categoryCount=taskCountForProjects(categoryProjects),open=categoryIsOpen(group);
     return `<div class="tree-category ${open?'open':'closed'}">
       <div class="tree-row category-row ${categoryIsActive(group)?'active':''}">
         <button class="tree-toggle" data-toggle-category="${escapeHtml(group.category)}">${open?'▾':'▸'}</button>
         <button class="tree-main" data-view="${escapeHtml(categoryView)}">${categoryIconHtml(group.category)}<span>${escapeHtml(group.category)}</span><small>${group.areas.length} område${group.areas.length===1?'':'n'}</small><i>${categoryCount||''}</i></button>
-        <button class="tree-add" title="Nytt område i ${escapeHtml(group.category)}" data-create-area="${escapeHtml(group.category)}">＋</button>
+        <button class="tree-action" title="Nytt område i ${escapeHtml(group.category)}" data-create-area="${escapeHtml(group.category)}">＋</button>
       </div>
       ${open?`<div class="tree-children">${group.areas.map(a=>{
         const projects=projectsForArea(a),areaOpen=areaIsOpen(a),count=taskCountForProjects(projects);
         return `<div class="tree-area ${areaOpen?'open':'closed'}">
           <div class="tree-row area-row ${areaIsActive(a)?'active':''}">
             <button class="tree-toggle" data-toggle-area="${a.id}">${areaOpen?'▾':'▸'}</button>
-            <button class="tree-main" data-view="area:${a.id}"><span class="area-icon" style="background:${a.color}">${a.icon}</span><span>${escapeHtml(areaName(a))}</span><small>${projects.length} projekt</small><i>${count||''}</i></button>
-            <button class="tree-add" title="Nytt projekt i ${escapeHtml(areaName(a))}" data-create-project="${a.id}">＋</button>
+            <button class="tree-main" data-view="area:${a.id}"><span class="area-icon" style="background:${a.color}">${a.icon}</span><span>${escapeHtml(areaName(a))}</span><small>${projects.length?`${projects.length} projekt`:'Inga projekt'}</small><i>${count||''}</i></button>
+            <button class="tree-action" title="Nytt projekt i ${escapeHtml(areaName(a))}" data-create-project="${a.id}">＋</button>
           </div>
-          ${areaOpen?`<div class="tree-projects">${projects.map(p=>`<div class="tree-project-line"><span class="tree-project-spacer"></span><button class="tree-project ${view==='project:'+p.id?'active':''}" data-view="project:${p.id}">${projectIconHtml(p)}<span>${escapeHtml(p.name)}</span><i>${visible().filter(t=>t.projectId===p.id).length||''}</i></button><button class="tree-add project-add" title="Ny uppgift i ${escapeHtml(p.name)}" data-create-task-project="${p.id}">＋</button></div>`).join('')}${projects.length?'':`<button class="tree-empty-project" data-create-project="${a.id}">＋ Skapa första projektet</button>`}</div>`:''}
+          ${areaOpen?`<div class="tree-projects">${projects.map(p=>`<div class="tree-project-line"><span class="tree-project-spacer"></span><button class="tree-project ${view==='project:'+p.id?'active':''}" data-view="project:${p.id}">${projectIconHtml(p)}<span>${escapeHtml(p.name)}</span><i>${visible().filter(t=>t.projectId===p.id).length||''}</i></button><button class="tree-action project-add" title="Ny uppgift i ${escapeHtml(p.name)}" data-create-task-project="${p.id}">＋</button></div>`).join('')}${projects.length?'':`<span class="tree-empty-note">Inga projekt ännu</span>`}</div>`:''}
         </div>`;
       }).join('')}</div>`:''}
     </div>`;
