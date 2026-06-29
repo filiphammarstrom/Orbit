@@ -1219,6 +1219,40 @@
   margin-top: 14px;
 }
 
+.overdue-bulk-actions {
+  align-items: center;
+  background: #fff;
+  border: 1px solid #efd8d3;
+  border-radius: 13px;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  margin-top: 14px;
+  padding: 11px 12px;
+}
+
+.overdue-bulk-actions strong {
+  color: #9d504a;
+  font: 800 12px Manrope;
+}
+
+.overdue-bulk-actions div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.overdue-bulk-actions button {
+  border: 0;
+  border-radius: 9px;
+  background: #fff1ef;
+  color: #9d504a;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 800;
+  padding: 8px 10px;
+}
+
 .overdue-reschedule-card {
   border: 1px solid #f0dfdc;
   border-radius: 13px;
@@ -1551,6 +1585,12 @@
   .reschedule-actions {
     display: grid;
     grid-template-columns: 1fr 1fr;
+  }
+
+  .overdue-bulk-actions,
+  .overdue-bulk-actions div {
+    align-items: stretch;
+    display: grid;
   }
 
   .inbox-triage-actions {

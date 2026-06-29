@@ -329,6 +329,7 @@ function render(){
   bindStructureActions($('#taskList'));
   document.querySelectorAll('[data-overdue-open]').forEach(b=>b.onclick=()=>openInspector(b.dataset.overdueOpen));
   document.querySelectorAll('[data-overdue-done]').forEach(b=>b.onclick=()=>complete(b.dataset.overdueDone));
+  document.querySelectorAll('[data-overdue-bulk]').forEach(b=>b.onclick=async()=>{b.disabled=true;try{await bulkRescheduleOverdue(b.dataset.overdueBulk)}catch(error){toast(error.message);b.disabled=false}});
   document.querySelectorAll('[data-weekly-open]').forEach(b=>b.onclick=()=>openInspector(b.dataset.weeklyOpen));
   document.querySelectorAll('[data-weekly-move]').forEach(b=>b.onclick=async()=>{b.disabled=true;try{await rescheduleTask(b.dataset.task,b.dataset.weeklyMove)}catch(error){toast(error.message);b.disabled=false}});
   document.querySelectorAll('[data-review-open]').forEach(b=>b.onclick=()=>openInspector(b.dataset.reviewOpen));
@@ -725,7 +726,9 @@ function dailyPlanHtml(tasks){
 }
 
 function overdueReviewHtml(tasks){
-  return `<section class="overdue-review"><div class="overdue-review-head"><div><p class="eyebrow">PLANERA OM FÖRST</p><h3>${tasks.length} försenad${tasks.length===1?' uppgift':'e uppgifter'}</h3><p>Bestäm ett nytt datum eller flytta bort den. Annars växer overdue-listan och blir brus.</p></div><span>${tasks.length}</span></div><div class="overdue-reschedule-list">${tasks.map(t=>`<article class="overdue-reschedule-card"><button class="overdue-title" data-overdue-open="${t.id}"><strong>${escapeHtml(t.title)}</strong><small>${escapeHtml(scheduleLabel(t))}</small></button><div class="reschedule-actions"><button data-task="${t.id}" data-reschedule="today">Idag</button><button data-task="${t.id}" data-reschedule="tomorrow">Imorgon</button><button data-task="${t.id}" data-reschedule="week">Senare i veckan</button><button data-task="${t.id}" data-reschedule="someday">Någon gång</button><button data-overdue-done="${t.id}">Klar</button></div></article>`).join('')}</div></section>`;
+  return `<section class="overdue-review"><div class="overdue-review-head"><div><p class="eyebrow">PLANERA OM FÖRST</p><h3>${tasks.length} försenad${tasks.length===1?' uppgift':'e uppgifter'}</h3><p>Bestäm ett nytt datum eller flytta bort den. Annars växer overdue-listan och blir brus.</p></div><span>${tasks.length}</span></div>
+    <div class="overdue-bulk-actions"><strong>Snabbt beslut för alla</strong><div><button data-overdue-bulk="tomorrow">Alla imorgon</button><button data-overdue-bulk="week">Alla senare i veckan</button><button data-overdue-bulk="someday">Alla någon gång</button></div></div>
+    <div class="overdue-reschedule-list">${tasks.map(t=>`<article class="overdue-reschedule-card"><button class="overdue-title" data-overdue-open="${t.id}"><strong>${escapeHtml(t.title)}</strong><small>${escapeHtml(scheduleLabel(t))}</small></button><div class="reschedule-actions"><button data-task="${t.id}" data-reschedule="today">Idag</button><button data-task="${t.id}" data-reschedule="tomorrow">Imorgon</button><button data-task="${t.id}" data-reschedule="week">Senare i veckan</button><button data-task="${t.id}" data-reschedule="someday">Någon gång</button><button data-overdue-done="${t.id}">Klar</button></div></article>`).join('')}</div></section>`;
 }
 
 async function rescheduleTask(id,preset){
@@ -740,6 +743,21 @@ async function rescheduleTask(id,preset){
   await api('/tasks/'+id,{method:'PATCH',body:JSON.stringify(patch)});
   await load();
   toast(preset==='someday'?'Flyttad till Gör nån gång.':'Uppgiften har fått nytt datum.');
+}
+
+async function bulkRescheduleOverdue(preset){
+  const ids=topLevel(tasksForBucketView('today').filter(isOverdue)).map(t=>t.id);
+  if(!ids.length){toast('Inga försenade uppgifter att planera om.');return}
+  for(const id of ids){
+    let dueAt=null,bucket='later',due='',reminderAt=null;
+    if(preset==='tomorrow'){dueAt=dayAt(1,9).toISOString();bucket='later';due=formatDateTime(dueAt)}
+    else if(preset==='week'){dueAt=dayAt(3,9).toISOString();bucket='later';due=formatDateTime(dueAt)}
+    else if(preset==='someday'){bucket='someday';dueAt=null;due='';reminderAt=null}
+    else throw new Error('Okänt planeringsval.');
+    await api('/tasks/'+id,{method:'PATCH',body:JSON.stringify({bucket,due,dueAt,reminderAt})});
+  }
+  await load();
+  toast(`${ids.length} försenad${ids.length===1?' uppgift':'e uppgifter'} planerades om.`);
 }
 
 async function triageInboxTask(id,target){
