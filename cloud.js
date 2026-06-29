@@ -756,6 +756,33 @@ export async function createInvitation(teamId, email, role = 'member') {
   };
 }
 
+export async function updateTeamMember(teamId, userId, role) {
+  const cleanRole = role === 'admin' ? 'admin' : 'member';
+  const { data, error } = await supabase.from('team_members')
+    .update({ role: cleanRole, status: 'active' })
+    .eq('team_id', teamId)
+    .eq('user_id', userId)
+    .select()
+    .single();
+  if (error) throw error;
+  return { teamId: data.team_id, userId: data.user_id, role: data.role, status: data.status };
+}
+
+export async function removeTeamMember(teamId, userId) {
+  const { error } = await supabase.from('team_members')
+    .delete()
+    .eq('team_id', teamId)
+    .eq('user_id', userId);
+  if (error) throw error;
+  return true;
+}
+
+export async function deleteInvitation(id) {
+  const { error } = await supabase.from('invitations').delete().eq('id', id);
+  if (error) throw error;
+  return true;
+}
+
 export async function shareAreaWithTeam(areaId, teamId) {
   return updateAreaDetails(areaId, { teamId });
 }

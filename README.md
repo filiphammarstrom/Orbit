@@ -14,6 +14,7 @@ Orbit är en molnbaserad fleranvändarapp för kategorier, områden, projekt, te
 - Kontextlänkar från andra appar, t.ex. mail, dokument, chattar och kalenderposter
 - Uppgifter som tilldelats dig ligger kvar i sina vanliga listor/projekt men markeras med “Tilldelat till dig”
 - Strukturvy för kategori → område → projekt, där team bara styr åtkomst/delning
+- Teamadministration med inbjudningar, rolländring, borttagning av medlemmar och möjlighet att dra tillbaka väntande inbjudningar
 - Google Calendar-sektion på uppgifter: manuell “öppna i Google Calendar”-länk, direkt-sync, retry och köad sync-status
 - Integrationsgrund för Google Calendar och Slack, inklusive Slack-inbox, message shortcut och länkar tillbaka till Slack-meddelanden
 - Daglig Orbit-brief från MCP/AI samt sparade agentförslag

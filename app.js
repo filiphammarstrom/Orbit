@@ -1,4 +1,4 @@
-import { configured, session, signIn, signUp, signOut, loadCloudState, createCloudTask, updateCloudTask, respondToAssignment, subscribeToChanges, addComment, addTaskLink, startGoogleCalendarOAuth, startSlackOAuth, slackEventSummary, createTaskFromSlackEvent, syncCalendarLinkNow, queueCalendarSync, saveDailyBrief, saveAgentRun, markNotificationRead, decideApproval, createTeam, createArea, createProject, updateProject, renameCategory, upsertCategorySetting, createInvitation, shareAreaWithTeam, updateAreaDetails } from './cloud.js';
+import { configured, session, signIn, signUp, signOut, loadCloudState, createCloudTask, updateCloudTask, respondToAssignment, subscribeToChanges, addComment, addTaskLink, startGoogleCalendarOAuth, startSlackOAuth, slackEventSummary, createTaskFromSlackEvent, syncCalendarLinkNow, queueCalendarSync, saveDailyBrief, saveAgentRun, markNotificationRead, decideApproval, createTeam, createArea, createProject, updateProject, renameCategory, upsertCategorySetting, createInvitation, updateTeamMember, removeTeamMember, deleteInvitation, shareAreaWithTeam, updateAreaDetails } from './cloud.js';
 
 let state, view = 'today', projectView='list', liveChannel, deferredInstallPrompt=null, reminderTimer=null;
 const $ = s => document.querySelector(s);
@@ -984,10 +984,19 @@ function slackEventCard(eventRow){
 function teamCard(tm){
   const members=(state.teamMembers||[]).filter(m=>m.teamId===tm.id&&m.status==='active'),invites=(state.invitations||[]).filter(i=>i.teamId===tm.id),pending=invites.filter(i=>!i.acceptedAt),isAdmin=tm.ownerId===state.currentUserId||members.some(m=>m.userId===state.currentUserId&&['owner','admin'].includes(m.role));
   return `<article class="team-card"><div class="team-card-head"><div><h3>${escapeHtml(tm.name)}</h3><p>${members.length} medlem${members.length===1?'':'mar'} · ${pending.length} väntande</p></div><span>${isAdmin?'Admin':'Medlem'}</span></div>
-    <div class="member-list">${members.map(m=>{const p=person(m.userId);return `<span>${avatarHtml(p)}${escapeHtml(p.name)} <small>${m.role}</small></span>`}).join('')||'<p class="muted-line">Inga aktiva medlemmar ännu.</p>'}</div>
+    <div class="member-list">${members.map(m=>memberRow(tm,m,isAdmin)).join('')||'<p class="muted-line">Inga aktiva medlemmar ännu.</p>'}</div>
     ${isAdmin?`<form class="invite-form" data-team="${tm.id}"><input name="email" type="email" placeholder="kollega@example.com" required><select name="role"><option value="member">Medlem</option><option value="admin">Admin</option></select><button>+ Bjud in</button></form>`:''}
-    <div class="pending-list">${invites.length?invites.map(i=>`<div><span>${escapeHtml(i.email)}</span><small>${i.acceptedAt?'Accepterad':'Väntar'} · ${i.role}</small></div>`).join(''):'<p class="muted-line">Inga inbjudningar ännu.</p>'}</div>
+    <div class="pending-list">${invites.length?invites.map(i=>inviteRow(i,isAdmin)).join(''):'<p class="muted-line">Inga inbjudningar ännu.</p>'}</div>
   </article>`;
+}
+
+function memberRow(tm,m,isAdmin){
+  const p=person(m.userId),canEdit=isAdmin&&m.userId!==state.currentUserId&&m.role!=='owner';
+  return `<div class="member-row">${avatarHtml(p)}<span>${escapeHtml(p.name)}</span>${canEdit?`<select data-member-role="${tm.id}:${m.userId}">${['member','admin'].map(role=>option(role,role==='admin'?'Admin':'Medlem',m.role)).join('')}</select><button class="danger-lite" data-member-remove="${tm.id}:${m.userId}">Ta bort</button>`:`<small>${m.role}</small>`}</div>`;
+}
+
+function inviteRow(invite,isAdmin){
+  return `<div class="invite-row"><span>${escapeHtml(invite.email)}</span><small>${invite.acceptedAt?'Accepterad':'Väntar'} · ${invite.role}</small>${isAdmin&&!invite.acceptedAt?`<button class="danger-lite" data-invite-delete="${invite.id}">Dra tillbaka</button>`:''}</div>`;
 }
 
 function areaShareRow(a){
@@ -1001,6 +1010,9 @@ function bindTeamSharing(){
   document.querySelectorAll('.slack-project-select').forEach(s=>s.onchange=()=>{const form=s.closest('form'),assignee=form.querySelector('.slack-assignee-select');assignee.innerHTML=assigneeOptionsHtml(s.value,defaultAssigneeForProject(s.value))});
   document.querySelectorAll('.slack-event-form').forEach(f=>f.onsubmit=async e=>{e.preventDefault();const data=Object.fromEntries(new FormData(f));try{const task=await createTaskFromSlackEvent(f.dataset.slackEvent,{title:data.title,projectId:data.projectId||null,assigneeId:data.assigneeId,priority:Number(data.priority||3)});await load();toast('Slack-händelsen blev en uppgift.');openInspector(task.id)}catch(error){toast(error.message)}});
   document.querySelectorAll('.invite-form').forEach(f=>f.onsubmit=async e=>{e.preventDefault();const data=new FormData(e.target),email=data.get('email').trim().toLowerCase();if(!email)return;const invite=await createInvitation(e.target.dataset.team,email,data.get('role'));await load();toast(invite.acceptedAt?'Personen är redan medlem nu.':'Inbjudan är skapad.')});
+  document.querySelectorAll('[data-member-role]').forEach(s=>s.onchange=async()=>{const[teamId,userId]=s.dataset.memberRole.split(':');await updateTeamMember(teamId,userId,s.value);await load();toast('Medlemsrollen är uppdaterad.')});
+  document.querySelectorAll('[data-member-remove]').forEach(b=>b.onclick=async()=>{const[teamId,userId]=b.dataset.memberRemove.split(':');b.disabled=true;try{await removeTeamMember(teamId,userId);await load();toast('Medlemmen är borttagen från teamet.')}catch(error){b.disabled=false;toast(error.message)}});
+  document.querySelectorAll('[data-invite-delete]').forEach(b=>b.onclick=async()=>{b.disabled=true;try{await deleteInvitation(b.dataset.inviteDelete);await load();toast('Inbjudan är tillbakadragen.')}catch(error){b.disabled=false;toast(error.message)}});
   document.querySelectorAll('[data-area-share]').forEach(s=>s.onchange=async()=>{await shareAreaWithTeam(s.dataset.areaShare,s.value||null);await load();toast(s.value?'Området är delat med teamet.':'Området är privat igen.')});
 }
 
