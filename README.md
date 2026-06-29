@@ -68,8 +68,9 @@ Tillgängliga MCP-verktyg:
 
 - `list_workspace` — visar områden, projekt, team och personer som AI:n får arbeta med
 - `list_tasks` — listar synliga uppgifter, valfritt med app-länkar
+- `create_area` / `update_area` — låter AI:n skapa och ändra kategori/område-strukturen
 - `create_project` / `update_project` — låter AI:n sätta upp och underhålla projekt
-- `create_task` — skapar uppgift/underuppgift med beroenden, trigger och länkar
+- `create_task` — skapar uppgift/underuppgift med beroenden, trigger, återkomst och länkar
 - `bulk_create_tasks` — skapar många tasks i ett svep med `tempId`, `parentTempId` och `dependsOnTempIds`
 - `update_task` / `assign_task` — flyttar, tilldelar och uppdaterar tasks
 - `add_comment` — lägger till kommentar på en task

@@ -67,6 +67,37 @@ const tools = [
     }
   },
   {
+    name: 'create_area',
+    description: 'Skapa ett område under en kategori. Kategorier syns i Orbit när de har minst ett område.',
+    inputSchema: {
+      type: 'object',
+      required: ['name'],
+      properties: {
+        name: { type: 'string' },
+        category: { type: 'string' },
+        icon: { type: 'string' },
+        color: { type: 'string' },
+        teamId: { type: 'string' }
+      }
+    }
+  },
+  {
+    name: 'update_area',
+    description: 'Uppdatera område: namn, kategori, ikon, färg eller vilket team som delar området.',
+    inputSchema: {
+      type: 'object',
+      required: ['areaId'],
+      properties: {
+        areaId: { type: 'string' },
+        name: { type: 'string' },
+        category: { type: 'string' },
+        icon: { type: 'string' },
+        color: { type: 'string' },
+        teamId: { type: 'string' }
+      }
+    }
+  },
+  {
     name: 'create_project',
     description: 'Skapa ett projekt i ett område som MCP-användaren har åtkomst till.',
     inputSchema: {
@@ -422,6 +453,9 @@ async function access() {
     : { data: [], error: null };
   if (amErr) throw amErr;
 
+  const { data: categorySettings, error: cErr } = await db.from('category_settings').select('*').eq('owner_id', actorId).order('name');
+  if (cErr) throw cErr;
+
   const userIds = [...new Set([
     actorId,
     ...areas.map(a => a.owner_id).filter(Boolean),
@@ -442,6 +476,7 @@ async function access() {
     areas,
     projects,
     teams,
+    categorySettings,
     members: allMembers,
     profiles
   };
@@ -658,6 +693,18 @@ async function addDependencies(taskId, dependencyTaskIds) {
   return data;
 }
 
+async function upsertCategorySetting(name, icon, color) {
+  const cleanName = cleanText(name, 'Privat') || 'Privat';
+  const { error } = await db.from('category_settings').upsert({
+    owner_id: actorId,
+    name: cleanName.slice(0, 80),
+    icon: String(icon || '▣').trim().slice(0, 2) || '▣',
+    color: color || '#7659ef',
+    updated_at: new Date().toISOString()
+  }, { onConflict: 'owner_id,name' });
+  if (error) throw error;
+}
+
 async function createTask(ctx, input = {}, tempMap = new Map(), defaults = {}) {
   const title = cleanText(input.title);
   if (!title) throw new Error('Uppgiften saknar titel.');
@@ -759,6 +806,7 @@ async function call(name, a = {}) {
     return {
       actorId,
       areas: ctx.areas,
+      categories: ctx.categorySettings,
       projects: a.includeProjects === false ? undefined : ctx.projects,
       teams: a.includeTeams === false ? undefined : ctx.teams.map(t => ({ ...t, memberIds: ctx.members.filter(m => m.team_id === t.id && m.status === 'active').map(m => m.user_id) })),
       people: a.includePeople === false ? undefined : ctx.profiles,
@@ -772,6 +820,44 @@ async function call(name, a = {}) {
     if (!a.includeLinks) return tasks;
     const links = await taskLinks(tasks.map(t => t.id));
     return withLinks(tasks, links);
+  }
+
+  if (name === 'create_area') {
+    const areaName = cleanText(a.name);
+    if (!areaName) throw new Error('Området behöver ett namn.');
+    if (a.teamId && !ctx.teamIds.includes(a.teamId)) throw new Error('Ingen åtkomst till teamet.');
+    const category = cleanText(a.category, 'Privat') || 'Privat';
+    await upsertCategorySetting(category, a.icon, a.color);
+    const { data, error } = await db.from('areas').insert({
+      name: areaName.slice(0, 120),
+      category: category.slice(0, 80),
+      icon: String(a.icon || '◫').trim().slice(0, 2) || '◫',
+      color: a.color || '#7659ef',
+      owner_id: actorId,
+      team_id: a.teamId || null
+    }).select().single();
+    if (error) throw error;
+    return data;
+  }
+
+  if (name === 'update_area') {
+    ensureAreaAccess(ctx, a.areaId);
+    const current = ctx.areas.find(area => area.id === a.areaId);
+    if (current.owner_id !== actorId) throw new Error('Bara områdets ägare kan ändra område via MCP.');
+    if (a.teamId && !ctx.teamIds.includes(a.teamId)) throw new Error('Ingen åtkomst till teamet.');
+    const category = a.category !== undefined ? cleanText(a.category, 'Privat') || 'Privat' : undefined;
+    if (category) await upsertCategorySetting(category, a.icon || current.icon, a.color || current.color);
+    const row = compactRow({
+      name: a.name ? cleanText(a.name).slice(0, 120) : undefined,
+      category: category ? category.slice(0, 80) : undefined,
+      icon: a.icon ? String(a.icon).trim().slice(0, 2) || '◫' : undefined,
+      color: a.color,
+      team_id: a.teamId !== undefined ? a.teamId || null : undefined
+    });
+    if (!Object.keys(row).length) return current;
+    const { data, error } = await db.from('areas').update(row).eq('id', a.areaId).select().single();
+    if (error) throw error;
+    return data;
   }
 
   if (name === 'create_project') {
