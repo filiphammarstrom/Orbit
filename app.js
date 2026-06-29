@@ -350,6 +350,7 @@ function render(){
   document.querySelectorAll('[data-capacity]').forEach(b=>b.onclick=()=>{dailyCapacity=Number(b.dataset.capacity);localStorage.setItem('orbitDailyCapacity',String(dailyCapacity));render()});
   document.querySelectorAll('[data-reschedule]').forEach(b=>b.onclick=async()=>{b.disabled=true;try{await rescheduleTask(b.dataset.task,b.dataset.reschedule)}catch(error){toast(error.message);b.disabled=false}});
   document.querySelectorAll('[data-inbox-move]').forEach(b=>b.onclick=async()=>{b.disabled=true;try{await triageInboxTask(b.dataset.task,b.dataset.inboxMove)}catch(error){toast(error.message);b.disabled=false}});
+  document.querySelectorAll('[data-inbox-bulk-unscheduled]').forEach(b=>b.onclick=async()=>{b.disabled=true;try{await bulkPlanInboxUnscheduled(b.dataset.inboxBulkUnscheduled)}catch(error){toast(error.message);b.disabled=false}});
   document.querySelectorAll('[data-inbox-open]').forEach(b=>b.onclick=()=>openInspector(b.dataset.inboxOpen));
   document.querySelectorAll('[data-assignment-open]').forEach(b=>b.onclick=()=>openInspector(b.dataset.assignmentOpen));
   document.querySelectorAll('[data-assignment-response]').forEach(b=>b.onclick=async()=>{b.disabled=true;try{await handleAssignmentResponse(b.dataset.task,b.dataset.assignmentResponse)}catch(error){toast(error.message);b.disabled=false}});
@@ -534,8 +535,10 @@ function approvalCardHtml({approval,task}){
 function inboxContent(tasks){
   if(!tasks.length)return'<div class="empty">Inbox är tom. Bra.</div>';
   const assignmentDecisions=tasks.filter(isPendingAssignmentForMe),normalTasks=tasks.filter(t=>!isPendingAssignmentForMe(t)),uncategorized=normalTasks.filter(t=>!t.projectId),withProject=normalTasks.filter(t=>t.projectId);
+  const undated=normalTasks.filter(t=>!t.dueAt);
   return `${assignmentDecisions.length?assignmentDecisionInboxHtml(assignmentDecisions):''}<section class="inbox-triage-card">
     <div class="inbox-triage-head"><div><p class="eyebrow">INBOX TRIAGE</p><h3>Bestäm vad varje sak betyder</h3><p>Inbox är bara en fångstplats. Ta ett snabbt beslut: gör idag, parkera, eller öppna och placera i projekt.</p></div><span>${tasks.length}</span></div>
+    ${undated.length>=3?inboxPlanNudgeHtml(undated):''}
     <div class="inbox-triage-list">${normalTasks.slice(0,8).map(t=>`<article class="inbox-triage-item ${t.projectId?'has-project':''}">
       <button class="inbox-triage-title" data-inbox-open="${t.id}"><strong>${escapeHtml(t.title)}</strong><small>${escapeHtml(taskContextLabel(t))}</small></button>
       <div class="inbox-triage-actions">
@@ -548,6 +551,10 @@ function inboxContent(tasks){
     ${normalTasks.length>8?`<p class="inbox-triage-more">${normalTasks.length-8} till visas i listan nedanför.</p>`:''}
     <div class="inbox-triage-summary"><span>${uncategorized.length} utan projekt</span><span>${withProject.length} redan placerade</span></div>
   </section>${normalTasks.map(taskGroupHtml).join('')}`;
+}
+
+function inboxPlanNudgeHtml(tasks){
+  return `<article class="parking-nudge inbox"><div><small>INBOX UTAN DATUM</small><strong>${tasks.length} saker behöver första beslut</strong><p>Sätt ett ungefärligt datum direkt, annars blir inboxen snabbt en vägg.</p></div><div><button data-inbox-bulk-unscheduled="spread">Sprid ut</button><button data-inbox-bulk-unscheduled="nextweek">Nästa vecka</button><button data-inbox-bulk-unscheduled="someday">Parkera</button></div></article>`;
 }
 
 function assignmentDecisionInboxHtml(tasks){
@@ -815,6 +822,26 @@ async function triageInboxTask(id,target){
   await api('/tasks/'+id,{method:'PATCH',body:JSON.stringify(patch)});
   await load();
   toast(target==='today'?'Flyttad till Gör idag.':target==='later'?'Flyttad till Gör sen.':'Flyttad till Gör nån gång.');
+}
+
+async function bulkPlanInboxUnscheduled(target){
+  const items=topLevel(tasksForBucketView('inbox').filter(t=>!isPendingAssignmentForMe(t)&&!t.dueAt));
+  if(!items.length){toast('Inga odaterade inbox-uppgifter hittades.');return}
+  for(const [index,t] of items.entries()){
+    const patch={};
+    if(target==='spread'){
+      const dueAt=index===0?todayPlanTime():dayAt(Math.min(index,5),9).toISOString();
+      patch.bucket=index===0?'today':'later';patch.dueAt=dueAt;patch.due=formatDateTime(dueAt);patch.reminderAt=null;patch.status=t.status==='doing'?'doing':'planned';
+    }else if(target==='nextweek'){
+      const dueAt=dayAt(7+Math.min(index,4),9).toISOString();
+      patch.bucket='later';patch.dueAt=dueAt;patch.due=formatDateTime(dueAt);patch.reminderAt=null;patch.status=t.status==='doing'?'doing':'planned';
+    }else if(target==='someday'){
+      patch.bucket='someday';patch.dueAt=null;patch.due='';patch.reminderAt=null;
+    }else throw new Error('Okänt inbox-val.');
+    await api('/tasks/'+t.id,{method:'PATCH',body:JSON.stringify(patch)});
+  }
+  await load();
+  toast(`${items.length} inbox-uppgift${items.length===1?'':'er'} fick ett tydligare nästa läge.`);
 }
 
 async function reviewSomedayTask(id,target){

@@ -936,6 +936,11 @@
   border: 1px solid #dce8f8;
 }
 
+.parking-nudge.inbox {
+  border: 1px solid #e7defb;
+  margin-bottom: 12px;
+}
+
 .parking-nudge small {
   color: var(--purple);
   display: block;
