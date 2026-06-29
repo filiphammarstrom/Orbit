@@ -28,6 +28,7 @@ const taskInputSchema = {
     due: { type: 'string' },
     dueAt: { type: 'string' },
     reminderAt: { type: 'string' },
+    recurrenceRule: { type: 'string', enum: ['daily', 'weekly', 'monthly'] },
     status: { type: 'string' },
     taskType: { type: 'string' },
     activationMode: { type: 'string' },
@@ -142,6 +143,7 @@ const tools = [
         due: { type: 'string' },
         dueAt: { type: 'string' },
         reminderAt: { type: 'string' },
+        recurrenceRule: { type: 'string', enum: ['daily', 'weekly', 'monthly'] },
         status: { type: 'string' },
         completed: { type: 'boolean' },
         visible: { type: 'boolean' }
@@ -656,11 +658,6 @@ async function addDependencies(taskId, dependencyTaskIds) {
   return data;
 }
 
-async function notifyAssignment(taskId, assigneeId, title) {
-  if (!assigneeId || assigneeId === actorId) return;
-  await db.from('notifications').insert({ user_id: assigneeId, task_id: taskId, type: 'assignment', title: 'Ny uppgift tilldelad', body: title || '' });
-}
-
 async function createTask(ctx, input = {}, tempMap = new Map(), defaults = {}) {
   const title = cleanText(input.title);
   if (!title) throw new Error('Uppgiften saknar titel.');
@@ -698,6 +695,7 @@ async function createTask(ctx, input = {}, tempMap = new Map(), defaults = {}) {
     due_text: input.due || '',
     due_at: nullableIso(input.dueAt),
     reminder_at: nullableIso(input.reminderAt),
+    recurrence_rule: input.recurrenceRule || null,
     status: input.status || 'todo',
     task_type: input.taskType || 'task',
     activation_mode: input.activationMode || 'all',
@@ -742,6 +740,7 @@ async function updateTask(ctx, input) {
     due_text: input.due,
     due_at: input.dueAt !== undefined ? nullableIso(input.dueAt) : undefined,
     reminder_at: input.reminderAt !== undefined ? nullableIso(input.reminderAt) : undefined,
+    recurrence_rule: input.recurrenceRule !== undefined ? input.recurrenceRule || null : undefined,
     status: input.completed ? 'done' : input.status,
     completed: input.completed,
     visible: input.visible
@@ -750,7 +749,6 @@ async function updateTask(ctx, input) {
   if (!Object.keys(row).length) return current;
   const { data, error } = await db.from('tasks').update(row).eq('id', input.taskId).select().single();
   if (error) throw error;
-  if (input.assigneeId !== undefined && assigneeId !== current.assignee_id) await notifyAssignment(data.id, assigneeId, data.title);
   return data;
 }
 
