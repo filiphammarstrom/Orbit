@@ -26,8 +26,20 @@ public final class OrbitStore {
     }
 
     public var inboxTasks: [OrbitTask] {
+        tasks(in: .inbox)
+    }
+
+    public var laterTasks: [OrbitTask] {
+        tasks(in: .later)
+    }
+
+    public var somedayTasks: [OrbitTask] {
+        tasks(in: .someday)
+    }
+
+    public func tasks(in bucket: OrbitBucket) -> [OrbitTask] {
         visibleTasks
-            .filter { $0.bucket == .inbox }
+            .filter { $0.bucket == bucket }
             .sorted(by: taskSort)
     }
 

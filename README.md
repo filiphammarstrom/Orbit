@@ -107,9 +107,11 @@ Rekommenderat flöde för ChatGPT/Claude:
 Länkar från andra appar:
 
 - Orbit är förberedd som PWA med Web Share Target. När appen installeras på en enhet som stödjer detta kan användaren dela en webbsida/länk till Orbit och få “Ny uppgift”-dialogen förifylld.
+- Installerad PWA har också genvägar för Ny uppgift, Gör idag, Inbox och Review. `/?quick=task` öppnar snabb uppgift och `/?view=today|inbox|review|later|someday|areas` öppnar rätt vy direkt.
 - Samma flöde kan öppnas manuellt med query-parametrar, t.ex. `https://orbit-iota-sage.vercel.app/?capture=1&title=Svara%20Pelle&url=https%3A%2F%2Fmail.google.com%2F...`
 - Stödda parametrar: `title`, `text`, `url`, eller `captureTitle`, `captureText`, `captureUrl`.
 - Orbit försöker känna igen Gmail, Outlook, Google Docs, Google Calendar och Slack-länkar och sätter rätt länktyp/app i uppgiften.
+- Kommandopaletten (`⌘K`/`Ctrl+K`) kan öppna tasks/projekt/områden och köra snabbactions som Ny uppgift, Ny kategori, Gå till Inbox/Review/Struktur, Uppdatera dagens brief och Kör Orbit-agenten.
 
 ## Google Calendar och Slack
 

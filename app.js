@@ -14,6 +14,8 @@ function setAppLocked(locked){
 const bucketViews = ['inbox','today','later','someday'];
 const navItems = [['inbox','⌄','Inbox'],['today','☀','Gör idag'],['later','◷','Gör sen'],['someday','◇','Gör nån gång'],['review','◎','Review'],['settings','⚙','Inställningar']];
 const mobileItems = [['inbox','⌄','Inbox'],['today','☀','Idag'],['later','◷','Sen'],['review','◎','Review'],['areas','▦','Områden'],['settings','⚙','Mer']];
+const initialView = new URLSearchParams(window.location.search).get('view');
+if(['inbox','today','later','someday','review','settings','areas'].includes(initialView))view=initialView;
 let pendingCapture = readCaptureIntent();
 const collapsedCategories = new Set();
 const collapsedAreas = new Set();
@@ -175,6 +177,8 @@ function readCaptureIntent(){
   const sharedUrl=firstParam(params,['url','captureUrl','link','u']);
   const sharedText=firstParam(params,['text','captureText','body','note']);
   const titleParam=firstParam(params,['title','captureTitle','name']);
+  const quick=firstParam(params,['quick','capture']);
+  if(!sharedUrl&&!sharedText&&!titleParam&&['task','new-task','quick-add'].includes(quick))return {};
   const url=sharedUrl||firstUrl(sharedText);
   const text=withoutUrl(sharedText,url);
   const meta=linkMeta(url,firstParam(params,['provider','app']));
@@ -402,16 +406,26 @@ function bindTaskViewButtons(){
 }
 
 function commandItems(){
+  const actionItems=[
+    {type:'action',id:'new-task',title:'Ny uppgift',meta:'Fånga ett snabbt nästa steg'},
+    {type:'action',id:'today',title:'Gå till Gör idag',meta:'Dagens fokus och plan'},
+    {type:'action',id:'inbox',title:'Gå till Inbox',meta:'Rensa och planera osorterat'},
+    {type:'action',id:'review',title:'Gå till Review',meta:'Besluta om lösa trådar'},
+    {type:'action',id:'areas',title:'Gå till Struktur',meta:'Kategori, område och projekt'},
+    {type:'action',id:'new-category',title:'Ny kategori / område',meta:'Skapa struktur på rätt nivå'},
+    {type:'action',id:'daily-brief',title:'Uppdatera dagens brief',meta:'Skapa AI/MCP-sammanfattning'},
+    {type:'action',id:'run-agent',title:'Kör Orbit-agenten',meta:'Föreslå nästa praktiska steg'}
+  ];
   const taskItems=state.tasks.filter(t=>!t.completed&&t.visible).map(t=>({type:'task',id:t.id,title:t.title,meta:taskContextLabel(t)}));
   const projectItems=state.projects.map(p=>({type:'project',id:p.id,title:p.name,meta:areaName(area(p.areaId))}));
   const areaItems=state.areas.map(a=>({type:'area',id:a.id,title:areaName(a),meta:areaCategory(a)}));
-  return [...taskItems,...projectItems,...areaItems];
+  return [...actionItems,...taskItems,...projectItems,...areaItems];
 }
 
 function renderCommandResults(query=''){
   const q=query.trim().toLocaleLowerCase('sv-SE'),items=commandItems().filter(item=>!q||`${item.title} ${item.meta}`.toLocaleLowerCase('sv-SE').includes(q)).slice(0,12);
-  $('#commandResults').innerHTML=items.length?items.map(item=>`<button type="button" data-command-type="${item.type}" data-command-id="${item.id}"><span>${item.type==='task'?'□':item.type==='project'?'▣':'◫'}</span><div><strong>${escapeHtml(item.title)}</strong><small>${escapeHtml(item.meta)}</small></div></button>`).join(''):'<p class="hint">Inga träffar.</p>';
-  document.querySelectorAll('[data-command-id]').forEach(b=>b.onclick=()=>{const type=b.dataset.commandType,id=b.dataset.commandId;$('#commandDialog').close();if(type==='task')openInspector(id);else{view=`${type}:${id}`;render()}});
+  $('#commandResults').innerHTML=items.length?items.map(item=>`<button type="button" data-command-type="${item.type}" data-command-id="${item.id}"><span>${item.type==='action'?'⌁':item.type==='task'?'□':item.type==='project'?'▣':'◫'}</span><div><strong>${escapeHtml(item.title)}</strong><small>${escapeHtml(item.meta)}</small></div></button>`).join(''):'<p class="hint">Inga träffar.</p>';
+  document.querySelectorAll('[data-command-id]').forEach(b=>b.onclick=async()=>{const type=b.dataset.commandType,id=b.dataset.commandId;$('#commandDialog').close();if(type==='action')await runCommandAction(id);else if(type==='task')openInspector(id);else{view=`${type}:${id}`;render()}});
 }
 
 function openFirstCommandResult(){
@@ -425,6 +439,14 @@ function openCommandPalette(){
   $('#commandDialog').showModal();
   $('#commandSearch').value='';
   $('#commandSearch').focus();
+}
+
+async function runCommandAction(id){
+  if(id==='new-task'){openDialog();return}
+  if(['today','inbox','review','areas'].includes(id)){view=id;render();return}
+  if(id==='new-category'){openStructureDialog('category');return}
+  if(id==='daily-brief'){const generated=buildDailyBrief();await saveDailyBrief(generated);await load();toast('Dagens brief är uppdaterad.');return}
+  if(id==='run-agent'){const plan=buildAgentPlan();await saveAgentRun(plan);await load();toast('Agenten har föreslagit nästa steg.');return}
 }
 
 function todayContent(tasks){

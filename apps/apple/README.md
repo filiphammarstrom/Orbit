@@ -23,6 +23,10 @@ Current package contains:
   - `AddOrbitTaskIntent`
   - `OpenOrbitIntent`
   - `OrbitShortcutsProvider`
+- Native list destinations for Today, Inbox, Later, Someday and Review.
+- App Intents handoff from Siri/Shortcuts into the native root view:
+  - add task with title, optional notes and bucket
+  - open a specific Orbit view
 
 Run checks:
 

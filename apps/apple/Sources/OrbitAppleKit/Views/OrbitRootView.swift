@@ -9,26 +9,35 @@ public struct OrbitRootView: View {
     }
 
     public var body: some View {
-        #if os(macOS)
-        NavigationSplitView {
-            OrbitSidebar(selectedTab: $selectedTab)
-        } detail: {
-            tabContent
-                .navigationTitle(selectedTab.title)
-        }
-        .frame(minWidth: 760, minHeight: 520)
-        #else
-        TabView(selection: $selectedTab) {
-            ForEach(OrbitTab.allCases) { tab in
-                NavigationStack {
-                    tab.makeContentView(store: store)
-                        .navigationTitle(tab.title)
-                }
-                .tabItem { tab.label }
-                .tag(tab)
+        Group {
+            #if os(macOS)
+            NavigationSplitView {
+                OrbitSidebar(selectedTab: $selectedTab)
+            } detail: {
+                tabContent
+                    .navigationTitle(selectedTab.title)
             }
+            .frame(minWidth: 760, minHeight: 520)
+            #else
+            TabView(selection: $selectedTab) {
+                ForEach(OrbitTab.allCases) { tab in
+                    NavigationStack {
+                        tab.makeContentView(store: store)
+                            .navigationTitle(tab.title)
+                    }
+                    .tabItem { tab.label }
+                    .tag(tab)
+                }
+            }
+            #endif
         }
-        #endif
+        .task {
+            await store.refresh()
+            await handleIntentHandoff()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .orbitIntentHandoff)) { _ in
+            Task { await handleIntentHandoff() }
+        }
     }
 
     @ViewBuilder
@@ -42,15 +51,26 @@ public struct OrbitRootView: View {
                 }
                 .keyboardShortcut("n", modifiers: [.command])
             }
-            .task {
-                await store.refresh()
-            }
+    }
+
+    private func handleIntentHandoff() async {
+        if let tab = OrbitIntentHandoff.shared.pendingTab {
+            OrbitIntentHandoff.shared.pendingTab = nil
+            selectedTab = tab
+        }
+        if let quickAdd = OrbitIntentHandoff.shared.pendingQuickAdd {
+            OrbitIntentHandoff.shared.pendingQuickAdd = nil
+            await store.quickAdd(title: quickAdd.title, notes: quickAdd.notes, bucket: quickAdd.bucket)
+            selectedTab = OrbitTab(bucket: quickAdd.bucket) ?? .inbox
+        }
     }
 }
 
 public enum OrbitTab: String, CaseIterable, Identifiable {
     case today
     case inbox
+    case later
+    case someday
     case quickAdd
     case review
     case settings
@@ -62,9 +82,20 @@ public enum OrbitTab: String, CaseIterable, Identifiable {
         switch self {
         case .today: "Idag"
         case .inbox: "Inbox"
+        case .later: "Gör sen"
+        case .someday: "Gör nån gång"
         case .quickAdd: "Quick Add"
         case .review: "Review"
         case .settings: "Inställningar"
+        }
+    }
+
+    init?(bucket: OrbitBucket) {
+        switch bucket {
+        case .inbox: self = .inbox
+        case .today: self = .today
+        case .later: self = .later
+        case .someday: self = .someday
         }
     }
 
@@ -76,6 +107,10 @@ public enum OrbitTab: String, CaseIterable, Identifiable {
             TodayView(store: store)
         case .inbox:
             TaskListView(title: "Inbox", tasks: store.inboxTasks, store: store)
+        case .later:
+            TaskListView(title: "Gör sen", tasks: store.laterTasks, store: store)
+        case .someday:
+            TaskListView(title: "Gör nån gång", tasks: store.somedayTasks, store: store)
         case .quickAdd:
             QuickAddView(store: store)
         case .review:
@@ -91,6 +126,8 @@ public enum OrbitTab: String, CaseIterable, Identifiable {
         switch self {
         case .today: Label("Idag", systemImage: "sun.max")
         case .inbox: Label("Inbox", systemImage: "tray")
+        case .later: Label("Sen", systemImage: "clock")
+        case .someday: Label("Någon gång", systemImage: "shippingbox")
         case .quickAdd: Label("Ny", systemImage: "plus.circle")
         case .review: Label("Review", systemImage: "checklist")
         case .settings: Label("Mer", systemImage: "gear")

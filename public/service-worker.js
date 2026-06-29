@@ -1,4 +1,4 @@
-const CACHE_NAME = 'orbit-shell-v1';
+const CACHE_NAME = 'orbit-shell-v2';
 const CORE_ASSETS = ['/', '/manifest.webmanifest', '/orbit-icon.svg'];
 
 self.addEventListener('install', event => {
