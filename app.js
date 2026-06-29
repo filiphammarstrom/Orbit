@@ -2,6 +2,15 @@ import { configured, session, signIn, signUp, signOut, loadCloudState, createClo
 
 let state, view = 'today', projectView='list', liveChannel, deferredInstallPrompt=null, reminderTimer=null;
 const $ = s => document.querySelector(s);
+const appShellSelectors = ['.sidebar','main','#inspector','#notificationPanel','#commandDialog','#taskDialog','#structureDialog','#mobileAdd','#mobileNav'];
+function setAppLocked(locked){
+  appShellSelectors.forEach(selector=>{
+    const el=$(selector);
+    if(!el)return;
+    el.inert=locked;
+    el.setAttribute('aria-hidden',locked?'true':'false');
+  });
+}
 const bucketViews = ['inbox','today','later','someday'];
 const navItems = [['inbox','⌄','Inbox'],['today','☀','Gör idag'],['later','◷','Gör sen'],['someday','◇','Gör nån gång'],['review','◎','Review'],['settings','⚙','Inställningar']];
 const mobileItems = [['inbox','⌄','Inbox'],['today','☀','Idag'],['later','◷','Sen'],['review','◎','Review'],['areas','▦','Områden'],['settings','⚙','Mer']];
@@ -1490,6 +1499,7 @@ function refreshAssignees(){
   updateTaskContext();
 }
 function openDialog(prefill={}){
+  if($('#authScreen')?.classList.contains('open'))return;
   $('#taskForm').reset();
   $('#linkDetails').open=false;
   $('#projectSelect').innerHTML=projectOptionsHtml('');
@@ -1553,8 +1563,8 @@ document.addEventListener('keydown',e=>{
 });
 
 let authMode='signin';
-function showAuth(){ $('#authScreen').classList.add('open');$('#configHelp').classList.toggle('show',!configured);$('#authSubmit').disabled=!configured }
-function hideAuth(){ $('#authScreen').classList.remove('open') }
+function showAuth(){ $('#authScreen').classList.add('open');setAppLocked(true);$('#configHelp').classList.toggle('show',!configured);$('#authSubmit').disabled=!configured }
+function hideAuth(){ $('#authScreen').classList.remove('open');setAppLocked(false) }
 $('#authSwitch').onclick=()=>{authMode=authMode==='signin'?'signup':'signin';const signup=authMode==='signup';$('#nameLabel').classList.toggle('show',signup);$('#authTitle').textContent=signup?'Skapa ditt konto':'Välkommen tillbaka';$('#authSubmit').textContent=signup?'Skapa konto':'Logga in';$('#authSwitch').textContent=signup?'Har du redan ett konto? Logga in':'Inget konto? Skapa ett';$('#authError').textContent=''};
 $('#authForm').onsubmit=async e=>{e.preventDefault();const f=new FormData(e.target);$('#authError').textContent='';$('#authSubmit').disabled=true;try{if(authMode==='signup')await signUp(f.get('name'),f.get('email'),f.get('password'));else await signIn(f.get('email'),f.get('password'));await boot()}catch(err){$('#authError').textContent=err.message}finally{$('#authSubmit').disabled=false}};
 $('#logoutButton').onclick=async()=>{if(liveChannel)await liveChannel.unsubscribe();await signOut();showAuth()};
