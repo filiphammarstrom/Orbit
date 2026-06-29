@@ -917,6 +917,68 @@
   padding: 12px;
 }
 
+.parking-nudge {
+  align-items: center;
+  background: #fff;
+  border-radius: 14px;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: 1fr auto;
+  margin-top: 12px;
+  padding: 12px;
+}
+
+.parking-nudge.later {
+  border: 1px solid #eee0bf;
+}
+
+.parking-nudge.someday {
+  border: 1px solid #dce8f8;
+}
+
+.parking-nudge small {
+  color: var(--purple);
+  display: block;
+  font-size: 9px;
+  font-weight: 850;
+  letter-spacing: .08em;
+  margin-bottom: 4px;
+}
+
+.parking-nudge strong {
+  color: #25202d;
+  display: block;
+  font: 800 13px Manrope;
+}
+
+.parking-nudge p {
+  color: #8f8895;
+  font-size: 11px;
+  line-height: 1.45;
+  margin: 4px 0 0;
+}
+
+.parking-nudge > div:last-child {
+  display: flex;
+  gap: 7px;
+}
+
+.parking-nudge button {
+  border: 0;
+  border-radius: 9px;
+  background: #f4f2f6;
+  color: #5f5966;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 800;
+  padding: 8px 10px;
+}
+
+.parking-nudge button:first-child {
+  background: #efeaff;
+  color: var(--purple);
+}
+
 .later-next-card > button,
 .later-card-main {
   background: transparent;
@@ -1641,13 +1703,20 @@
   }
 
   .later-next-card div,
-  .later-card-actions {
+  .later-card-actions,
+  .parking-nudge,
+  .parking-nudge > div:last-child {
     display: grid;
     grid-template-columns: 1fr 1fr;
   }
 
+  .parking-nudge {
+    grid-template-columns: 1fr;
+  }
+
   .later-next-card div button,
-  .later-card-actions button {
+  .later-card-actions button,
+  .parking-nudge button {
     width: 100%;
   }
 

@@ -354,7 +354,9 @@ function render(){
   document.querySelectorAll('[data-assignment-response]').forEach(b=>b.onclick=async()=>{b.disabled=true;try{await handleAssignmentResponse(b.dataset.task,b.dataset.assignmentResponse)}catch(error){toast(error.message);b.disabled=false}});
   document.querySelectorAll('[data-later-move]').forEach(b=>b.onclick=async()=>{b.disabled=true;try{await rescheduleTask(b.dataset.task,b.dataset.laterMove)}catch(error){toast(error.message);b.disabled=false}});
   document.querySelectorAll('[data-later-open]').forEach(b=>b.onclick=()=>openInspector(b.dataset.laterOpen));
+  document.querySelectorAll('[data-later-bulk-unscheduled]').forEach(b=>b.onclick=async()=>{b.disabled=true;try{await bulkMoveLaterUnscheduled(b.dataset.laterBulkUnscheduled)}catch(error){toast(error.message);b.disabled=false}});
   document.querySelectorAll('[data-someday-move]').forEach(b=>b.onclick=async()=>{b.disabled=true;try{await reviewSomedayTask(b.dataset.task,b.dataset.somedayMove)}catch(error){toast(error.message);b.disabled=false}});
+  document.querySelectorAll('[data-someday-bulk-priority]').forEach(b=>b.onclick=async()=>{b.disabled=true;try{await bulkPlanSomedayPriority(Number(b.dataset.somedayBulkPriority))}catch(error){toast(error.message);b.disabled=false}});
   document.querySelectorAll('[data-someday-priority]').forEach(b=>b.onclick=async()=>{b.disabled=true;try{await setTaskPriority(b.dataset.task,Number(b.dataset.somedayPriority))}catch(error){toast(error.message);b.disabled=false}});
   document.querySelectorAll('[data-someday-open]').forEach(b=>b.onclick=()=>openInspector(b.dataset.somedayOpen));
   document.querySelectorAll('.board-card,.calendar-task,.flow-node').forEach(c=>c.onclick=()=>openInspector(c.dataset.id));
@@ -564,15 +566,21 @@ function laterContent(tasks){
     ['unscheduled','Utan datum',sorted.filter(t=>!t.dueAt),'Behöver ett beslut för att inte försvinna.']
   ].filter(([, ,items])=>items.length);
   const next=groups[0]?.[2]?.[0];
+  const unscheduled=sorted.filter(t=>!t.dueAt);
   return `<section class="later-planner-card">
     <div class="later-planner-head"><div><p class="eyebrow">GÖR SEN</p><h3>Planera framåt utan att fylla idag</h3><p>Här ska saker ha ett ungefärligt nästa datum. Om något är viktigt nog: lyft till idag.</p></div><span>${tasks.length}</span></div>
     ${next?`<article class="later-next-card"><button data-later-open="${next.id}"><small>Närmast beslut</small><strong>${escapeHtml(next.title)}</strong><span>${escapeHtml(taskContextLabel(next))}</span></button><div><button class="primary" data-task="${next.id}" data-later-move="today">Idag</button><button class="secondary" data-task="${next.id}" data-later-move="someday">Någon gång</button></div></article>`:''}
+    ${unscheduled.length>=3?laterNudgeHtml(unscheduled):''}
   </section>
   <div class="later-timeline">${groups.map(([key,label,items,help])=>`<section class="later-group ${key}">
     <h3>${label}<span>${items.length}</span></h3>
     <p>${help}</p>
     <div>${items.map(laterCardHtml).join('')}</div>
   </section>`).join('')}</div>`;
+}
+
+function laterNudgeHtml(tasks){
+  return `<article class="parking-nudge later"><div><small>UTAN DATUM</small><strong>${tasks.length} saker riskerar att försvinna</strong><p>Ge dem ett ungefärligt nästa datum eller parkera dem ärligt i Someday.</p></div><div><button data-later-bulk-unscheduled="nextweek">Planera nästa vecka</button><button data-later-bulk-unscheduled="someday">Parkera i Someday</button></div></article>`;
 }
 
 function laterCardHtml(t){
@@ -591,6 +599,7 @@ function somedayContent(tasks){
   if(!tasks.length)return'<div class="empty">Gör nån gång är tom. Bra.</div>';
   const sorted=[...tasks].sort((a,b)=>Number(a.priority||4)-Number(b.priority||4)||String(a.title).localeCompare(String(b.title),'sv-SE'));
   const pick=sorted[0],groups=[[1,'P1 · Viktigt'],[2,'P2 · Bra att göra'],[3,'P3 · Låg energi'],[4,'P4 · Parkering']];
+  const highParked=sorted.filter(t=>Number(t.priority||4)<=2);
   return `<section class="someday-review-card">
     <div class="someday-review-head">
       <div><p class="eyebrow">SOMEDAY REVIEW</p><h3>Plocka upp en sak eller låt den vila</h3><p>Den här listan ska vara en parkering, inte ett svart hål. Välj en sak om något faktiskt ska framåt.</p></div>
@@ -600,11 +609,38 @@ function somedayContent(tasks){
       <button data-someday-open="${pick.id}"><small>Föreslagen att lyfta</small><strong>${escapeHtml(pick.title)}</strong><span>${escapeHtml(taskContextLabel(pick))}</span></button>
       <div><button class="primary" data-task="${pick.id}" data-someday-move="today">Gör idag</button><button class="secondary" data-task="${pick.id}" data-someday-move="later">Gör senare</button></div>
     </article>
+    ${highParked.length>=3?`<article class="parking-nudge someday"><div><small>VIKTIGT MEN PARKERAT</small><strong>${highParked.length} P1/P2 ligger i Someday</strong><p>Om det är viktigt ska det få ett nästa datum, annars sänk prioriteten.</p></div><div><button data-someday-bulk-priority="1">Planera P1 nästa vecka</button><button data-someday-bulk-priority="2">Planera P2 nästa vecka</button></div></article>`:''}
   </section>
   <div class="someday-priority-board">${groups.map(([priority,label])=>{
     const cards=sorted.filter(t=>Number(t.priority||4)===priority);
     return `<section class="someday-priority-column"><h3>${label}<span>${cards.length}</span></h3>${cards.length?cards.map(somedayCardHtml).join(''):'<p class="hint">Tomt.</p>'}</section>`;
   }).join('')}</div>`;
+}
+
+async function bulkMoveLaterUnscheduled(target){
+  const items=topLevel(tasksForBucketView('later').filter(t=>!t.dueAt));
+  if(!items.length){toast('Inga odaterade Gör sen-uppgifter hittades.');return}
+  for(const [index,t] of items.entries()){
+    if(target==='nextweek'){
+      const dueAt=dayAt(7+Math.min(index,4),9).toISOString();
+      await api('/tasks/'+t.id,{method:'PATCH',body:JSON.stringify({bucket:'later',dueAt,due:formatDateTime(dueAt),reminderAt:null,status:t.status==='doing'?'planned':t.status})});
+    } else if(target==='someday'){
+      await api('/tasks/'+t.id,{method:'PATCH',body:JSON.stringify({bucket:'someday',dueAt:null,due:'',reminderAt:null})});
+    } else throw new Error('Okänt val.');
+  }
+  await load();
+  toast(`${items.length} uppgift${items.length===1?'':'er'} fick ett tydligare hem.`);
+}
+
+async function bulkPlanSomedayPriority(priority){
+  const items=topLevel(tasksForBucketView('someday').filter(t=>Number(t.priority||4)===priority));
+  if(!items.length){toast(`Inga P${priority} i Someday.`);return}
+  for(const [index,t] of items.entries()){
+    const dueAt=dayAt(7+Math.min(index,4),9).toISOString();
+    await api('/tasks/'+t.id,{method:'PATCH',body:JSON.stringify({bucket:'later',dueAt,due:formatDateTime(dueAt),reminderAt:null,status:'planned'})});
+  }
+  await load();
+  toast(`${items.length} P${priority}-uppgift${items.length===1?'':'er'} planerades till nästa vecka.`);
 }
 
 function somedayCardHtml(t){
