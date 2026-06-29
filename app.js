@@ -23,6 +23,7 @@ let taskScope=localStorage.getItem('orbitTaskScope')||'all';
 if(!['all','mine'].includes(taskScope))taskScope='all';
 let taskSort=localStorage.getItem('orbitTaskSort')||'smart';
 if(!['smart','priority','due','name'].includes(taskSort))taskSort='smart';
+let taskSearch=localStorage.getItem('orbitTaskSearch')||'';
 let notifiedReminderKeys=new Set(JSON.parse(localStorage.getItem('orbitNotifiedReminders')||'[]'));
 let pendingTaskOpen = new URLSearchParams(window.location.search).get('task') || '';
 
@@ -368,7 +369,14 @@ function render(){
 }
 
 function applyTaskViewControls(tasks){
-  const scoped=taskScope==='mine'?tasks.filter(t=>t.assigneeId===state.currentUserId):tasks;
+  const query=taskSearch.trim().toLocaleLowerCase('sv-SE');
+  const matches=t=>{
+    if(!query)return true;
+    const p=project(t.projectId),a=areaForProject(t.projectId),assignee=person(t.assigneeId);
+    return [t.title,t.notes,statusLabel(t.status),p?.name,a?areaName(a):'',assignee.name,scheduleLabel(t),assignmentStatusLabel(t)]
+      .filter(Boolean).join(' ').toLocaleLowerCase('sv-SE').includes(query);
+  };
+  const scoped=(taskScope==='mine'?tasks.filter(t=>t.assigneeId===state.currentUserId):tasks).filter(matches);
   const score=t=>{
     if(taskSort==='priority')return[Number(t.priority||4),t.dueAt?new Date(t.dueAt).getTime():Number.MAX_SAFE_INTEGER,String(t.title)];
     if(taskSort==='due')return[t.dueAt?new Date(t.dueAt).getTime():Number.MAX_SAFE_INTEGER,Number(t.priority||4),String(t.title)];
@@ -379,15 +387,17 @@ function applyTaskViewControls(tasks){
 }
 
 function updateTaskViewButtons(){
-  const buttons=document.querySelectorAll('.section-head .filter');
-  if(buttons[0])buttons[0].textContent=taskScope==='mine'?'◎ Mina':'☷ Alla';
-  if(buttons[1])buttons[1].textContent=({smart:'↕ Smart',priority:'↕ Prio',due:'↕ Datum',name:'↕ Namn'})[taskSort]||'↕ Sortera';
+  const search=$('#taskSearch'),scope=$('#taskScopeSelect'),sort=$('#taskSortSelect');
+  if(search&&search.value!==taskSearch)search.value=taskSearch;
+  if(scope)scope.value=taskScope;
+  if(sort)sort.value=taskSort;
 }
 
 function bindTaskViewButtons(){
-  const buttons=document.querySelectorAll('.section-head .filter');
-  if(buttons[0])buttons[0].onclick=()=>{taskScope=taskScope==='all'?'mine':'all';localStorage.setItem('orbitTaskScope',taskScope);render()};
-  if(buttons[1])buttons[1].onclick=()=>{const order=['smart','priority','due','name'];taskSort=order[(order.indexOf(taskSort)+1)%order.length];localStorage.setItem('orbitTaskSort',taskSort);render()};
+  const search=$('#taskSearch'),scope=$('#taskScopeSelect'),sort=$('#taskSortSelect');
+  if(search)search.oninput=e=>{taskSearch=e.target.value;localStorage.setItem('orbitTaskSearch',taskSearch);render()};
+  if(scope)scope.onchange=e=>{taskScope=e.target.value;localStorage.setItem('orbitTaskScope',taskScope);render()};
+  if(sort)sort.onchange=e=>{taskSort=e.target.value;localStorage.setItem('orbitTaskSort',taskSort);render()};
 }
 
 function commandItems(){
