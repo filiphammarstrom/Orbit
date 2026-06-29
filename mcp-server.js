@@ -187,6 +187,19 @@ const tools = [
     inputSchema: { type: 'object', required: ['taskId', 'assigneeId'], properties: { taskId: { type: 'string' }, assigneeId: { type: 'string' } } }
   },
   {
+    name: 'respond_to_assignment',
+    description: 'Acceptera eller neka en uppgift som är tilldelad till MCP-användaren. Används för Inbox-beslut.',
+    inputSchema: {
+      type: 'object',
+      required: ['taskId', 'status'],
+      properties: {
+        taskId: { type: 'string' },
+        status: { type: 'string', enum: ['accepted', 'declined'] },
+        note: { type: 'string' }
+      }
+    }
+  },
+  {
     name: 'add_comment',
     description: 'Lägg till en kommentar på en task, t.ex. “Skapad av Claude från mötesanteckningarna”.',
     inputSchema: { type: 'object', required: ['taskId', 'body'], properties: { taskId: { type: 'string' }, body: { type: 'string' } } }
@@ -950,6 +963,19 @@ async function call(name, a = {}) {
 
   if (name === 'assign_task') {
     return updateTask(ctx, { taskId: a.taskId, assigneeId: a.assigneeId });
+  }
+
+  if (name === 'respond_to_assignment') {
+    const task = await allowedTask(a.taskId, ctx);
+    if (task.assignee_id !== actorId) throw new Error('Du kan bara svara på uppgifter som är tilldelade till MCP-användaren.');
+    if (!['accepted', 'declined'].includes(a.status)) throw new Error('Status måste vara accepted eller declined.');
+    const { data, error } = await db.from('tasks').update({
+      assignment_status: a.status,
+      assignment_responded_at: new Date().toISOString(),
+      assignment_response_note: a.note || ''
+    }).eq('id', a.taskId).select().single();
+    if (error) throw error;
+    return data;
   }
 
   if (name === 'add_comment') {

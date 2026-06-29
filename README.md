@@ -72,7 +72,7 @@ Tillgängliga MCP-verktyg:
 - `create_project` / `update_project` — låter AI:n sätta upp och underhålla projekt
 - `create_task` — skapar uppgift/underuppgift med beroenden, trigger, återkomst och länkar
 - `bulk_create_tasks` — skapar många tasks i ett svep med `tempId`, `parentTempId` och `dependsOnTempIds`
-- `update_task` / `assign_task` — flyttar, tilldelar och uppdaterar tasks
+- `update_task` / `assign_task` / `respond_to_assignment` — flyttar, tilldelar, accepterar/nekar och uppdaterar tasks
 - `add_comment` — lägger till kommentar på en task
 - `add_task_link` — kopplar t.ex. Gmail/Outlook/Slack/Docs-länk till en uppgift
 - `list_integrations` / `register_integration` — hanterar registrerade Google Calendar- och Slack-kopplingar
