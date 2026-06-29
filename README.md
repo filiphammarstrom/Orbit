@@ -68,10 +68,12 @@ Tillgängliga MCP-verktyg:
 
 - `list_workspace` — visar områden, projekt, team och personer som AI:n får arbeta med
 - `list_tasks` — listar synliga uppgifter, valfritt med app-länkar
+- `create_team` / `invite_member` / `share_area_with_team` — låter AI:n sätta upp team, bjuda in personer och dela områden
 - `create_area` / `update_area` — låter AI:n skapa och ändra kategori/område-strukturen
 - `create_project` / `update_project` — låter AI:n sätta upp och underhålla projekt
 - `create_task` — skapar uppgift/underuppgift med beroenden, trigger, återkomst och länkar
 - `bulk_create_tasks` — skapar många tasks i ett svep med `tempId`, `parentTempId` och `dependsOnTempIds`
+- `break_down_task` — bryter ner en stor uppgift till parallella underuppgifter eller en sekventiell kedja
 - `update_task` / `assign_task` / `respond_to_assignment` — flyttar, tilldelar, accepterar/nekar och uppdaterar tasks
 - `add_comment` — lägger till kommentar på en task
 - `add_task_link` — kopplar t.ex. Gmail/Outlook/Slack/Docs-länk till en uppgift
@@ -85,6 +87,8 @@ Tillgängliga MCP-verktyg:
 - `complete_task` — slutför en uppgift och låter databasen aktivera nästa steg
 - `emit_event` — skickar extern trigger, t.ex. `pelle_replied_email`
 - `daily_brief` — skapar och kan spara en daglig sammanfattning
+- `reschedule_overdue_tasks` — planerar om försenade uppgifter till idag, imorgon, nästa vecka eller someday
+- `daily_planning` — väljer ett begränsat antal fokusuppgifter och flyttar dem till Gör idag
 - `agent_suggest_next_actions` — ger read-only-förslag på nästa steg
 
 Webbappen har också en “AI-agent”-panel i Today-vyn. Den kör en lokal regelbaserad agent över dina synliga uppgifter, inbox, deadlines, Google Calendar-köer, väntelägen och app-länkar och sparar resultatet i `agent_runs`. Det är avsiktligt samma datayta som MCP/externa AI-klienter kan använda senare.
