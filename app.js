@@ -1102,30 +1102,25 @@ function areaAccessContent(){
 function areaHierarchyCard(a){
   const projects=projectsForArea(a),members=membersForArea(a),current=team(a.teamId),owner=a.ownerId===state.currentUserId,category=areaCategory(a),taskCount=taskCountForProjects(projects);
   return `<article class="area-card hierarchy-area-card">
-    <div class="area-card-head"><span class="area-card-icon" style="background:${a.color}">${a.icon}</span><div><h3>${escapeHtml(areaName(a))}</h3><p>${projects.length} projekt · ${taskCount} uppgifter</p></div></div>
+    <button class="area-card-open" type="button" data-area-open="${a.id}"><span class="area-card-icon" style="background:${a.color}">${a.icon}</span><div><h3>${escapeHtml(areaName(a))}</h3><p>${projects.length} projekt · ${taskCount} uppgifter</p></div></button>
     <div class="area-card-projects">${projects.map(p=>`<span class="project-chip"><button data-view="project:${p.id}">${projectIconHtml(p)}${escapeHtml(p.name)}</button><button class="chip-edit" data-edit-project="${p.id}" title="Redigera projekt">✎</button></span>`).join('')||'<span>Inga projekt ännu</span>'}</div>
-    <div class="area-settings">
-      <label>Kategori<input data-area-category="${a.id}" data-original-category="${escapeHtml(category)}" value="${escapeHtml(category)}" ${owner?'':'disabled'}></label>
-      <label>Delas med<select data-area-share="${a.id}" ${owner?'':'disabled'}><option value="">Endast privat</option>${state.teams.map(t=>`<option value="${t.id}" ${a.teamId===t.id?'selected':''}>${escapeHtml(t.name)}</option>`).join('')}</select></label>
-    </div>
+    <details class="area-settings-panel">
+      <summary>Kategori och delning</summary>
+      <div class="area-settings">
+        <label>Kategori<input data-area-category="${a.id}" data-original-category="${escapeHtml(category)}" value="${escapeHtml(category)}" ${owner?'':'disabled'}></label>
+        <label>Delas med<select data-area-share="${a.id}" ${owner?'':'disabled'}><option value="">Endast privat</option>${state.teams.map(t=>`<option value="${t.id}" ${a.teamId===t.id?'selected':''}>${escapeHtml(t.name)}</option>`).join('')}</select></label>
+      </div>
+    </details>
     <div class="access-note">${a.teamId?'Delas med':'Privat för dig'}<span class="team-stack">${members.map(avatarHtml).join('')}</span>${a.teamId?escapeHtml(current?.name||'Okänt team'):'Endast du'}</div>
-    <div class="area-card-actions"><button class="secondary" type="button" data-area-open="${a.id}">Öppna område</button><button class="secondary" type="button" data-edit-area="${a.id}">✎ Redigera</button><button class="secondary" type="button" data-create-project="${a.id}">＋ Nytt projekt</button></div>
+    <div class="area-card-actions"><button class="secondary" type="button" data-edit-area="${a.id}">✎ Redigera område</button><button class="secondary" type="button" data-create-project="${a.id}">＋ Nytt projekt</button></div>
   </article>`;
 }
 
 function areaCards(){
   const groups=areaGroups();
   return `<div class="hierarchy-page">
-    <section class="hierarchy-intro"><div><p class="eyebrow">MODELLEN</p><h3>Kategori → Område → Projekt → Task → Subtask</h3><p>Kategorier är översta nivån, t.ex. Privat, Bolag eller Jobb. Team kopplas till områden för åtkomst och är därför inte en egen uppgiftslista.</p></div><button class="primary" data-create-structure="category">＋ Ny kategori</button></section>
-    <section class="structure-builder">
-      <div><p class="eyebrow">BYGG STRUKTUR</p><h3>Skapa på rätt nivå</h3><p>Välj först om du vill skapa en helt ny kategori, ett område under en kategori eller ett projekt under ett område.</p></div>
-      <div class="structure-builder-grid">
-        <button type="button" data-create-structure="category"><strong>1</strong><span>Ny kategori</span><small>Ex. Privat, Jobb, Bolag. Skapar också första området.</small></button>
-        <button type="button" data-create-structure="area"><strong>2</strong><span>Nytt område</span><small>Ex. Huset, Båten, Foreshadow under vald kategori.</small></button>
-        <button type="button" data-create-structure="project" ${state.areas.length?'':'disabled'}><strong>3</strong><span>Nytt projekt</span><small>Ex. Bygga v1, Ny landing page under valt område.</small></button>
-      </div>
-    </section>
-    ${groups.length?groups.map(group=>`<section class="category-card"><div class="category-head"><div class="category-title">${categoryIconHtml(group.category)}<div><p class="eyebrow">KATEGORI</p><h3>${escapeHtml(group.category)}</h3><p>${group.areas.length} område${group.areas.length===1?'':'n'}</p></div></div><div class="category-head-actions"><button class="secondary" data-edit-category="${escapeHtml(group.category)}">✎ Redigera kategori</button><button class="secondary" data-create-area="${escapeHtml(group.category)}">＋ Nytt område</button></div></div><div class="area-grid">${group.areas.map(areaHierarchyCard).join('')}</div></section>`).join(''):'<div class="empty">Inga områden ännu. Skapa första kategorin ovan.</div>'}
+    <section class="hierarchy-intro"><div><p class="eyebrow">STRUKTUR</p><h3>Kategori → Område → Projekt</h3><p>Det här är kartan. Skapa nytt från rätt nivå: ny kategori här, nytt område på kategorin, nytt projekt på området.</p></div><button class="primary" data-create-structure="category">＋ Ny kategori</button></section>
+    ${groups.length?groups.map(group=>`<section class="category-card"><div class="category-head"><button class="category-title" type="button" data-view="${escapeHtml(categoryViewId(group.category))}">${categoryIconHtml(group.category)}<div><p class="eyebrow">KATEGORI</p><h3>${escapeHtml(group.category)}</h3><p>${group.areas.length} område${group.areas.length===1?'':'n'}</p></div></button><div class="category-head-actions"><button class="secondary" data-edit-category="${escapeHtml(group.category)}">✎ Redigera</button><button class="secondary" data-create-area="${escapeHtml(group.category)}">＋ Nytt område</button></div></div><div class="area-grid">${group.areas.map(areaHierarchyCard).join('')}</div></section>`).join(''):'<div class="empty">Inga områden ännu. Skapa första kategorin ovan.</div>'}
     ${areaAccessContent()}
   </div>`;
 }

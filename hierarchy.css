@@ -523,6 +523,78 @@
   width: 100%;
 }
 
+.category-title,
+.area-card-open {
+  background: transparent;
+  border: 0;
+  color: inherit;
+  cursor: pointer;
+  padding: 0;
+  text-align: left;
+}
+
+.category-title:hover h3,
+.area-card-open:hover h3 {
+  color: var(--purple);
+}
+
+.area-card-open {
+  align-items: center;
+  display: flex;
+  gap: 11px;
+  width: 100%;
+}
+
+.area-settings-panel {
+  border: 0;
+  margin: 12px 0 0;
+  padding: 0;
+}
+
+.area-settings-panel summary {
+  color: #9a93a2;
+  font-size: 11px;
+  font-weight: 800;
+  list-style: none;
+}
+
+.area-settings-panel summary::-webkit-details-marker {
+  display: none;
+}
+
+.area-settings-panel summary:before {
+  content: "▸";
+  color: #b6afbd;
+  display: inline-block;
+  font-size: 10px;
+  margin-right: 6px;
+  transition: transform .12s;
+}
+
+.area-settings-panel[open] summary:before {
+  transform: rotate(90deg);
+}
+
+.category-head-actions,
+.area-card-actions,
+.area-card-projects .chip-edit {
+  opacity: 0;
+  transition: opacity .12s;
+}
+
+.category-card:hover .category-head-actions,
+.category-card:focus-within .category-head-actions,
+.hierarchy-area-card:hover .area-card-actions,
+.hierarchy-area-card:focus-within .area-card-actions,
+.project-chip:hover .chip-edit,
+.project-chip:focus-within .chip-edit {
+  opacity: 1;
+}
+
+.area-card-actions {
+  grid-template-columns: 1fr 1fr;
+}
+
 @media(max-width:800px){
   .tree-main small,
   .tree-main i,
@@ -572,6 +644,12 @@
   .category-head,
   .category-head-actions {
     display: grid;
+  }
+
+  .category-head-actions,
+  .area-card-actions,
+  .area-card-projects .chip-edit {
+    opacity: 1;
   }
 
   .hierarchy-intro .primary,
