@@ -1257,8 +1257,29 @@ function settingsContent(){
       <article class="settings-card"><p class="eyebrow">NOTISER</p><h3>${notificationStatusLabel()}</h3><p>Lokala påminnelser visas när appen är öppen. Riktig push kan byggas senare med servernycklar.</p><button class="secondary" id="enableNotificationsButton">${'Notification' in window&&Notification.permission==='granted'?'Skicka testnotis':'Aktivera notiser'}</button></article>
     </section>
     ${setupChecklistHtml({google,slack,installed,mcpReady})}
+    ${quickAddGuideHtml()}
     ${teamSharingContent()}
   </div>`;
+}
+
+function quickAddGuideHtml(){
+  const examples=[
+    ['Ring Pelle #imorgon p1','Datum + prio'],
+    ['Kolla offert #om2v @filip','Relativt datum + person'],
+    ['Boka service #fre #sen p2','Veckodag + bucket'],
+    ['Läs igenom avtalet #nästa-vecka','Nästa vecka']
+  ];
+  const tokens=[
+    ['Buckets','#idag #sen #someday'],
+    ['Datum','#imorgon #ikväll #fre #om3d #om2v'],
+    ['Prioritet','p1 p2 p3'],
+    ['Tilldelning','@namn']
+  ];
+  return `<section class="quick-guide-card">
+    <div class="quick-guide-head"><div><p class="eyebrow">QUICK ADD-GUIDE</p><h3>Skriv mindre, få mer ifyllt</h3><p>Använd små tokens direkt i titeln. Orbit tar bort tokens från titeln och fyller rätt fält automatiskt.</p></div><button class="secondary" data-copy-settings="${escapeHtml(examples[0][0])}" data-copy-label="Exempel">Kopiera exempel</button></div>
+    <div class="quick-token-grid">${tokens.map(([label,value])=>`<div><strong>${label}</strong><code>${escapeHtml(value)}</code></div>`).join('')}</div>
+    <div class="quick-example-list">${examples.map(([example,help])=>`<button data-copy-settings="${escapeHtml(example)}" data-copy-label="Quick Add-exempel"><strong>${escapeHtml(example)}</strong><small>${escapeHtml(help)}</small></button>`).join('')}</div>
+  </section>`;
 }
 
 function setupChecklistHtml({google,slack,installed,mcpReady}){
