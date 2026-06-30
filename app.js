@@ -129,6 +129,7 @@ const reviewGroups=()=>{const active=topLevel(visible());return{
   assignments:pendingAssignmentsForMe(),
   overdue:active.filter(isOverdue),
   waiting:active.filter(t=>t.status==='waiting'),
+  blocked:state.tasks.filter(t=>!t.visible&&!t.completed),
   unplanned:active.filter(t=>!t.dueAt&&['later','someday'].includes(t.bucket)),
   inbox:active.filter(t=>t.bucket==='inbox'&&!t.projectId),
   someday:active.filter(t=>t.bucket==='someday')
@@ -599,6 +600,7 @@ function reviewContent(){
     ['assignments','Tilldelningar',groups.assignments,'Svara så de inte ligger och skaver i bakgrunden.'],
     ['overdue','Försenat',groups.overdue,'Välj nytt datum eller markera klart.'],
     ['waiting','Väntar',groups.waiting,'Följ upp blockeringar eller öppna tasken och lägg mer kontext.'],
+    ['blocked','Låsta/dolda',groups.blocked,'Uppgifter som väntar på kedja eller extern trigger.'],
     ['inbox','Inbox utan projekt',groups.inbox,'Placera i projekt eller bestäm när den ska göras.'],
     ['unplanned','Oplanerat',groups.unplanned,'Sätt datum eller låt den ligga som någon gång.'],
     ['someday','Gör nån gång',groups.someday,'Lyft bara sådant som faktiskt ska bli gjort snart.']
@@ -626,6 +628,18 @@ function reviewItemHtml(t,key){
         <button data-task="${t.id}" data-assignment-plan="today">Acceptera idag</button>
         <button data-task="${t.id}" data-assignment-plan="tomorrow">Imorgon</button>
         <button data-task="${t.id}" data-assignment-response="declined">Neka</button>
+      </div>
+    </article>`;
+  }
+  if(key==='blocked'){
+    const parent=t.parentTaskId?state.tasks.find(task=>task.id===t.parentTaskId):null;
+    const reason=t.trigger?.type==='external_event'?`Extern trigger: ${t.trigger.event||'saknas'}`:parent?`Väntar på ${parent.title}`:t.activationReason||'Väntar på villkor';
+    return `<article class="review-item blocked-review-item">
+      <button class="review-item-main" data-review-open="${t.id}"><strong>${escapeHtml(t.title)}</strong><small>${escapeHtml(reason)}</small></button>
+      <div>
+        ${t.trigger?.type==='external_event'?`<button data-copy-trigger="${t.id}" data-trigger-kind="external">Kopiera webhook</button>`:''}
+        ${parent?`<button data-review-open="${parent.id}">Öppna blockerare</button>`:''}
+        <button data-review-open="${t.id}">Öppna</button>
       </div>
     </article>`;
   }

@@ -569,9 +569,18 @@
   border-color: #efd9ad;
 }
 
+.review-section.blocked {
+  border-color: #d8d0f6;
+}
+
 .assignment-review-item {
   background: #fffaf1;
   border-color: #f0dfbd;
+}
+
+.blocked-review-item {
+  background: #f8f6ff;
+  border-color: #ded7fb;
 }
 
 .review-more {
