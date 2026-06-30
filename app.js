@@ -102,6 +102,16 @@ function parseNaturalDateTime(text,now=new Date()){
   else if(/\b(i morgon|imorgon)\b/.test(s)){date=startOfLocalDay(now);date.setDate(date.getDate()+1)}
   else if(/\b(övermorgon|overmorgon|i övermorgon|i overmorgon)\b/.test(s)){date=startOfLocalDay(now);date.setDate(date.getDate()+2)}
   else if(/\bikväll\b/.test(s)){date=startOfLocalDay(now);defaultTime={h:18,m:0}}
+  else if(/\bnästa vecka\b|\bnasta vecka\b/.test(s)){date=startOfLocalDay(now);date.setDate(date.getDate()+7)}
+  else if(/\bnästa månad\b|\bnasta manad\b/.test(s)){date=startOfLocalDay(now);date.setMonth(date.getMonth()+1)}
+  const relative=s.match(/\bom\s+(\d+)\s*(dag|dagar|vecka|veckor|månad|månader|manad|manader)\b/);
+  if(!date&&relative){
+    date=startOfLocalDay(now);
+    const amount=Number(relative[1]),unit=relative[2];
+    if(unit.startsWith('dag'))date.setDate(date.getDate()+amount);
+    else if(unit.startsWith('veck'))date.setDate(date.getDate()+amount*7);
+    else date.setMonth(date.getMonth()+amount);
+  }
   const iso=s.match(/\b(20\d{2})-(\d{1,2})-(\d{1,2})\b/);
   if(!date&&iso)date=new Date(Number(iso[1]),Number(iso[2])-1,Number(iso[3]));
   const slash=s.match(/\b([0-3]?\d)[/-]([01]?\d)(?:[/-](\d{2,4}))?\b/);

@@ -9,7 +9,7 @@ Orbit är en molnbaserad fleranvändarapp för kategorier, områden, projekt, te
 - Anpassade uppgiftsstatusar, milstolpar och godkännanden
 - Underuppgifter samt beroenden där alla eller minst ett föregående steg krävs
 - Redigering av uppgifter direkt i sidopanelen: titel, anteckningar, status, prioritet, bucket, projekt, tilldelad person, deadline och påminnelse
-- Strukturerade datumfält (`due_at`, `reminder_at`) används i listor, kalender, AI-brief och MCP — med enkel svensk snabbtolkning som “imorgon 09:00”
+- Strukturerade datumfält (`due_at`, `reminder_at`) används i listor, kalender, AI-brief och MCP — med enkel svensk snabbtolkning som “imorgon 09:00”, “nästa vecka”, “om 3 dagar” och “om 2 veckor”
 - Overdue-flöde med individuella och bulk-beslut så försenade uppgifter snabbt får nytt datum eller flyttas bort
 - Uppgiftspanelen har snabbplanering till idag, imorgon, nästa vecka eller någon gång utan att öppna hela redigeringsformuläret
 - Uppgiftspanelen kan starta nästa synliga delsteg direkt och kopiera en Orbit-länk tillbaka till uppgiften
