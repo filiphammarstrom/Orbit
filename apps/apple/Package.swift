@@ -5,8 +5,8 @@ import PackageDescription
 let package = Package(
     name: "OrbitApple",
     platforms: [
-        .iOS(.v17),
-        .macOS(.v14)
+        .iOS("27.0"),
+        .macOS("27.0")
     ],
     products: [
         .library(

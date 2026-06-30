@@ -2,7 +2,7 @@
 
 First native Apple client scaffold for Orbit.
 
-This Apple track is now Xcode 27-first. The current package is intentionally kept buildable until Xcode 27 is installed locally, but new native product work should target the Xcode 27 direction documented in `XCODE27.md`.
+This Apple track is Xcode 27-first. The package deployment baseline is iOS 27 and macOS 27, and new native product work should follow `XCODE27.md`.
 
 Target direction:
 
@@ -33,9 +33,10 @@ Current package contains:
 Run checks:
 
 ```bash
-swift test
 swift build --product OrbitMac
 ```
+
+`swift test` kräver macOS 27-runtime efter att paketets deployment target höjts till macOS 27. På en Mac som kör äldre macOS kan testerna bygga men falla när testbundlen laddas.
 
 Run the current macOS app shell:
 
@@ -54,7 +55,7 @@ Next step is to add an actual Xcode app project/targets that import `OrbitAppleK
 
 Keep this package as the shared core so Apple-native clients do not fork product logic from the web app.
 
-Before raising deployment targets or adding Xcode 27-only APIs, run:
+Before changing Apple code, run:
 
 ```bash
 bash scripts/check_xcode27.sh
