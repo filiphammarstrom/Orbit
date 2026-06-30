@@ -437,6 +437,7 @@ function render(){
   document.querySelectorAll('[data-approval-decision]').forEach(b=>b.onclick=async()=>{b.disabled=true;try{await handleApprovalDecision(b.dataset.approvalDecision,b.dataset.approvalStatus)}catch(error){toast(error.message);b.disabled=false}});
   document.querySelectorAll('[data-detail-schedule]').forEach(b=>b.onclick=async()=>{b.disabled=true;try{await rescheduleTask(b.dataset.task,b.dataset.detailSchedule);openInspector(b.dataset.task)}catch(error){toast(error.message);b.disabled=false}});
   document.querySelectorAll('[data-copy-task-link]').forEach(b=>b.onclick=async()=>{b.disabled=true;try{await copyTaskLink(b.dataset.copyTaskLink)}catch(error){toast(error.message)}finally{b.disabled=false}});
+  document.querySelectorAll('[data-copy-trigger]').forEach(b=>b.onclick=async()=>{b.disabled=true;try{await copyTriggerPayload(b.dataset.copyTrigger,b.dataset.triggerKind)}catch(error){toast(error.message)}finally{b.disabled=false}});
   document.querySelectorAll('[data-start-subtask]').forEach(b=>b.onclick=async()=>{b.disabled=true;try{await startFocusTask(b.dataset.startSubtask);openInspector(b.dataset.parentTask)}catch(error){toast(error.message);b.disabled=false}});
   document.querySelectorAll('[data-plan-open]').forEach(b=>b.onclick=()=>openInspector(b.dataset.planOpen));
   document.querySelectorAll('[data-plan-start]').forEach(b=>b.onclick=async()=>{b.disabled=true;try{await startFocusTask(b.dataset.planStart)}catch(error){toast(error.message);b.disabled=false}});
@@ -1015,6 +1016,13 @@ async function copyTaskLink(id){
   toast('Uppgiftslänken är kopierad.');
 }
 
+async function copyTriggerPayload(id,kind='external'){
+  const t=state.tasks.find(task=>task.id===id);
+  if(!t?.trigger||t.trigger.type!=='external_event')throw new Error('Uppgiften har ingen extern trigger.');
+  await copyText(JSON.stringify(triggerPayload(t,kind),null,2));
+  toast(kind==='gmail'?'Gmail-triggern är kopierad.':'Webhook-bodyn är kopierad.');
+}
+
 async function copyText(value){
   if(navigator.clipboard?.writeText)await navigator.clipboard.writeText(value);
   else{
@@ -1389,9 +1397,38 @@ function renderTaskLinks(t){
 function renderTriggerBox(t){
   if(!t.trigger)return'';
   if(t.trigger.type==='external_event'){
-    return `<div class="trigger-box"><strong>⚡ Väntar på extern trigger</strong><p>Triggernamn: <code>${escapeHtml(t.trigger.event||'')}</code></p><small>Kan låsas upp via <code>/api/external-event</code> eller Gmail-vägen <code>/api/gmail-trigger</code>.</small></div>`;
+    const eventName=t.trigger.event||'';
+    return `<div class="trigger-box"><strong>⚡ Väntar på extern trigger</strong><p>Triggernamn: <code>${escapeHtml(eventName)}</code></p><small>Kan låsas upp via <code>/api/external-event</code> eller Gmail-vägen <code>/api/gmail-trigger</code>.</small><div class="trigger-actions"><button data-copy-trigger="${t.id}" data-trigger-kind="external">Kopiera webhook-body</button><button data-copy-trigger="${t.id}" data-trigger-kind="gmail">Kopiera Gmail-body</button></div></div>`;
   }
   return `<div class="trigger-box"><strong>⚡ Aktiverad av villkor</strong>${escapeHtml(t.trigger.label||'Ett externt villkor')}</div>`;
+}
+
+function triggerPayload(t,kind='external'){
+  const ar=areaForProject(t.projectId)||state.areas?.[0]||null,eventName=t.trigger?.event||'external_event';
+  if(kind==='gmail'){
+    const email=eventName.startsWith('gmail_reply:')?eventName.slice('gmail_reply:'.length):'pelle@example.com';
+    return {
+      areaId: ar?.id || 'uuid-for-området',
+      from: email.includes('@') ? `Avsändare <${email}>` : 'Pelle <pelle@example.com>',
+      subject: `Re: ${t.title}`,
+      messageId: 'gmail-message-id',
+      threadId: 'gmail-thread-id',
+      url: 'https://mail.google.com/mail/u/0/#inbox/...',
+      snippet: 'Kort text från mailet',
+      triggerName: eventName
+    };
+  }
+  return {
+    areaId: ar?.id || 'uuid-for-området',
+    name: eventName,
+    source: 'external',
+    externalId: `${eventName}-external-id`,
+    payload: {
+      taskId: t.id,
+      title: t.title,
+      note: 'Skickas från Make, Zapier, Apps Script, MCP eller annan agent.'
+    }
+  };
 }
 
 function renderQuickScheduleActions(t){

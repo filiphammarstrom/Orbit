@@ -775,6 +775,24 @@
   margin: 5px 0 0;
 }
 
+.trigger-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-top: 11px;
+}
+
+.trigger-actions button {
+  background: #fff;
+  border: 1px solid #ddd5ff;
+  border-radius: 8px;
+  color: var(--purple);
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 850;
+  padding: 8px 10px;
+}
+
 .overdue-review,
 .execution-nudge {
   background: #fff;

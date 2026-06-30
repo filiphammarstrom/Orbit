@@ -166,6 +166,7 @@ Cron-schemat i `vercel.json` är satt till dagligen (`0 6 * * *`) för att funge
 Externa triggers från andra appar:
 
 Orbit har en server-side webhook på `POST /api/external-event` för triggers som Gmail/Make/Zapier/AI-agent kan skicka när något händer i en annan app. Den kan exempelvis låsa upp dolda uppgifter som väntar på `pelle_replied_email`.
+På en uppgift som väntar på extern trigger kan uppgiftspanelen kopiera färdig JSON-body för både `/api/external-event` och `/api/gmail-trigger`.
 
 Header:
 
