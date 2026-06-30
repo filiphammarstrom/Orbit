@@ -2,6 +2,8 @@
 
 First native Apple client scaffold for Orbit.
 
+This Apple track is now Xcode 27-first. The current package is intentionally kept buildable until Xcode 27 is installed locally, but new native product work should target the Xcode 27 direction documented in `XCODE27.md`.
+
 Target direction:
 
 - SwiftUI shared UI for iOS, iPadOS and macOS.
@@ -51,3 +53,9 @@ Next step is to add an actual Xcode app project/targets that import `OrbitAppleK
 - Share extension
 
 Keep this package as the shared core so Apple-native clients do not fork product logic from the web app.
+
+Before raising deployment targets or adding Xcode 27-only APIs, run:
+
+```bash
+bash scripts/check_xcode27.sh
+```
