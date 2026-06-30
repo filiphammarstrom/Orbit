@@ -193,6 +193,13 @@ function parseTaskTitleTokens(title,projectId=''){
     if(priority)patch.priority=priority;
     clean=clean.replace(priorityMatch[0],priorityMatch[1]||' ');
   }
+  const dueMatch=clean.match(/(^|\s)#(imorgon|i-morgon|ikväll|ikvall|nästa-vecka|nasta-vecka|nästa-månad|nasta-manad|mån|man|tis|ons|tor|fre|lör|lor|sön|son|om(\d+)(d|v|m))\b/i);
+  if(dueMatch){
+    const token=dueMatch[2].toLocaleLowerCase('sv-SE');
+    const phrase=token.startsWith('om')?`om ${dueMatch[3]} ${dueMatch[4]==='d'?'dagar':dueMatch[4]==='v'?'veckor':'månader'}`:token.replaceAll('-',' ');
+    patch.due=phrase;
+    clean=clean.replace(dueMatch[0],dueMatch[1]||' ');
+  }
   const assigneeMatch=clean.match(/(^|\s)@([\p{L}\p{N}._-]+)/u);
   if(assigneeMatch){
     const assigneeId=resolveAssigneeId(projectId,assigneeMatch[2]);
@@ -1969,6 +1976,7 @@ $('#taskForm').onsubmit=async e=>{
   data.title=parsedTitle.title;
   if(parsedTitle.bucket)data.bucket=parsedTitle.bucket;
   if(parsedTitle.priority)data.priority=parsedTitle.priority;
+  if(parsedTitle.due&&!data.due)data.due=parsedTitle.due;
   if(parsedTitle.assigneeId)data.assigneeId=parsedTitle.assigneeId;
   const link={kind:data.linkKind||'other',provider:data.linkProvider||'',title:data.linkTitle||data.title,url:data.linkUrl||''};
   const type=data.triggerType,val=type==='task_completed'?dependencies[0]:data.triggerValue;

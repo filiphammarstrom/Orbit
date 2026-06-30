@@ -13,7 +13,7 @@ Orbit är en molnbaserad fleranvändarapp för kategorier, områden, projekt, te
 - Overdue-flöde med individuella och bulk-beslut så försenade uppgifter snabbt får nytt datum eller flyttas bort
 - Uppgiftspanelen har snabbplanering till idag, imorgon, nästa vecka eller någon gång utan att öppna hela redigeringsformuläret
 - Uppgiftspanelen kan starta nästa synliga delsteg direkt och kopiera en Orbit-länk tillbaka till uppgiften
-- Quick Add kan tolka enkla tokens i titeln: `#idag`, `#sen`, `#someday`, `p1/p2/p3` och `@namn`
+- Quick Add kan tolka enkla tokens i titeln: `#idag`, `#sen`, `#someday`, `#imorgon`, `#nästa-vecka`, `#om3d`, `#om2v`, `p1/p2/p3` och `@namn`
 - Parkeringsnudges i “Gör sen” och “Gör nån gång” när uppgifter utan datum eller hög prio riskerar att fastna
 - Someday kan bulk-sänka P1/P2 till P3 när du vill erkänna att något faktiskt är parkerat
 - Externa MCP-händelser och tidsbaserad aktivering
