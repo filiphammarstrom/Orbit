@@ -528,6 +528,7 @@ function commandItems(){
     {type:'action',id:'inbox',title:'Gå till Inbox',meta:'Rensa och planera osorterat'},
     {type:'action',id:'review',title:'Gå till Review',meta:'Besluta om lösa trådar'},
     {type:'action',id:'areas',title:'Gå till Struktur',meta:'Kategori, område och projekt'},
+    {type:'action',id:'quick-guide',title:'Visa Quick Add-guide',meta:'Tokens för datum, prio, bucket och tilldelning'},
     {type:'action',id:'new-category',title:'Ny kategori / område',meta:'Skapa struktur på rätt nivå'},
     {type:'action',id:'daily-brief',title:'Uppdatera dagens brief',meta:'Skapa AI/MCP-sammanfattning'},
     {type:'action',id:'run-agent',title:'Kör Orbit-agenten',meta:'Föreslå nästa praktiska steg'}
@@ -560,6 +561,12 @@ function openCommandPalette(){
 async function runCommandAction(id){
   if(id==='new-task'){openDialog();return}
   if(['today','inbox','review','areas'].includes(id)){view=id;render();return}
+  if(id==='quick-guide'){
+    view='settings';
+    render();
+    setTimeout(()=>document.getElementById('quickAddGuide')?.scrollIntoView({behavior:'smooth',block:'start'}),50);
+    return;
+  }
   if(id==='new-category'){openStructureDialog('category');return}
   if(id==='daily-brief'){const generated=buildDailyBrief();await saveDailyBrief(generated);await load();toast('Dagens brief är uppdaterad.');return}
   if(id==='run-agent'){const plan=buildAgentPlan();await saveAgentRun(plan);await load();toast('Agenten har föreslagit nästa steg.');return}
@@ -1275,7 +1282,7 @@ function quickAddGuideHtml(){
     ['Prioritet','p1 p2 p3'],
     ['Tilldelning','@namn']
   ];
-  return `<section class="quick-guide-card">
+  return `<section class="quick-guide-card" id="quickAddGuide">
     <div class="quick-guide-head"><div><p class="eyebrow">QUICK ADD-GUIDE</p><h3>Skriv mindre, få mer ifyllt</h3><p>Använd små tokens direkt i titeln. Orbit tar bort tokens från titeln och fyller rätt fält automatiskt.</p></div><button class="secondary" data-copy-settings="${escapeHtml(examples[0][0])}" data-copy-label="Exempel">Kopiera exempel</button></div>
     <div class="quick-token-grid">${tokens.map(([label,value])=>`<div><strong>${label}</strong><code>${escapeHtml(value)}</code></div>`).join('')}</div>
     <div class="quick-example-list">${examples.map(([example,help])=>`<button data-copy-settings="${escapeHtml(example)}" data-copy-label="Quick Add-exempel"><strong>${escapeHtml(example)}</strong><small>${escapeHtml(help)}</small></button>`).join('')}</div>
