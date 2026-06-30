@@ -130,6 +130,7 @@ const reviewGroups=()=>{const active=topLevel(visible());return{
   overdue:active.filter(isOverdue),
   waiting:active.filter(t=>t.status==='waiting'),
   blocked:state.tasks.filter(t=>!t.visible&&!t.completed),
+  recurring:active.filter(t=>t.recurrenceRule),
   unplanned:active.filter(t=>!t.dueAt&&['later','someday'].includes(t.bucket)),
   inbox:active.filter(t=>t.bucket==='inbox'&&!t.projectId),
   someday:active.filter(t=>t.bucket==='someday')
@@ -601,6 +602,7 @@ function reviewContent(){
     ['overdue','Försenat',groups.overdue,'Välj nytt datum eller markera klart.'],
     ['waiting','Väntar',groups.waiting,'Följ upp blockeringar eller öppna tasken och lägg mer kontext.'],
     ['blocked','Låsta/dolda',groups.blocked,'Uppgifter som väntar på kedja eller extern trigger.'],
+    ['recurring','Återkommande',groups.recurring,'Kontrollera att upprepade uppgifter har rätt nästa datum.'],
     ['inbox','Inbox utan projekt',groups.inbox,'Placera i projekt eller bestäm när den ska göras.'],
     ['unplanned','Oplanerat',groups.unplanned,'Sätt datum eller låt den ligga som någon gång.'],
     ['someday','Gör nån gång',groups.someday,'Lyft bara sådant som faktiskt ska bli gjort snart.']
@@ -639,6 +641,16 @@ function reviewItemHtml(t,key){
       <div>
         ${t.trigger?.type==='external_event'?`<button data-copy-trigger="${t.id}" data-trigger-kind="external">Kopiera webhook</button>`:''}
         ${parent?`<button data-review-open="${parent.id}">Öppna blockerare</button>`:''}
+        <button data-review-open="${t.id}">Öppna</button>
+      </div>
+    </article>`;
+  }
+  if(key==='recurring'){
+    return `<article class="review-item recurring-review-item">
+      <button class="review-item-main" data-review-open="${t.id}"><strong>${escapeHtml(t.title)}</strong><small>${escapeHtml(`${recurrenceLabel(t.recurrenceRule)} · ${taskContextLabel(t)}`)}</small></button>
+      <div>
+        <button data-task="${t.id}" data-review-move="today">Idag</button>
+        <button data-task="${t.id}" data-review-move="nextweek">Nästa vecka</button>
         <button data-review-open="${t.id}">Öppna</button>
       </div>
     </article>`;

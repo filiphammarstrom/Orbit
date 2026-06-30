@@ -573,6 +573,10 @@
   border-color: #d8d0f6;
 }
 
+.review-section.recurring {
+  border-color: #d8ece5;
+}
+
 .assignment-review-item {
   background: #fffaf1;
   border-color: #f0dfbd;
@@ -581,6 +585,11 @@
 .blocked-review-item {
   background: #f8f6ff;
   border-color: #ded7fb;
+}
+
+.recurring-review-item {
+  background: #f5fbf8;
+  border-color: #d9efe4;
 }
 
 .review-more {

@@ -31,6 +31,7 @@ Orbit är en molnbaserad fleranvändarapp för kategorier, områden, projekt, te
 - Återkommande uppgifter och databasgrund för projektmallar
 - Förklaring av varför och när en villkorsstyrd uppgift aktiverades
 - Review visar även låsta/dolda uppgifter som väntar på kedja eller extern trigger, inklusive kopiering av webhook-body när det är relevant
+- Review visar återkommande uppgifter separat så nästa datum kan kontrolleras snabbt
 
 ## Apple-native klient
 
