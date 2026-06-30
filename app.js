@@ -1011,11 +1011,15 @@ async function setTaskPriority(id,priority){
 async function copyTaskLink(id){
   const t=state.tasks.find(task=>task.id===id);
   if(!t)throw new Error('Uppgiften finns inte längre.');
-  const url=taskDeepLink(id);
-  if(navigator.clipboard?.writeText)await navigator.clipboard.writeText(url);
+  await copyText(taskDeepLink(id));
+  toast('Uppgiftslänken är kopierad.');
+}
+
+async function copyText(value){
+  if(navigator.clipboard?.writeText)await navigator.clipboard.writeText(value);
   else{
     const input=document.createElement('input');
-    input.value=url;
+    input.value=value;
     input.style.position='fixed';
     input.style.opacity='0';
     document.body.appendChild(input);
@@ -1023,7 +1027,6 @@ async function copyTaskLink(id){
     document.execCommand('copy');
     input.remove();
   }
-  toast('Uppgiftslänken är kopierad.');
 }
 
 async function handleApprovalDecision(id,status){
@@ -1193,8 +1196,34 @@ function settingsContent(){
       <article class="settings-card"><p class="eyebrow">MOBIL/PWA</p><h3>${installed?'Installerad':'Kan installeras'}</h3><p>Installera Orbit som app på mobil/desktop. Share Sheet-stöd finns för länkar från andra appar.</p><button class="secondary" id="installOrbitButton">${installed?'Installerad':'Installera app'}</button></article>
       <article class="settings-card"><p class="eyebrow">NOTISER</p><h3>${notificationStatusLabel()}</h3><p>Lokala påminnelser visas när appen är öppen. Riktig push kan byggas senare med servernycklar.</p><button class="secondary" id="enableNotificationsButton">${'Notification' in window&&Notification.permission==='granted'?'Skicka testnotis':'Aktivera notiser'}</button></article>
     </section>
+    ${setupChecklistHtml({google,slack,installed,mcpReady})}
     ${teamSharingContent()}
   </div>`;
+}
+
+function setupChecklistHtml({google,slack,installed,mcpReady}){
+  const notificationsOn='Notification' in window&&Notification.permission==='granted';
+  const items=[
+    ['MCP/AI-styrning',mcpReady,'Kopiera ditt ORBIT_USER_ID och använd i MCP-servern.'],
+    ['PWA installerad',installed,'Installera appen för snabbare mobil/desktop-flöde.'],
+    ['Share Sheet / länkar',true,'Manifestet tar emot title/text/url från andra appar.'],
+    ['Google Calendar',google.length>0,'Anslut Google när OAuth-secrets ligger i Vercel.'],
+    ['Slack',slack.length>0,'Anslut Slack när Slack-secrets och appen är konfigurerade.'],
+    ['Lokala notiser',notificationsOn,'Aktivera notiser för reminders när appen är öppen.']
+  ];
+  const done=items.filter(([,ready])=>ready).length;
+  const captureUrl=`${window.location.origin}${window.location.pathname}?quick=task`;
+  return `<section class="setup-checklist-card">
+    <div class="setup-checklist-head">
+      <div><p class="eyebrow">SETUP-STATUS</p><h3>${done}/${items.length} delar redo</h3><p>Det här är en praktisk översikt över vad Orbit kan använda just nu och vad som kräver extern setup.</p></div>
+      <span>${Math.round(done/items.length*100)}%</span>
+    </div>
+    <div class="setup-checklist-list">${items.map(([label,ready,help])=>`<div class="setup-checklist-row ${ready?'ready':'todo'}"><strong>${ready?'✓':'○'} ${label}</strong><small>${help}</small></div>`).join('')}</div>
+    <div class="setup-copy-actions">
+      <button class="secondary" data-copy-settings="${escapeHtml(state.currentUserId||'')}" data-copy-label="ORBIT_USER_ID">Kopiera ORBIT_USER_ID</button>
+      <button class="secondary" data-copy-settings="${escapeHtml(captureUrl)}" data-copy-label="Quick Add-länk">Kopiera Quick Add-länk</button>
+    </div>
+  </section>`;
 }
 
 function bindSettings(){
@@ -1203,6 +1232,7 @@ function bindSettings(){
   $('#settingsSlackOAuth')?.addEventListener('click',async e=>{try{e.currentTarget.disabled=true;const url=await startSlackOAuth();window.location.href=url}catch(error){e.currentTarget.disabled=false;toast(error.message)}});
   $('#installOrbitButton')?.addEventListener('click',installOrbitApp);
   $('#enableNotificationsButton')?.addEventListener('click',async()=>{if('Notification' in window&&Notification.permission==='granted')await showLocalNotification('Orbit testnotis',{body:'Notiser fungerar.',tag:'orbit-test'});else await requestLocalNotifications()});
+  document.querySelectorAll('[data-copy-settings]').forEach(b=>b.addEventListener('click',async()=>{await copyText(b.dataset.copySettings||'');toast(`${b.dataset.copyLabel||'Värdet'} är kopierat.`)}));
 }
 
 function teamSharingContent(){

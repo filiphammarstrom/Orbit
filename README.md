@@ -24,6 +24,7 @@ Orbit är en molnbaserad fleranvändarapp för kategorier, områden, projekt, te
 - Teamadministration med inbjudningar, rolländring, borttagning av medlemmar och möjlighet att dra tillbaka väntande inbjudningar
 - Google Calendar-sektion på uppgifter: manuell “öppna i Google Calendar”-länk, direkt-sync, retry och köad sync-status
 - Integrationsgrund för Google Calendar och Slack, inklusive Slack-inbox, message shortcut och länkar tillbaka till Slack-meddelanden
+- Inställningar visar setup-status för MCP, PWA, Share Sheet, Google, Slack och notiser med kopieringsknappar för ORBIT_USER_ID och Quick Add-länk
 - Daglig Orbit-brief från MCP/AI samt sparade agentförslag
 - AI-control via MCP: externa AI-klienter kan läsa workspace, skapa projekt, masskapa tasks, tilldela personer och uppdatera status
 - Kommentarer, aktivitetshistorik och separat notis-inbox
