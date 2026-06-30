@@ -461,6 +461,7 @@ function render(){
   document.querySelectorAll('[data-later-bulk-unscheduled]').forEach(b=>b.onclick=async()=>{b.disabled=true;try{await bulkMoveLaterUnscheduled(b.dataset.laterBulkUnscheduled)}catch(error){toast(error.message);b.disabled=false}});
   document.querySelectorAll('[data-someday-move]').forEach(b=>b.onclick=async()=>{b.disabled=true;try{await reviewSomedayTask(b.dataset.task,b.dataset.somedayMove)}catch(error){toast(error.message);b.disabled=false}});
   document.querySelectorAll('[data-someday-bulk-priority]').forEach(b=>b.onclick=async()=>{b.disabled=true;try{await bulkPlanSomedayPriority(Number(b.dataset.somedayBulkPriority))}catch(error){toast(error.message);b.disabled=false}});
+  document.querySelectorAll('[data-someday-downgrade-priority]').forEach(b=>b.onclick=async()=>{b.disabled=true;try{await bulkDowngradeSomedayPriority(Number(b.dataset.somedayDowngradePriority))}catch(error){toast(error.message);b.disabled=false}});
   document.querySelectorAll('[data-someday-priority]').forEach(b=>b.onclick=async()=>{b.disabled=true;try{await setTaskPriority(b.dataset.task,Number(b.dataset.somedayPriority))}catch(error){toast(error.message);b.disabled=false}});
   document.querySelectorAll('[data-someday-open]').forEach(b=>b.onclick=()=>openInspector(b.dataset.somedayOpen));
   document.querySelectorAll('.board-card,.calendar-task,.flow-node').forEach(c=>c.onclick=()=>openInspector(c.dataset.id));
@@ -800,7 +801,7 @@ function somedayContent(tasks){
       <button data-someday-open="${pick.id}"><small>Föreslagen att lyfta</small><strong>${escapeHtml(pick.title)}</strong><span>${escapeHtml(taskContextLabel(pick))}</span></button>
       <div><button class="primary" data-task="${pick.id}" data-someday-move="today">Gör idag</button><button class="secondary" data-task="${pick.id}" data-someday-move="later">Gör senare</button></div>
     </article>
-    ${highParked.length>=3?`<article class="parking-nudge someday"><div><small>VIKTIGT MEN PARKERAT</small><strong>${highParked.length} P1/P2 ligger i Someday</strong><p>Om det är viktigt ska det få ett nästa datum, annars sänk prioriteten.</p></div><div><button data-someday-bulk-priority="1">Planera P1 nästa vecka</button><button data-someday-bulk-priority="2">Planera P2 nästa vecka</button></div></article>`:''}
+    ${highParked.length>=3?`<article class="parking-nudge someday"><div><small>VIKTIGT MEN PARKERAT</small><strong>${highParked.length} P1/P2 ligger i Someday</strong><p>Om det är viktigt ska det få ett nästa datum. Om det bara skaver: sänk prioriteten så listan blir ärlig.</p></div><div><button data-someday-bulk-priority="1">Planera P1 nästa vecka</button><button data-someday-bulk-priority="2">Planera P2 nästa vecka</button><button data-someday-downgrade-priority="1">Sänk P1 till P3</button><button data-someday-downgrade-priority="2">Sänk P2 till P3</button></div></article>`:''}
   </section>
   <div class="someday-priority-board">${groups.map(([priority,label])=>{
     const cards=sorted.filter(t=>Number(t.priority||4)===priority);
@@ -832,6 +833,14 @@ async function bulkPlanSomedayPriority(priority){
   }
   await load();
   toast(`${items.length} P${priority}-uppgift${items.length===1?'':'er'} planerades till nästa vecka.`);
+}
+
+async function bulkDowngradeSomedayPriority(priority){
+  const items=topLevel(tasksForBucketView('someday').filter(t=>Number(t.priority||4)===priority));
+  if(!items.length){toast(`Inga P${priority} i Someday.`);return}
+  for(const t of items)await api('/tasks/'+t.id,{method:'PATCH',body:JSON.stringify({priority:3})});
+  await load();
+  toast(`${items.length} P${priority}-uppgift${items.length===1?'':'er'} sänktes till P3.`);
 }
 
 function somedayCardHtml(t){

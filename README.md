@@ -15,6 +15,7 @@ Orbit är en molnbaserad fleranvändarapp för kategorier, områden, projekt, te
 - Uppgiftspanelen kan starta nästa synliga delsteg direkt och kopiera en Orbit-länk tillbaka till uppgiften
 - Quick Add kan tolka enkla tokens i titeln: `#idag`, `#sen`, `#someday`, `p1/p2/p3` och `@namn`
 - Parkeringsnudges i “Gör sen” och “Gör nån gång” när uppgifter utan datum eller hög prio riskerar att fastna
+- Someday kan bulk-sänka P1/P2 till P3 när du vill erkänna att något faktiskt är parkerat
 - Externa MCP-händelser och tidsbaserad aktivering
 - Kontextlänkar från andra appar, t.ex. mail, dokument, chattar och kalenderposter
 - Uppgifter som tilldelats dig ligger kvar i sina vanliga listor/projekt men markeras med “Tilldelat till dig”
