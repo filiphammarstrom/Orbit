@@ -13,7 +13,7 @@ Orbit är en molnbaserad fleranvändarapp för kategorier, områden, projekt, te
 - Overdue-flöde med individuella och bulk-beslut så försenade uppgifter snabbt får nytt datum eller flyttas bort
 - Uppgiftspanelen har snabbplanering till idag, imorgon, nästa vecka eller någon gång utan att öppna hela redigeringsformuläret
 - Uppgiftspanelen kan starta nästa synliga delsteg direkt och kopiera en Orbit-länk tillbaka till uppgiften
-- Quick Add kan tolka enkla tokens i titeln: `#idag`, `#sen`, `#someday`, `#imorgon`, `#nästa-vecka`, `#om3d`, `#om2v`, `p1/p2/p3` och `@namn`
+- Quick Add och Slack `/orbit` kan tolka enkla tokens i titeln: `#idag`, `#sen`, `#someday`, `#imorgon`, `#ikväll`, `#fre`, `#nästa-vecka`, `#om3d`, `#om2v`, `p1/p2/p3` och `@namn`/Slack-mention
 - Parkeringsnudges i “Gör sen” och “Gör nån gång” när uppgifter utan datum eller hög prio riskerar att fastna
 - Someday kan bulk-sänka P1/P2 till P3 när du vill erkänna att något faktiskt är parkerat
 - Externa MCP-händelser och tidsbaserad aktivering
@@ -235,7 +235,7 @@ Slack-flödet:
 10. Slack Events API verifierar `X-Slack-Signature`, deduplicerar `event_id`, försöker hämta en riktig Slack-permalink via `chat.getPermalink` och sparar inkommande events i `integration_events`.
 11. Granska nya Slack-events i Orbit, öppna originalmeddelandet i Slack och skapa Orbit-uppgifter med titel, projekt, tilldelad och prioritet.
 12. Använd Slack message shortcut “Skapa Orbit-task” på ett meddelande för att skapa en uppgift direkt i Orbit. Om Slack-användarens email matchar en Orbit-användare som delar team med integrationsägaren hamnar den i den personens Inbox, annars i integrationsägarens Inbox.
-13. Använd `/orbit Svara på offerten #idag p1` för att skapa en task direkt från Slack. `/orbit <@person> Följ upp avtalet #sen p2` tilldelar tasken till personen om Slack-emailen matchar en Orbit-användare som delar team.
+13. Använd `/orbit Svara på offerten #idag p1` för att skapa en task direkt från Slack. `/orbit <@person> Följ upp avtalet #imorgon #sen p2` tilldelar tasken till personen om Slack-emailen matchar en Orbit-användare som delar team och sätter datum från token.
 14. När en Slack-händelse, shortcut eller slash command blir en uppgift markeras den som hanterad/länkad och sparas i `integration_events`. Message shortcuts sparas även i `slack_message_links` med Slack-permalink när den finns.
 15. Använd MCP-verktygen `create_task_from_slack` eller `link_slack_message` för samma flöde från en AI-klient.
 16. `ingest_integration_event` kan spara inkommande Slack-events och samtidigt aktivera dolda tasks via ett triggernamn.
