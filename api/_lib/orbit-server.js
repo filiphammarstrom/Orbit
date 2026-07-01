@@ -36,9 +36,13 @@ export function requireAnyEnv(names) {
   return process.env[entry];
 }
 
+function supabaseUrl() {
+  return requireAnyEnv(['SUPABASE_URL', 'VITE_SUPABASE_URL']);
+}
+
 export function adminClient() {
   if (!cachedAdmin) {
-    cachedAdmin = createClient(requireEnv('SUPABASE_URL'), requireEnv('SUPABASE_SERVICE_ROLE_KEY'), {
+    cachedAdmin = createClient(supabaseUrl(), requireEnv('SUPABASE_SERVICE_ROLE_KEY'), {
       auth: { persistSession: false, autoRefreshToken: false }
     });
   }
@@ -64,7 +68,7 @@ function supabaseUserKey() {
 export function userClient(req) {
   const token = bearerToken(req);
   if (!token) throw new HttpError(401, 'Saknar inloggnings-token.');
-  return createClient(requireEnv('SUPABASE_URL'), supabaseUserKey(), {
+  return createClient(supabaseUrl(), supabaseUserKey(), {
     auth: { persistSession: false, autoRefreshToken: false },
     global: { headers: { authorization: `Bearer ${token}` } }
   });
