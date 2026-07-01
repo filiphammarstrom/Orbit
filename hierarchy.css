@@ -297,6 +297,12 @@
   margin-top: 12px;
 }
 
+.structure-form .readonly-field {
+  background: #f6f3f8;
+  color: #6c6672;
+  cursor: default;
+}
+
 .structure-form .structure-details {
   grid-template-columns: 110px 110px minmax(180px, 1fr);
 }

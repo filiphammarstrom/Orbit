@@ -5,6 +5,12 @@ const key = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || import.meta.env.VIT
 
 export const configured = Boolean(url && key);
 export const supabase = configured ? createClient(url, key, { auth: { persistSession: true, autoRefreshToken: true } }) : null;
+const firstIcon = value => {
+  const text = String(value || '').trim();
+  if (!text) return '📁';
+  if (globalThis.Intl?.Segmenter) return [...new Intl.Segmenter(undefined, { granularity: 'grapheme' }).segment(text)][0]?.segment || '📁';
+  return Array.from(text)[0] || '📁';
+};
 
 const camelTask = t => ({
   id: t.id,
@@ -192,12 +198,12 @@ export async function loadCloudState() {
       memberIds: members.data.filter(m => m.team_id === t.id && m.status === 'active').map(m => m.user_id)
     })),
     teamMembers: members.data.map(m => ({ teamId: m.team_id, userId: m.user_id, role: m.role, status: m.status })),
-    areas: areas.data.map(a => ({ id: a.id, name: a.name, icon: a.icon, color: a.color, category: a.category || 'Privat', ownerId: a.owner_id, teamId: a.team_id })),
-    categorySettings: categorySettings.data.map(c => ({ id: c.id, ownerId: c.owner_id, name: c.name, icon: c.icon || '▣', color: c.color || '#7659ef' })),
+    areas: areas.data.map(a => ({ id: a.id, name: a.name, icon: a.icon || '📁', color: a.color, category: a.category || 'Privat', ownerId: a.owner_id, teamId: a.team_id })),
+    categorySettings: categorySettings.data.map(c => ({ id: c.id, ownerId: c.owner_id, name: c.name, icon: c.icon || '📁', color: c.color || '#7659ef' })),
     projects: projects.data.map(p => ({
       id: p.id,
       name: p.name,
-      icon: p.icon || '▣',
+      icon: p.icon || '✅',
       color: p.color,
       areaId: p.area_id,
       objective: p.objective,
@@ -397,6 +403,22 @@ export async function startSlackOAuth() {
   return data.url;
 }
 
+async function authedJson(path, options = {}) {
+  const current = await session();
+  if (!current?.access_token) throw new Error('Du är inte inloggad.');
+  const response = await fetch(path, {
+    ...options,
+    headers: {
+      authorization: `Bearer ${current.access_token}`,
+      'content-type': 'application/json',
+      ...(options.headers || {})
+    }
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data.error || 'Servern kunde inte spara ändringen.');
+  return data;
+}
+
 export function slackEventSummary(eventRow = {}) {
   const payload = eventRow.payload || {};
   const event = payload.event || {};
@@ -500,18 +522,10 @@ export async function createTaskFromSlackEvent(eventId, input = {}) {
 }
 
 export async function syncCalendarLinkNow(calendarLinkId) {
-  const current = await session();
-  if (!current?.access_token) throw new Error('Du är inte inloggad.');
-  const response = await fetch('/api/google-calendar-sync-now', {
+  const data = await authedJson('/api/google-calendar-sync-now', {
     method: 'POST',
-    headers: {
-      authorization: `Bearer ${current.access_token}`,
-      'content-type': 'application/json'
-    },
     body: JSON.stringify({ calendarLinkId })
   });
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(data.error || 'Kunde inte synca Google Calendar.');
   return data.result;
 }
 
@@ -649,50 +663,49 @@ export async function createTeam(name) {
 }
 
 export async function createArea(input = {}) {
-  if (!(await session())?.user) throw new Error('Du är inte inloggad.');
   const name = String(input.name || '').trim();
   if (!name) throw new Error('Området behöver ett namn.');
   const category = String(input.category || 'Privat').trim() || 'Privat';
-
-  const { data, error } = await supabase.from('areas').insert({
+  const { area } = await authedJson('/api/areas', {
+    method: 'POST',
+    body: JSON.stringify({
     name: name.slice(0, 120),
     category: category.slice(0, 80),
-    icon: String(input.icon || '◫').trim().slice(0, 2) || '◫',
+      icon: firstIcon(input.icon || '📁'),
     color: input.color || '#7659ef',
-    team_id: input.teamId || null
-  }).select().single();
-  if (error) throw error;
-  return data;
+      teamId: input.teamId || null
+    })
+  });
+  return area;
 }
 
 export async function createProject(input = {}) {
   const name = String(input.name || '').trim();
   if (!name) throw new Error('Projektet behöver ett namn.');
   if (!input.areaId) throw new Error('Välj vilket område projektet ska ligga under.');
-
-  const { data, error } = await supabase.from('projects').insert({
-    area_id: input.areaId,
-    name: name.slice(0, 120),
-    icon: String(input.icon || '▣').trim().slice(0, 2) || '▣',
-    color: input.color || '#8b70ff'
-  }).select().single();
-  if (error) throw error;
-  return data;
+  const { project } = await authedJson('/api/projects', {
+    method: 'POST',
+    body: JSON.stringify({
+      areaId: input.areaId,
+      name: name.slice(0, 120),
+      icon: firstIcon(input.icon || '✅'),
+      color: input.color || '#8b70ff'
+    })
+  });
+  return project;
 }
 
 export async function upsertCategorySetting(input = {}) {
-  const user = (await session())?.user;
-  if (!user) throw new Error('Du är inte inloggad.');
   const name = String(input.name || '').trim() || 'Privat';
-  const { data, error } = await supabase.from('category_settings').upsert({
-    owner_id: user.id,
-    name: name.slice(0, 80),
-    icon: String(input.icon || '▣').trim().slice(0, 2) || '▣',
-    color: input.color || '#7659ef',
-    updated_at: new Date().toISOString()
-  }, { onConflict: 'owner_id,name' }).select().single();
-  if (error) throw error;
-  return data;
+  const { category } = await authedJson('/api/category-settings', {
+    method: 'POST',
+    body: JSON.stringify({
+      name: name.slice(0, 80),
+      icon: firstIcon(input.icon || '📁'),
+      color: input.color || '#7659ef'
+    })
+  });
+  return category;
 }
 
 export async function renameCategory(oldCategory, newCategory, visual = {}) {

@@ -57,9 +57,15 @@ const areaGroups=()=>{
 };
 const projectsForArea=a=>state.projects.filter(p=>p.areaId===a.id);
 const categorySetting=name=>(state.categorySettings||[]).find(c=>c.name===name);
-const categoryVisual=name=>{const setting=categorySetting(name),firstArea=(state.areas||[]).find(a=>areaCategory(a)===name);return{icon:setting?.icon||firstArea?.icon||'▣',color:setting?.color||firstArea?.color||'#7659ef'}};
+const firstIcon=value=>{
+  const text=String(value||'').trim();
+  if(!text)return'📁';
+  if(globalThis.Intl?.Segmenter)return[...new Intl.Segmenter(undefined,{granularity:'grapheme'}).segment(text)][0]?.segment||'📁';
+  return Array.from(text)[0]||'📁';
+};
+const categoryVisual=name=>{const setting=categorySetting(name),firstArea=(state.areas||[]).find(a=>areaCategory(a)===name);return{icon:setting?.icon||firstArea?.icon||'📁',color:setting?.color||firstArea?.color||'#7659ef'}};
 const categoryIconHtml=name=>{const visual=categoryVisual(name);return`<span class="category-icon" style="background:${escapeHtml(visual.color)}">${escapeHtml(visual.icon)}</span>`};
-const projectIconHtml=p=>`<span class="project-icon" style="background:${escapeHtml(p?.color||'#8b70ff')}">${escapeHtml(p?.icon||'▣')}</span>`;
+const projectIconHtml=p=>`<span class="project-icon" style="background:${escapeHtml(p?.color||'#8b70ff')}">${escapeHtml(p?.icon||'✅')}</span>`;
 const taskCountForProjects=projects=>visible().filter(t=>projects.some(p=>p.id===t.projectId)).length;
 const categoryViewId=category=>`category:${encodeURIComponent(category)}`;
 const categoryFromView=()=>decodeURIComponent(view.slice('category:'.length));
@@ -1814,8 +1820,8 @@ function showStructureField(id,show){
   if(el)el.style.display=show?'block':'none';
 }
 
-function setStructureIcon(icon='◫'){
-  const value=String(icon||'◫').trim().slice(0,2)||'◫';
+function setStructureIcon(icon='📁'){
+  const value=firstIcon(icon||'📁');
   const input=$('#structureForm')?.elements?.icon;
   if(input)input.value=value;
   document.querySelectorAll('[data-icon-choice]').forEach(b=>b.classList.toggle('active',b.dataset.iconChoice===value));
@@ -1858,8 +1864,10 @@ function openStructureDialog(mode='category',context={}){
   form.elements.entityId.value=context.areaId||context.projectId||'';
   form.elements.originalCategory.value=category||'';
   form.elements.color.value=currentProject?.color||currentArea?.color||visual?.color||(mode.includes('project')?'#8b70ff':'#7659ef');
-  setStructureIcon(currentProject?.icon||currentArea?.icon||visual?.icon||(mode.includes('project')?'▣':'◫'));
+  setStructureIcon(currentProject?.icon||currentArea?.icon||visual?.icon||(mode.includes('project')?'✅':'📁'));
   form.elements.category.value=editingCategory?category:(category==='Privat'&&mode==='category'?'':category);
+  form.elements.category.readOnly=mode==='area';
+  form.elements.category.classList.toggle('readonly-field',mode==='area');
   form.elements.areaId.value=areaId;
   form.elements.name.value=editingCategory?category:currentArea?areaName(currentArea):currentProject?.name||'';
   form.elements.areaId.disabled=mode==='project'||editingProject?!state.areas.length:false;
@@ -1885,7 +1893,7 @@ function openStructureDialog(mode='category',context={}){
   $('#saveStructure').textContent=editing?'Spara ändringar':mode==='project'?'Skapa projekt':mode==='area'?'Skapa område':'Skapa kategori';
   updateStructureHint(mode);
   if(!dialog.open)dialog.showModal();
-  setTimeout(()=>mode==='area'&&!editing?form.elements.category.focus():$('#structureNameInput').focus(),50);
+  setTimeout(()=>$('#structureNameInput').focus(),50);
 }
 
 $('#structureForm').onsubmit=async e=>{
