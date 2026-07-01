@@ -666,13 +666,14 @@ export async function createArea(input = {}) {
   const name = String(input.name || '').trim();
   if (!name) throw new Error('Området behöver ett namn.');
   const category = String(input.category || 'Privat').trim() || 'Privat';
-  const { area } = await authedJson('/api/areas', {
+  const { area } = await authedJson('/api/structure', {
     method: 'POST',
     body: JSON.stringify({
-    name: name.slice(0, 120),
-    category: category.slice(0, 80),
+      action: 'area',
+      name: name.slice(0, 120),
+      category: category.slice(0, 80),
       icon: firstIcon(input.icon || '📁'),
-    color: input.color || '#7659ef',
+      color: input.color || '#7659ef',
       teamId: input.teamId || null
     })
   });
@@ -683,9 +684,10 @@ export async function createProject(input = {}) {
   const name = String(input.name || '').trim();
   if (!name) throw new Error('Projektet behöver ett namn.');
   if (!input.areaId) throw new Error('Välj vilket område projektet ska ligga under.');
-  const { project } = await authedJson('/api/projects', {
+  const { project } = await authedJson('/api/structure', {
     method: 'POST',
     body: JSON.stringify({
+      action: 'project',
       areaId: input.areaId,
       name: name.slice(0, 120),
       icon: firstIcon(input.icon || '✅'),
@@ -697,9 +699,10 @@ export async function createProject(input = {}) {
 
 export async function upsertCategorySetting(input = {}) {
   const name = String(input.name || '').trim() || 'Privat';
-  const { category } = await authedJson('/api/category-settings', {
+  const { category } = await authedJson('/api/structure', {
     method: 'POST',
     body: JSON.stringify({
+      action: 'category',
       name: name.slice(0, 80),
       icon: firstIcon(input.icon || '📁'),
       color: input.color || '#7659ef'
