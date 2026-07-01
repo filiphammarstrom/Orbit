@@ -27,6 +27,57 @@
 .flow-node.waiting{border-style:dashed;opacity:.65}
 .flow-node small{display:block;color:#999;margin-top:7px}
 
+.project-starter-card{background:linear-gradient(180deg,#fff,#fbf9ff);border:1px solid #e4dcfb;border-radius:18px;box-shadow:0 8px 28px #3424500a;padding:20px}
+.project-starter-card h3{font:800 18px Manrope;margin:0}
+.project-starter-card p{color:#81788a;font-size:12px;line-height:1.55;margin:6px 0 0}
+.project-starter-options{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:16px}
+.project-starter-options button{background:#fff;border:1px solid #ece6f5;border-radius:14px;cursor:pointer;padding:14px;text-align:left}
+.project-starter-options button:hover{border-color:#d7c9ff;background:#f9f6ff}
+.project-starter-options strong{display:block;color:#2d2734;font:800 13px Manrope}
+.project-starter-options small{display:block;color:#918997;font-size:11px;line-height:1.4;margin-top:4px}
+
+.project-health-card{margin:0 0 18px;padding:18px;border:1px solid #e4eadf;background:linear-gradient(180deg,#fff,#fbfdf9);border-radius:18px;box-shadow:0 8px 28px #3424500a}
+.project-health-card.warn{border-color:#eadfbd;background:linear-gradient(180deg,#fff,#fffaf0)}
+.project-health-card.risk{border-color:#f0d6d2;background:linear-gradient(180deg,#fff,#fff7f6)}
+.project-health-main{display:flex;align-items:flex-start;justify-content:space-between;gap:16px}
+.project-health-main h3{font:800 18px Manrope;margin:0}
+.project-health-main p{color:#81788a;font-size:12px;line-height:1.55;margin:6px 0 0}
+.project-health-progress{width:54px;height:54px;position:relative;flex:0 0 auto}
+.project-health-progress svg{width:54px;transform:rotate(-90deg)}
+.project-health-progress circle{fill:none;stroke:#ebe7ef;stroke-width:3}
+.project-health-progress circle:last-child{stroke:#5da58f;stroke-linecap:round;stroke-dasharray:100;transition:.3s}
+.project-health-card.warn .project-health-progress circle:last-child{stroke:#c28b2e}
+.project-health-card.risk .project-health-progress circle:last-child{stroke:#cf5d55}
+.project-health-progress span{position:absolute;inset:0;display:grid;place-items:center;font-size:10px;font-weight:850}
+.project-health-stats{display:grid;grid-template-columns:repeat(6,1fr);gap:7px;margin-top:14px}
+.project-health-stats span{background:#fff;border:1px solid #eee9f3;border-radius:11px;color:#8f8798;font-size:10px;padding:9px 8px;text-align:center}
+.project-health-stats strong{display:block;color:#2d2734;font:850 14px Manrope;margin-bottom:2px}
+.project-health-stats span.bad strong{color:#cf5d55}
+.project-health-stats span.warn strong{color:#b67820}
+.project-health-people{align-items:center;display:flex;gap:10px;justify-content:space-between;margin-top:12px}
+.project-health-people small{color:#928b99;font-size:10px;font-weight:850;text-transform:uppercase;letter-spacing:.08em}
+.project-health-people div{display:flex}
+.project-health-people .mini-avatar{margin-left:-6px;border:2px solid #fff}
+
+.project-next-card{margin:0 0 18px;padding:18px;border:1px solid #e4dcfb;background:linear-gradient(180deg,#fff,#fbf8ff);border-radius:18px;box-shadow:0 8px 28px #3424500a}
+.project-next-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:13px}
+.project-next-head h3{font:800 18px Manrope;margin:0}
+.project-next-head p{color:#81788a;font-size:12px;line-height:1.55;margin:6px 0 0}
+.project-next-head>span{min-width:38px;height:34px;border-radius:12px;background:#efeaff;color:var(--purple);display:grid;place-items:center;font-weight:850}
+.project-next-list{display:grid;gap:9px}
+.project-next-item{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center;padding:12px;border:1px solid #ece6f5;background:#fff;border-radius:14px}
+.project-next-item.active{border-color:#d7c9ff;box-shadow:inset 4px 0 0 var(--purple)}
+.project-next-item>button:first-child{border:0;background:transparent;text-align:left;padding:0;cursor:pointer;display:grid;gap:4px}
+.project-next-item small{color:var(--purple);font-size:9px;font-weight:850;letter-spacing:.08em;text-transform:uppercase}
+.project-next-item strong{color:#25202d;font:800 13px Manrope}
+.project-next-item span{color:#918997;font-size:11px}
+.project-next-item .primary{padding:9px 12px;font-size:12px}
+.project-next-waiting{margin:12px 0 0;color:#8f8798;font-size:11px}
+.project-next-mini{width:100%;border:1px solid #ece6f5;background:#fff;border-radius:10px;padding:9px 10px;margin:0 0 9px;text-align:left;display:grid;grid-template-columns:auto 1fr;gap:8px;align-items:center;cursor:pointer}
+.project-next-mini span{color:var(--purple);font-size:9px;font-weight:850;text-transform:uppercase}
+.project-next-mini strong{font:750 12px Manrope;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.project-next-mini.waiting{border-style:dashed;color:#8d8794}
+
 .status-chip{display:inline-flex!important;padding:3px 6px;border-radius:5px;background:#f0edf3;color:#776f7e;font-size:9px!important}
 
 .notification-panel{position:fixed;right:18px;top:18px;bottom:18px;width:370px;background:#fff;border-radius:18px;box-shadow:var(--shadow);z-index:40;padding:25px;transform:translateX(calc(100% + 40px));transition:.25s;overflow:auto}
@@ -42,13 +93,18 @@
 .icon-btn b{position:absolute;right:-5px;top:-6px;background:var(--purple);color:#fff;border-radius:9px;min-width:17px;height:17px;padding:2px;font:700 8px DM Sans;display:none}
 
 .comment-section{margin-top:28px}
-.comment-section h3,.link-section h3{font:700 13px Manrope}
+.comment-section h3,.link-section h3,.activity-section h3{font:700 13px Manrope}
 .comment{display:grid;grid-template-columns:27px 1fr;gap:8px;margin:13px 0}
 .comment p{margin:0;font-size:11px;line-height:1.5}
 .comment time{font-size:8px;color:#aaa}
 .comment-form{display:flex;gap:7px;margin-top:13px}
 .comment-form input{font-size:12px}
 .comment-form button{border:0;background:var(--purple);color:#fff;border-radius:8px;padding:0 12px}
+.activity-section{margin-top:27px;padding:13px;border:1px solid var(--line);background:#fbfafc;border-radius:13px}
+.activity-row{display:grid;gap:3px;border-top:1px solid #eeeaf2;padding:9px 0}
+.activity-row:first-of-type{border-top:0}
+.activity-row span{font-size:12px;font-weight:800;color:#3b3541}
+.activity-row small{font-size:10px;color:#918b99}
 
 .activation-explain{margin-top:20px;padding:13px;border:1px solid #ded6ff;background:#f6f3ff;border-radius:10px;font-size:10px;color:#6253a4}
 .activation-explain strong{display:block;margin-bottom:4px}
@@ -60,6 +116,17 @@
 .task-edit-form textarea{height:78px;margin-top:6px;background:#fbfafc}
 .task-edit-form .compact-grid{grid-template-columns:1fr 1fr;gap:10px;margin:0}
 .task-edit-form .primary{justify-self:end;padding:10px 14px;font-size:12px}
+
+.breakdown-card{margin-top:14px;border:1px solid #e8e1f7;background:linear-gradient(180deg,#fff,#fbf8ff);border-radius:13px;padding:0}
+.breakdown-card summary{padding:13px 14px;color:var(--purple);font-size:12px;font-weight:800;list-style:none}
+.breakdown-card summary::-webkit-details-marker{display:none}
+.breakdown-form{padding:0 14px 15px;display:grid;gap:10px}
+.breakdown-form p{color:#81788a;font-size:11px;line-height:1.5;margin:0}
+.breakdown-form textarea{height:105px;margin:0;background:#fff}
+.breakdown-options{display:grid;gap:7px}
+.breakdown-options label{align-items:center;display:flex;gap:8px;font-size:11px}
+.breakdown-options input{margin:0;width:auto}
+.breakdown-form .primary{justify-self:end;padding:10px 14px;font-size:12px}
 
 .brief-card{display:none;align-items:flex-start;justify-content:space-between;gap:18px;margin:-16px 0 28px;padding:18px;border:1px solid #e5defb;background:linear-gradient(135deg,#fff,#f7f3ff);border-radius:16px;box-shadow:0 10px 35px #4932780a}
 .brief-card h2{font:750 17px Manrope;margin:0 0 6px}
@@ -104,13 +171,38 @@
 .link-form input,.link-form select{font-size:11px;padding:9px}
 .link-form button{border:0;border-radius:8px;background:var(--purple);color:#fff}
 .link-grid{align-items:end}
+.command-form{padding:26px;display:grid;gap:14px}
+.command-form .dialog-head h2{margin-bottom:8px}
+#commandSearch{font:700 17px Manrope;background:#fff;padding:14px 15px}
+.command-results{display:grid;gap:8px;max-height:min(440px,55vh);overflow:auto;padding-right:3px}
+.command-results button{width:100%;border:1px solid #eee9f4;background:#fbfafc;border-radius:13px;padding:11px;text-align:left;display:grid;grid-template-columns:34px 1fr;gap:10px;align-items:center;cursor:pointer}
+.command-results button:hover{background:#fff;border-color:#d8cdfa;box-shadow:0 8px 22px #30244d0d}
+.command-results button>span{width:34px;height:34px;border-radius:11px;background:#f0edff;color:var(--purple);display:grid;place-items:center;font-size:15px;font-weight:800}
+.command-results strong{display:block;font:800 13px Manrope;color:var(--ink)}
+.command-results small{display:block;color:#918a98;font-size:11px;margin-top:3px}
+
+.task-view-controls{align-items:center;display:flex;gap:7px}
+.task-view-controls input,.task-view-controls select{background:#fff;border:1px solid var(--line);border-radius:9px;color:#5f5966;font-size:12px;height:34px;padding:0 10px}
+.task-view-controls input{min-width:190px}
+.task-view-controls select{cursor:pointer;width:auto}
+.task-view-controls input:focus,.task-view-controls select:focus{border-color:#cfc2ff;box-shadow:0 0 0 3px #7659ef10}
 
 @media(max-width:800px){
+  .task-view-controls{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:8px;width:100%}
+  .task-view-controls input{grid-column:1/-1;min-width:0;width:100%}
+  .task-view-controls select{width:100%}
   .project-toolbar{display:none!important}
   .notification-panel{inset:18px 0 0;width:100%;border-radius:22px 22px 0 0}
   .board{grid-template-columns:repeat(4,78vw)}
   .calendar-view{grid-template-columns:repeat(7,65vw);overflow:auto}
   .flow-view{padding-bottom:100px}
+  .project-starter-options{grid-template-columns:1fr}
+  .project-health-main{display:grid}
+  .project-health-stats{grid-template-columns:repeat(2,1fr)}
+  .project-health-people{align-items:flex-start;display:grid}
+  .project-next-head,.project-next-item{display:grid}
+  .project-next-item{grid-template-columns:1fr}
+  .project-next-item .primary{width:100%}
   .brief-card{flex-direction:column;margin:-3px 0 18px}
   .brief-card button{width:100%}
   .link-form{grid-template-columns:1fr}
@@ -120,5 +212,5 @@
   .calendar-sync-form .primary,.small-link{width:100%;justify-content:center}
   .task-link-card{grid-template-columns:34px 1fr}
   .task-edit-form .compact-grid{grid-template-columns:1fr}
-  .task-edit-form .primary{width:100%}
+  .task-edit-form .primary,.breakdown-form .primary{width:100%}
 }

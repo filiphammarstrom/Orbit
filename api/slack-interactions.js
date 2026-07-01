@@ -32,6 +32,62 @@ function cleanText(value = '') {
   return String(value || '').replace(/\s+/g, ' ').trim();
 }
 
+function startOfLocalDay(date = new Date()) {
+  const copy = new Date(date);
+  copy.setHours(0, 0, 0, 0);
+  return copy;
+}
+
+function dayAt(daysFromToday, hour = 9, minute = 0) {
+  const date = startOfLocalDay();
+  date.setDate(date.getDate() + daysFromToday);
+  date.setHours(hour, minute, 0, 0);
+  return date;
+}
+
+function nextWeekday(targetDay, hour = 9, minute = 0) {
+  const today = new Date().getDay();
+  const diff = (targetDay - today + 7) % 7 || 7;
+  return dayAt(diff, hour, minute);
+}
+
+function parseSlashDueToken(raw = '') {
+  const token = cleanText(raw).toLowerCase().replace(/^#/, '');
+  const weekdays = {
+    sön: 0,
+    son: 0,
+    mån: 1,
+    man: 1,
+    tis: 2,
+    ons: 3,
+    tor: 4,
+    fre: 5,
+    lör: 6,
+    lor: 6
+  };
+  if (token === 'imorgon' || token === 'i-morgon') return { due: 'imorgon', dueAt: dayAt(1, 9).toISOString() };
+  if (token === 'ikväll' || token === 'ikvall') return { due: 'ikväll', dueAt: dayAt(0, 18).toISOString() };
+  if (token === 'nästa-vecka' || token === 'nasta-vecka') return { due: 'nästa vecka', dueAt: dayAt(7, 9).toISOString() };
+  if (token === 'nästa-månad' || token === 'nasta-manad') {
+    const date = dayAt(0, 9);
+    date.setMonth(date.getMonth() + 1);
+    return { due: 'nästa månad', dueAt: date.toISOString() };
+  }
+  if (Object.prototype.hasOwnProperty.call(weekdays, token)) return { due: token, dueAt: nextWeekday(weekdays[token], 9).toISOString() };
+  const relative = token.match(/^om(\d+)(d|v|m)$/i);
+  if (relative) {
+    const amount = Number(relative[1]);
+    const unit = relative[2].toLowerCase();
+    const date = dayAt(0, 9);
+    if (unit === 'd') date.setDate(date.getDate() + amount);
+    if (unit === 'v') date.setDate(date.getDate() + amount * 7);
+    if (unit === 'm') date.setMonth(date.getMonth() + amount);
+    const label = `om ${amount} ${unit === 'd' ? 'dagar' : unit === 'v' ? 'veckor' : 'månader'}`;
+    return { due: label, dueAt: date.toISOString() };
+  }
+  return { due: '', dueAt: null };
+}
+
 function shortTitle(text, fallback = 'Slack-meddelande') {
   const clean = cleanText(text) || fallback;
   return clean.length > 90 ? `${clean.slice(0, 87)}…` : clean;
@@ -61,6 +117,7 @@ function slashHelpText() {
     '• `/orbit Svara på offerten #idag p1` skapar en task i din Orbit Inbox.',
     '• `/orbit <@person> Följ upp avtalet #sen p2` tilldelar tasken till personen om Slack-emailen matchar en Orbit-teammedlem.',
     '• Bucket: `#idag`, `#sen`, `#someday`.',
+    '• Datum: `#imorgon`, `#ikväll`, `#fre`, `#nästa-vecka`, `#om3d`, `#om2v`.',
     '• Prioritet: `p1`, `p2`, `p3` eller `!!!`, `!!`, `!`.'
   ].join('\n');
 }
@@ -240,11 +297,15 @@ function parseSlashTask(text = '') {
   if (/(^|\s)#?(sen|later)(\s|$)/i.test(raw)) bucket = 'later';
   if (/(^|\s)#?(someday|någon-gång|nagon-gang|nån-gång|nan-gang)(\s|$)/i.test(raw)) bucket = 'someday';
 
+  const dueMatch = raw.match(/(^|\s)#(imorgon|i-morgon|ikväll|ikvall|nästa-vecka|nasta-vecka|nästa-månad|nasta-manad|mån|man|tis|ons|tor|fre|lör|lor|sön|son|om\d+[dvm])(?=\s|$)/i);
+  const due = dueMatch ? parseSlashDueToken(dueMatch[2]) : { due: '', dueAt: null };
+
   const title = cleanText(raw
     .replace(/<@[A-Z0-9]+(?:\|[^>]+)?>/ig, '')
     .replace(/\b(p[123]|prio\s*[123])\b/ig, '')
     .replace(/!!!|!!|!/g, '')
     .replace(/(^|\s)#(idag|today|sen|later|someday|någon-gång|nagon-gang|nån-gång|nan-gang)(?=\s|$)/ig, ' ')
+    .replace(/(^|\s)#(imorgon|i-morgon|ikväll|ikvall|nästa-vecka|nasta-vecka|nästa-månad|nasta-manad|mån|man|tis|ons|tor|fre|lör|lor|sön|son|om\d+[dvm])(?=\s|$)/ig, ' ')
   );
 
   return {
@@ -252,6 +313,8 @@ function parseSlashTask(text = '') {
     title: title || raw || 'Ny Slack-uppgift',
     priority,
     bucket,
+    due: due.due,
+    dueAt: due.dueAt,
     assigneeSlackUserId
   };
 }
@@ -315,6 +378,8 @@ async function createTaskFromSlashCommand(command, integration) {
       assignee_id: assigneeId,
       bucket: parsed.bucket,
       priority: parsed.priority,
+      due_text: parsed.due || '',
+      due_at: parsed.dueAt || null,
       status: 'todo',
       task_type: 'task',
       activation_mode: 'all',

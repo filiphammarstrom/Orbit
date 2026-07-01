@@ -27,6 +27,11 @@ const camelTask = t => ({
   activatedAt: t.activated_at,
   activationReason: t.activation_reason,
   recurrenceRule: t.recurrence_rule,
+  assignmentStatus: t.assignment_status || 'accepted',
+  assignmentRespondedAt: t.assignment_responded_at,
+  assignmentResponseNote: t.assignment_response_note || '',
+  createdAt: t.created_at,
+  updatedAt: t.updated_at,
   trigger: t.trigger_type ? {
     type: t.trigger_type,
     taskId: t.trigger_task_id,
@@ -270,6 +275,7 @@ export async function createCloudTask(input) {
     status: input.status || 'todo',
     task_type: input.taskType || 'task',
     recurrence_rule: input.recurrenceRule || null,
+    assignment_status: input.assigneeId && input.assigneeId !== user.id ? 'pending' : 'accepted',
     activation_mode: input.activationMode || 'all',
     visible: !input.trigger && !dependencies.length,
     trigger_type: input.trigger?.type || null,
@@ -315,11 +321,22 @@ export async function updateCloudTask(id, patch) {
   if ('dueAt' in patch) row.due_at = nullableIso(patch.dueAt);
   if ('reminderAt' in patch) row.reminder_at = nullableIso(patch.reminderAt);
   if ('status' in patch) row.status = patch.status;
+  if ('recurrenceRule' in patch) row.recurrence_rule = patch.recurrenceRule || null;
+  if ('assignmentStatus' in patch) {
+    row.assignment_status = patch.assignmentStatus || 'accepted';
+    row.assignment_responded_at = new Date().toISOString();
+    row.assignment_response_note = patch.assignmentResponseNote || '';
+  }
   row.updated_at = new Date().toISOString();
 
   const { data, error } = await supabase.from('tasks').update(row).eq('id', id).select().single();
   if (error) throw error;
   return camelTask(data);
+}
+
+export async function respondToAssignment(id, status, note = '') {
+  if (!['accepted', 'declined'].includes(status)) throw new Error('Okänt svar på tilldelning.');
+  return updateCloudTask(id, { assignmentStatus: status, assignmentResponseNote: note });
 }
 
 export function subscribeToChanges(onChange) {
@@ -737,6 +754,33 @@ export async function createInvitation(teamId, email, role = 'member') {
     acceptedAt: data.accepted_at,
     expiresAt: data.expires_at
   };
+}
+
+export async function updateTeamMember(teamId, userId, role) {
+  const cleanRole = role === 'admin' ? 'admin' : 'member';
+  const { data, error } = await supabase.from('team_members')
+    .update({ role: cleanRole, status: 'active' })
+    .eq('team_id', teamId)
+    .eq('user_id', userId)
+    .select()
+    .single();
+  if (error) throw error;
+  return { teamId: data.team_id, userId: data.user_id, role: data.role, status: data.status };
+}
+
+export async function removeTeamMember(teamId, userId) {
+  const { error } = await supabase.from('team_members')
+    .delete()
+    .eq('team_id', teamId)
+    .eq('user_id', userId);
+  if (error) throw error;
+  return true;
+}
+
+export async function deleteInvitation(id) {
+  const { error } = await supabase.from('invitations').delete().eq('id', id);
+  if (error) throw error;
+  return true;
 }
 
 export async function shareAreaWithTeam(areaId, teamId) {

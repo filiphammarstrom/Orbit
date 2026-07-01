@@ -15,6 +15,36 @@
       "purpose": "any maskable"
     }
   ],
+  "shortcuts": [
+    {
+      "name": "Ny uppgift",
+      "short_name": "Ny",
+      "description": "Fånga en ny uppgift snabbt.",
+      "url": "/?quick=task",
+      "icons": [{ "src": "/orbit-icon.svg", "sizes": "any", "type": "image/svg+xml" }]
+    },
+    {
+      "name": "Gör idag",
+      "short_name": "Idag",
+      "description": "Öppna dagens uppgifter.",
+      "url": "/?view=today",
+      "icons": [{ "src": "/orbit-icon.svg", "sizes": "any", "type": "image/svg+xml" }]
+    },
+    {
+      "name": "Inbox",
+      "short_name": "Inbox",
+      "description": "Öppna inboxen.",
+      "url": "/?view=inbox",
+      "icons": [{ "src": "/orbit-icon.svg", "sizes": "any", "type": "image/svg+xml" }]
+    },
+    {
+      "name": "Review",
+      "short_name": "Review",
+      "description": "Öppna besluts- och review-vyn.",
+      "url": "/?view=review",
+      "icons": [{ "src": "/orbit-icon.svg", "sizes": "any", "type": "image/svg+xml" }]
+    }
+  ],
   "share_target": {
     "action": "/?capture=share",
     "method": "GET",

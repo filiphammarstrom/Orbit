@@ -9,18 +9,45 @@ Orbit är en molnbaserad fleranvändarapp för kategorier, områden, projekt, te
 - Anpassade uppgiftsstatusar, milstolpar och godkännanden
 - Underuppgifter samt beroenden där alla eller minst ett föregående steg krävs
 - Redigering av uppgifter direkt i sidopanelen: titel, anteckningar, status, prioritet, bucket, projekt, tilldelad person, deadline och påminnelse
-- Strukturerade datumfält (`due_at`, `reminder_at`) används i listor, kalender, AI-brief och MCP — med enkel svensk snabbtolkning som “imorgon 09:00”
+- Strukturerade datumfält (`due_at`, `reminder_at`) används i listor, kalender, AI-brief och MCP — med enkel svensk snabbtolkning som “imorgon 09:00”, “nästa vecka”, “om 3 dagar” och “om 2 veckor”
+- Overdue-flöde med individuella och bulk-beslut så försenade uppgifter snabbt får nytt datum eller flyttas bort
+- Uppgiftspanelen har snabbplanering till idag, imorgon, nästa vecka eller någon gång utan att öppna hela redigeringsformuläret
+- Uppgiftspanelen kan starta nästa synliga delsteg direkt och kopiera en Orbit-länk tillbaka till uppgiften
+- Quick Add och Slack `/orbit` kan tolka enkla tokens i titeln: `#idag`, `#sen`, `#someday`, `#imorgon`, `#ikväll`, `#fre`, `#nästa-vecka`, `#om3d`, `#om2v`, `p1/p2/p3` och `@namn`/Slack-mention
+- Parkeringsnudges i “Gör sen” och “Gör nån gång” när uppgifter utan datum eller hög prio riskerar att fastna
+- Someday kan bulk-sänka P1/P2 till P3 när du vill erkänna att något faktiskt är parkerat
 - Externa MCP-händelser och tidsbaserad aktivering
 - Kontextlänkar från andra appar, t.ex. mail, dokument, chattar och kalenderposter
 - Uppgifter som tilldelats dig ligger kvar i sina vanliga listor/projekt men markeras med “Tilldelat till dig”
+- Nya tilldelningar hamnar i Inbox som beslut: acceptera och planera idag/imorgon/nästa vecka, neka, eller öppna och ändra detaljer först
+- Review samlar även väntande tilldelningar, så beslut om andras uppgifter inte bara ligger gömda i Inbox
 - Strukturvy för kategori → område → projekt, där team bara styr åtkomst/delning
+- Teamadministration med inbjudningar, rolländring, borttagning av medlemmar och möjlighet att dra tillbaka väntande inbjudningar
 - Google Calendar-sektion på uppgifter: manuell “öppna i Google Calendar”-länk, direkt-sync, retry och köad sync-status
 - Integrationsgrund för Google Calendar och Slack, inklusive Slack-inbox, message shortcut och länkar tillbaka till Slack-meddelanden
+- Inställningar visar setup-status för MCP, PWA, Share Sheet, Google, Slack och notiser med kopieringsknappar för ORBIT_USER_ID och Quick Add-länk
+- Inställningar har en Quick Add-guide med kopierbara exempel för tokens som datum, prio, bucket och tilldelning
 - Daglig Orbit-brief från MCP/AI samt sparade agentförslag
 - AI-control via MCP: externa AI-klienter kan läsa workspace, skapa projekt, masskapa tasks, tilldela personer och uppdatera status
 - Kommentarer, aktivitetshistorik och separat notis-inbox
 - Återkommande uppgifter och databasgrund för projektmallar
 - Förklaring av varför och när en villkorsstyrd uppgift aktiverades
+- Review visar även låsta/dolda uppgifter som väntar på kedja eller extern trigger, inklusive kopiering av webhook-body när det är relevant
+- Review visar återkommande uppgifter separat så nästa datum kan kontrolleras snabbt
+
+## Apple-native klient
+
+Det finns en första SwiftUI-grund i `apps/apple/` för iOS, iPadOS och macOS. Den är byggd som ett separat Swift Package (`OrbitAppleKit`) med delade modeller, store, SwiftUI-vyer, Supabase REST-klient-skelett och App Intents för Siri/Shortcuts.
+Task-raderna i Apple-grunden har även snabbactions/context menu för fokus, klar och planering till idag/imorgon/nästa vecka/någon gång.
+
+```bash
+cd apps/apple
+swift test
+swift build --product OrbitMac
+swift run OrbitMac
+```
+
+Nästa Apple-steg är att lägga Xcode-app targets ovanpå paketet: iOS-app, macOS-app, WidgetKit-extension och Share Extension.
 
 ## Sätt upp molndatabasen
 
@@ -55,10 +82,13 @@ Tillgängliga MCP-verktyg:
 
 - `list_workspace` — visar områden, projekt, team och personer som AI:n får arbeta med
 - `list_tasks` — listar synliga uppgifter, valfritt med app-länkar
+- `create_team` / `invite_member` / `share_area_with_team` — låter AI:n sätta upp team, bjuda in personer och dela områden
+- `create_area` / `update_area` — låter AI:n skapa och ändra kategori/område-strukturen
 - `create_project` / `update_project` — låter AI:n sätta upp och underhålla projekt
-- `create_task` — skapar uppgift/underuppgift med beroenden, trigger och länkar
+- `create_task` — skapar uppgift/underuppgift med beroenden, trigger, återkomst och länkar
 - `bulk_create_tasks` — skapar många tasks i ett svep med `tempId`, `parentTempId` och `dependsOnTempIds`
-- `update_task` / `assign_task` — flyttar, tilldelar och uppdaterar tasks
+- `break_down_task` — bryter ner en stor uppgift till parallella underuppgifter eller en sekventiell kedja
+- `update_task` / `assign_task` / `respond_to_assignment` — flyttar, tilldelar, accepterar/nekar och uppdaterar tasks
 - `add_comment` — lägger till kommentar på en task
 - `add_task_link` — kopplar t.ex. Gmail/Outlook/Slack/Docs-länk till en uppgift
 - `list_integrations` / `register_integration` — hanterar registrerade Google Calendar- och Slack-kopplingar
@@ -71,6 +101,8 @@ Tillgängliga MCP-verktyg:
 - `complete_task` — slutför en uppgift och låter databasen aktivera nästa steg
 - `emit_event` — skickar extern trigger, t.ex. `pelle_replied_email`
 - `daily_brief` — skapar och kan spara en daglig sammanfattning
+- `reschedule_overdue_tasks` — planerar om försenade uppgifter till idag, imorgon, nästa vecka eller someday
+- `daily_planning` — väljer ett begränsat antal fokusuppgifter och flyttar dem till Gör idag
 - `agent_suggest_next_actions` — ger read-only-förslag på nästa steg
 
 Webbappen har också en “AI-agent”-panel i Today-vyn. Den kör en lokal regelbaserad agent över dina synliga uppgifter, inbox, deadlines, Google Calendar-köer, väntelägen och app-länkar och sparar resultatet i `agent_runs`. Det är avsiktligt samma datayta som MCP/externa AI-klienter kan använda senare.
@@ -86,9 +118,16 @@ Rekommenderat flöde för ChatGPT/Claude:
 Länkar från andra appar:
 
 - Orbit är förberedd som PWA med Web Share Target. När appen installeras på en enhet som stödjer detta kan användaren dela en webbsida/länk till Orbit och få “Ny uppgift”-dialogen förifylld.
+- Installerad PWA har också genvägar för Ny uppgift, Gör idag, Inbox och Review. `/?quick=task` öppnar snabb uppgift och `/?view=today|inbox|review|later|someday|areas` öppnar rätt vy direkt.
 - Samma flöde kan öppnas manuellt med query-parametrar, t.ex. `https://orbit-iota-sage.vercel.app/?capture=1&title=Svara%20Pelle&url=https%3A%2F%2Fmail.google.com%2F...`
-- Stödda parametrar: `title`, `text`, `url`, eller `captureTitle`, `captureText`, `captureUrl`.
+- Stödda capture-parametrar:
+  - innehåll: `title`, `text`, `url`, eller `captureTitle`, `captureText`, `captureUrl`
+  - planering: `bucket`/`view` (`inbox`, `today`, `later`, `someday`), `priority`/`prio` (`p1`, `p2`, `p3`), `due`/`when`, `dueAt`, `reminderAt`
+  - placering: `projectId` eller `project`/`projectName`, samt `assigneeId` eller `assignee`/`to`
+  - styrning: `status`, `taskType`, `recurrence`, `trigger`/`event`
+  - exempel: `/?quick=task&title=Ring%20Pelle&bucket=today&prio=p1&due=imorgon%2009:00&project=Foreshadow&to=Filip`
 - Orbit försöker känna igen Gmail, Outlook, Google Docs, Google Calendar och Slack-länkar och sätter rätt länktyp/app i uppgiften.
+- Kommandopaletten (`⌘K`/`Ctrl+K`) kan öppna tasks/projekt/områden och köra snabbactions som Ny uppgift, Ny kategori, Gå till Inbox/Review/Struktur, Uppdatera dagens brief och Kör Orbit-agenten.
 
 ## Google Calendar och Slack
 
@@ -131,6 +170,7 @@ Cron-schemat i `vercel.json` är satt till dagligen (`0 6 * * *`) för att funge
 Externa triggers från andra appar:
 
 Orbit har en server-side webhook på `POST /api/external-event` för triggers som Gmail/Make/Zapier/AI-agent kan skicka när något händer i en annan app. Den kan exempelvis låsa upp dolda uppgifter som väntar på `pelle_replied_email`.
+På en uppgift som väntar på extern trigger kan uppgiftspanelen kopiera färdig JSON-body för både `/api/external-event` och `/api/gmail-trigger`.
 
 Header:
 
@@ -195,7 +235,7 @@ Slack-flödet:
 10. Slack Events API verifierar `X-Slack-Signature`, deduplicerar `event_id`, försöker hämta en riktig Slack-permalink via `chat.getPermalink` och sparar inkommande events i `integration_events`.
 11. Granska nya Slack-events i Orbit, öppna originalmeddelandet i Slack och skapa Orbit-uppgifter med titel, projekt, tilldelad och prioritet.
 12. Använd Slack message shortcut “Skapa Orbit-task” på ett meddelande för att skapa en uppgift direkt i Orbit. Om Slack-användarens email matchar en Orbit-användare som delar team med integrationsägaren hamnar den i den personens Inbox, annars i integrationsägarens Inbox.
-13. Använd `/orbit Svara på offerten #idag p1` för att skapa en task direkt från Slack. `/orbit <@person> Följ upp avtalet #sen p2` tilldelar tasken till personen om Slack-emailen matchar en Orbit-användare som delar team.
+13. Använd `/orbit Svara på offerten #idag p1` för att skapa en task direkt från Slack. `/orbit <@person> Följ upp avtalet #imorgon #sen p2` tilldelar tasken till personen om Slack-emailen matchar en Orbit-användare som delar team och sätter datum från token.
 14. När en Slack-händelse, shortcut eller slash command blir en uppgift markeras den som hanterad/länkad och sparas i `integration_events`. Message shortcuts sparas även i `slack_message_links` med Slack-permalink när den finns.
 15. Använd MCP-verktygen `create_task_from_slack` eller `link_slack_message` för samma flöde från en AI-klient.
 16. `ingest_integration_event` kan spara inkommande Slack-events och samtidigt aktivera dolda tasks via ett triggernamn.

@@ -28,6 +28,7 @@ const taskInputSchema = {
     due: { type: 'string' },
     dueAt: { type: 'string' },
     reminderAt: { type: 'string' },
+    recurrenceRule: { type: 'string', enum: ['daily', 'weekly', 'monthly'] },
     status: { type: 'string' },
     taskType: { type: 'string' },
     activationMode: { type: 'string' },
@@ -62,6 +63,74 @@ const tools = [
         includeLinks: { type: 'boolean' },
         includeHidden: { type: 'boolean' },
         includeCompleted: { type: 'boolean' }
+      }
+    }
+  },
+  {
+    name: 'create_team',
+    description: 'Skapa ett team och lägg MCP-användaren som ägare. Team kan sedan kopplas till områden.',
+    inputSchema: {
+      type: 'object',
+      required: ['name'],
+      properties: {
+        name: { type: 'string' }
+      }
+    }
+  },
+  {
+    name: 'invite_member',
+    description: 'Bjud in en person via e-post till ett team som MCP-användaren äger eller administrerar.',
+    inputSchema: {
+      type: 'object',
+      required: ['teamId', 'email'],
+      properties: {
+        teamId: { type: 'string' },
+        email: { type: 'string' },
+        role: { type: 'string', enum: ['admin', 'member'] },
+        expiresAt: { type: 'string' }
+      }
+    }
+  },
+  {
+    name: 'share_area_with_team',
+    description: 'Dela ett område med ett team. Teamet blir åtkomstlagret för området och dess projekt.',
+    inputSchema: {
+      type: 'object',
+      required: ['areaId', 'teamId'],
+      properties: {
+        areaId: { type: 'string' },
+        teamId: { type: 'string' }
+      }
+    }
+  },
+  {
+    name: 'create_area',
+    description: 'Skapa ett område under en kategori. Kategorier syns i Orbit när de har minst ett område.',
+    inputSchema: {
+      type: 'object',
+      required: ['name'],
+      properties: {
+        name: { type: 'string' },
+        category: { type: 'string' },
+        icon: { type: 'string' },
+        color: { type: 'string' },
+        teamId: { type: 'string' }
+      }
+    }
+  },
+  {
+    name: 'update_area',
+    description: 'Uppdatera område: namn, kategori, ikon, färg eller vilket team som delar området.',
+    inputSchema: {
+      type: 'object',
+      required: ['areaId'],
+      properties: {
+        areaId: { type: 'string' },
+        name: { type: 'string' },
+        category: { type: 'string' },
+        icon: { type: 'string' },
+        color: { type: 'string' },
+        teamId: { type: 'string' }
       }
     }
   },
@@ -125,6 +194,20 @@ const tools = [
     }
   },
   {
+    name: 'break_down_task',
+    description: 'Bryt ner en stor uppgift till underuppgifter. Kan skapa parallella steg eller en kedja där nästa steg väntar på föregående.',
+    inputSchema: {
+      type: 'object',
+      required: ['taskId', 'subtasks'],
+      properties: {
+        taskId: { type: 'string' },
+        mode: { type: 'string', enum: ['parallel', 'sequential'] },
+        subtasks: { type: 'array', items: taskInputSchema },
+        addComment: { type: 'boolean' }
+      }
+    }
+  },
+  {
     name: 'update_task',
     description: 'Uppdatera en befintlig uppgift: titel, anteckning, status, bucket, prioritet, datum, projekt eller tilldelad person.',
     inputSchema: {
@@ -142,6 +225,7 @@ const tools = [
         due: { type: 'string' },
         dueAt: { type: 'string' },
         reminderAt: { type: 'string' },
+        recurrenceRule: { type: 'string', enum: ['daily', 'weekly', 'monthly'] },
         status: { type: 'string' },
         completed: { type: 'boolean' },
         visible: { type: 'boolean' }
@@ -152,6 +236,19 @@ const tools = [
     name: 'assign_task',
     description: 'Tilldela en task till en annan person som har åtkomst till uppgiftens område.',
     inputSchema: { type: 'object', required: ['taskId', 'assigneeId'], properties: { taskId: { type: 'string' }, assigneeId: { type: 'string' } } }
+  },
+  {
+    name: 'respond_to_assignment',
+    description: 'Acceptera eller neka en uppgift som är tilldelad till MCP-användaren. Används för Inbox-beslut.',
+    inputSchema: {
+      type: 'object',
+      required: ['taskId', 'status'],
+      properties: {
+        taskId: { type: 'string' },
+        status: { type: 'string', enum: ['accepted', 'declined'] },
+        note: { type: 'string' }
+      }
+    }
   },
   {
     name: 'add_comment',
@@ -321,6 +418,33 @@ const tools = [
     inputSchema: { type: 'object', properties: { date: { type: 'string' }, areaId: { type: 'string' }, save: { type: 'boolean' } } }
   },
   {
+    name: 'reschedule_overdue_tasks',
+    description: 'Planera om försenade uppgifter så de inte bara ligger kvar som overdue-brus.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        areaId: { type: 'string' },
+        taskIds: { type: 'array', items: { type: 'string' } },
+        strategy: { type: 'string', enum: ['today', 'tomorrow', 'next_week', 'someday'] },
+        limit: { type: 'number' },
+        dryRun: { type: 'boolean' }
+      }
+    }
+  },
+  {
+    name: 'daily_planning',
+    description: 'Välj ett begränsat antal rimliga fokusuppgifter för idag och flytta dem till Gör idag.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        areaId: { type: 'string' },
+        capacity: { type: 'number' },
+        includeInbox: { type: 'boolean' },
+        dryRun: { type: 'boolean' }
+      }
+    }
+  },
+  {
     name: 'agent_suggest_next_actions',
     description: 'Låt Orbit-agenten föreslå nästa drag baserat på prioritet, inbox, väntande uppgifter, länkar och dagens plan.',
     inputSchema: { type: 'object', properties: { areaId: { type: 'string' }, goal: { type: 'string' }, save: { type: 'boolean' } } }
@@ -380,6 +504,39 @@ function cleanText(value, fallback = '') {
   return typeof value === 'string' ? value.trim() : fallback;
 }
 
+function isTeamAdmin(ctx, teamId) {
+  const team = ctx.teams.find(t => t.id === teamId);
+  return team?.owner_id === actorId || ctx.members.some(m => m.team_id === teamId && m.user_id === actorId && m.status === 'active' && ['owner', 'admin'].includes(m.role));
+}
+
+function ensureTeamAdmin(ctx, teamId) {
+  if (!ctx.teamIds.includes(teamId) || !isTeamAdmin(ctx, teamId)) throw new Error('MCP-användaren måste vara ägare eller admin i teamet.');
+}
+
+function nextPlanningDate(strategy = 'today', offset = 0) {
+  const date = new Date();
+  if (strategy === 'tomorrow') date.setDate(date.getDate() + 1);
+  if (strategy === 'next_week') {
+    const day = date.getDay() || 7;
+    date.setDate(date.getDate() + (8 - day));
+  }
+  date.setHours(strategy === 'today' ? 18 : 9, Math.min(offset, 5) * 10, 0, 0);
+  return date.toISOString();
+}
+
+function taskRank(task) {
+  const statusScore = task.status === 'doing' ? 0 : task.status === 'review' ? 1 : task.status === 'todo' ? 2 : 3;
+  const priorityScore = Number(task.priority || 3);
+  const dueScore = task.due_at ? new Date(task.due_at).getTime() : Number.MAX_SAFE_INTEGER;
+  return [statusScore, priorityScore, dueScore, new Date(task.created_at || 0).getTime()];
+}
+
+function sortTasksForPlanning(a, b) {
+  const left = taskRank(a), right = taskRank(b);
+  for (let i = 0; i < left.length; i += 1) if (left[i] !== right[i]) return left[i] - right[i];
+  return 0;
+}
+
 function orderTasksForParents(tasks) {
   const pending = [...tasks];
   const createdTempIds = new Set();
@@ -420,6 +577,9 @@ async function access() {
     : { data: [], error: null };
   if (amErr) throw amErr;
 
+  const { data: categorySettings, error: cErr } = await db.from('category_settings').select('*').eq('owner_id', actorId).order('name');
+  if (cErr) throw cErr;
+
   const userIds = [...new Set([
     actorId,
     ...areas.map(a => a.owner_id).filter(Boolean),
@@ -440,6 +600,7 @@ async function access() {
     areas,
     projects,
     teams,
+    categorySettings,
     members: allMembers,
     profiles
   };
@@ -656,9 +817,16 @@ async function addDependencies(taskId, dependencyTaskIds) {
   return data;
 }
 
-async function notifyAssignment(taskId, assigneeId, title) {
-  if (!assigneeId || assigneeId === actorId) return;
-  await db.from('notifications').insert({ user_id: assigneeId, task_id: taskId, type: 'assignment', title: 'Ny uppgift tilldelad', body: title || '' });
+async function upsertCategorySetting(name, icon, color) {
+  const cleanName = cleanText(name, 'Privat') || 'Privat';
+  const { error } = await db.from('category_settings').upsert({
+    owner_id: actorId,
+    name: cleanName.slice(0, 80),
+    icon: String(icon || '▣').trim().slice(0, 2) || '▣',
+    color: color || '#7659ef',
+    updated_at: new Date().toISOString()
+  }, { onConflict: 'owner_id,name' });
+  if (error) throw error;
 }
 
 async function createTask(ctx, input = {}, tempMap = new Map(), defaults = {}) {
@@ -698,6 +866,7 @@ async function createTask(ctx, input = {}, tempMap = new Map(), defaults = {}) {
     due_text: input.due || '',
     due_at: nullableIso(input.dueAt),
     reminder_at: nullableIso(input.reminderAt),
+    recurrence_rule: input.recurrenceRule || null,
     status: input.status || 'todo',
     task_type: input.taskType || 'task',
     activation_mode: input.activationMode || 'all',
@@ -742,6 +911,7 @@ async function updateTask(ctx, input) {
     due_text: input.due,
     due_at: input.dueAt !== undefined ? nullableIso(input.dueAt) : undefined,
     reminder_at: input.reminderAt !== undefined ? nullableIso(input.reminderAt) : undefined,
+    recurrence_rule: input.recurrenceRule !== undefined ? input.recurrenceRule || null : undefined,
     status: input.completed ? 'done' : input.status,
     completed: input.completed,
     visible: input.visible
@@ -750,7 +920,6 @@ async function updateTask(ctx, input) {
   if (!Object.keys(row).length) return current;
   const { data, error } = await db.from('tasks').update(row).eq('id', input.taskId).select().single();
   if (error) throw error;
-  if (input.assigneeId !== undefined && assigneeId !== current.assignee_id) await notifyAssignment(data.id, assigneeId, data.title);
   return data;
 }
 
@@ -761,6 +930,7 @@ async function call(name, a = {}) {
     return {
       actorId,
       areas: ctx.areas,
+      categories: ctx.categorySettings,
       projects: a.includeProjects === false ? undefined : ctx.projects,
       teams: a.includeTeams === false ? undefined : ctx.teams.map(t => ({ ...t, memberIds: ctx.members.filter(m => m.team_id === t.id && m.status === 'active').map(m => m.user_id) })),
       people: a.includePeople === false ? undefined : ctx.profiles,
@@ -774,6 +944,92 @@ async function call(name, a = {}) {
     if (!a.includeLinks) return tasks;
     const links = await taskLinks(tasks.map(t => t.id));
     return withLinks(tasks, links);
+  }
+
+  if (name === 'create_team') {
+    const teamName = cleanText(a.name);
+    if (!teamName) throw new Error('Teamet behöver ett namn.');
+    const { data: team, error } = await db.from('teams').insert({ name: teamName.slice(0, 120), owner_id: actorId }).select().single();
+    if (error) throw error;
+    const { data: membership, error: memberError } = await db.from('team_members').insert({ team_id: team.id, user_id: actorId, role: 'owner', status: 'active' }).select().single();
+    if (memberError) throw memberError;
+    return { team, membership };
+  }
+
+  if (name === 'invite_member') {
+    ensureTeamAdmin(ctx, a.teamId);
+    const email = cleanText(a.email).toLowerCase();
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) throw new Error('Ange en giltig e-postadress.');
+    const role = ['admin', 'member'].includes(a.role) ? a.role : 'member';
+    const expiresAt = nullableIso(a.expiresAt) || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+    const { data: existing, error: existingError } = await db.from('invitations').select('*').eq('team_id', a.teamId).eq('email', email).maybeSingle();
+    if (existingError) throw existingError;
+    if (existing) {
+      const { data, error } = await db.from('invitations').update({
+        role,
+        invited_by: actorId,
+        expires_at: existing.accepted_at ? existing.expires_at : expiresAt
+      }).eq('id', existing.id).select().single();
+      if (error) throw error;
+      return data;
+    }
+    const { data, error } = await db.from('invitations').insert({
+      team_id: a.teamId,
+      email,
+      role,
+      invited_by: actorId,
+      expires_at: expiresAt
+    }).select().single();
+    if (error) throw error;
+    return data;
+  }
+
+  if (name === 'share_area_with_team') {
+    ensureAreaAccess(ctx, a.areaId);
+    ensureTeamAdmin(ctx, a.teamId);
+    const area = ctx.areas.find(item => item.id === a.areaId);
+    if (area.owner_id !== actorId) throw new Error('Bara områdets ägare kan dela området med ett team.');
+    const { data, error } = await db.from('areas').update({ team_id: a.teamId }).eq('id', a.areaId).select().single();
+    if (error) throw error;
+    return data;
+  }
+
+  if (name === 'create_area') {
+    const areaName = cleanText(a.name);
+    if (!areaName) throw new Error('Området behöver ett namn.');
+    if (a.teamId && !ctx.teamIds.includes(a.teamId)) throw new Error('Ingen åtkomst till teamet.');
+    const category = cleanText(a.category, 'Privat') || 'Privat';
+    await upsertCategorySetting(category, a.icon, a.color);
+    const { data, error } = await db.from('areas').insert({
+      name: areaName.slice(0, 120),
+      category: category.slice(0, 80),
+      icon: String(a.icon || '◫').trim().slice(0, 2) || '◫',
+      color: a.color || '#7659ef',
+      owner_id: actorId,
+      team_id: a.teamId || null
+    }).select().single();
+    if (error) throw error;
+    return data;
+  }
+
+  if (name === 'update_area') {
+    ensureAreaAccess(ctx, a.areaId);
+    const current = ctx.areas.find(area => area.id === a.areaId);
+    if (current.owner_id !== actorId) throw new Error('Bara områdets ägare kan ändra område via MCP.');
+    if (a.teamId && !ctx.teamIds.includes(a.teamId)) throw new Error('Ingen åtkomst till teamet.');
+    const category = a.category !== undefined ? cleanText(a.category, 'Privat') || 'Privat' : undefined;
+    if (category) await upsertCategorySetting(category, a.icon || current.icon, a.color || current.color);
+    const row = compactRow({
+      name: a.name ? cleanText(a.name).slice(0, 120) : undefined,
+      category: category ? category.slice(0, 80) : undefined,
+      icon: a.icon ? String(a.icon).trim().slice(0, 2) || '◫' : undefined,
+      color: a.color,
+      team_id: a.teamId !== undefined ? a.teamId || null : undefined
+    });
+    if (!Object.keys(row).length) return current;
+    const { data, error } = await db.from('areas').update(row).eq('id', a.areaId).select().single();
+    if (error) throw error;
+    return data;
   }
 
   if (name === 'create_project') {
@@ -860,12 +1116,60 @@ async function call(name, a = {}) {
     return { created: withLinks(created, links), tempIdMap: Object.fromEntries(tempMap.entries()) };
   }
 
+  if (name === 'break_down_task') {
+    const parent = await allowedTask(a.taskId, ctx);
+    const subtasks = Array.isArray(a.subtasks) ? a.subtasks : [];
+    if (!subtasks.length) throw new Error('break_down_task kräver minst en underuppgift.');
+    if (subtasks.length > 50) throw new Error('Skapa högst 50 underuppgifter åt gången.');
+    const sequential = (a.mode || 'parallel') === 'sequential';
+    const created = [];
+    let previousId = null;
+
+    for (const [index, subtask] of subtasks.entries()) {
+      const createdTask = await createTask(ctx, {
+        ...subtask,
+        parentTaskId: parent.id,
+        projectId: subtask.projectId || parent.project_id,
+        assigneeId: subtask.assigneeId || parent.assignee_id || actorId,
+        bucket: subtask.bucket || parent.bucket || 'inbox',
+        dependencyTaskIds: sequential && previousId ? [previousId] : (subtask.dependencyTaskIds || []),
+        notes: subtask.notes || (sequential ? `Steg ${index + 1} i kedjan för: ${parent.title}` : '')
+      });
+      created.push(createdTask);
+      previousId = createdTask.id;
+    }
+
+    if (a.addComment !== false) {
+      const { error } = await db.from('comments').insert({
+        task_id: parent.id,
+        author_id: actorId,
+        body: `AI/MCP bröt ner uppgiften i ${created.length} underuppgift${created.length === 1 ? '' : 'er'}${sequential ? ' som en kedja' : ''}.`
+      });
+      if (error) throw error;
+    }
+
+    return { parent, mode: sequential ? 'sequential' : 'parallel', created };
+  }
+
   if (name === 'update_task') {
     return updateTask(ctx, a);
   }
 
   if (name === 'assign_task') {
     return updateTask(ctx, { taskId: a.taskId, assigneeId: a.assigneeId });
+  }
+
+  if (name === 'respond_to_assignment') {
+    const task = await allowedTask(a.taskId, ctx);
+    if (task.assignee_id !== actorId) throw new Error('Du kan bara svara på uppgifter som är tilldelade till MCP-användaren.');
+    if (!['accepted', 'declined'].includes(a.status)) throw new Error('Status måste vara accepted eller declined.');
+    const { data, error } = await db.from('tasks').update({
+      assignment_status: a.status,
+      assignment_responded_at: new Date().toISOString(),
+      assignment_response_note: a.note || ''
+    }).eq('id', a.taskId).select().single();
+    if (error) throw error;
+    return data;
   }
 
   if (name === 'add_comment') {
@@ -985,6 +1289,71 @@ async function call(name, a = {}) {
     const { data, error } = await db.from('task_events').insert({ area_id: a.areaId, name: a.name, payload: a.payload || {}, actor_id: actorId }).select().single();
     if (error) throw error;
     return data;
+  }
+
+  if (name === 'reschedule_overdue_tasks') {
+    const date = todayISO();
+    const strategy = a.strategy || 'tomorrow';
+    if (!['today', 'tomorrow', 'next_week', 'someday'].includes(strategy)) throw new Error('Okänd omplaneringsstrategi.');
+    const allTasks = await listTasks(ctx, { areaId: a.areaId });
+    const ids = new Set(Array.isArray(a.taskIds) ? a.taskIds.filter(Boolean) : []);
+    const overdue = allTasks
+      .filter(task => task.due_at && stockholmDateISO(task.due_at) < date)
+      .filter(task => !ids.size || ids.has(task.id))
+      .sort(sortTasksForPlanning)
+      .slice(0, Number(a.limit || 20));
+
+    const updates = overdue.map((task, index) => ({
+      task,
+      patch: strategy === 'someday'
+        ? { bucket: 'someday', due_text: '', due_at: null, reminder_at: null }
+        : { bucket: strategy === 'today' ? 'today' : 'later', due_text: strategy === 'today' ? 'Planerad idag' : strategy === 'tomorrow' ? 'Planerad imorgon' : 'Planerad nästa vecka', due_at: nextPlanningDate(strategy, index) }
+    }));
+
+    if (a.dryRun) return { dryRun: true, strategy, count: updates.length, updates: updates.map(item => ({ taskId: item.task.id, title: item.task.title, patch: item.patch })) };
+
+    const results = [];
+    for (const item of updates) {
+      const { data, error } = await db.from('tasks').update(item.patch).eq('id', item.task.id).select().single();
+      if (error) throw error;
+      results.push(data);
+    }
+    return { strategy, count: results.length, updated: results };
+  }
+
+  if (name === 'daily_planning') {
+    const capacity = Math.max(1, Math.min(Number(a.capacity || 3), 8));
+    const tasks = await listTasks(ctx, { areaId: a.areaId });
+    const candidates = tasks
+      .filter(task => task.visible && !task.completed)
+      .filter(task => a.includeInbox !== false || task.bucket !== 'inbox')
+      .filter(task => ['inbox', 'later', 'someday', 'today'].includes(task.bucket))
+      .sort(sortTasksForPlanning);
+    const selected = uniqTasks([
+      ...candidates.filter(task => task.status === 'doing'),
+      ...candidates.filter(task => Number(task.priority) === 1),
+      ...candidates.filter(task => task.due_at && stockholmDateISO(task.due_at) <= todayISO()),
+      ...candidates
+    ]).slice(0, capacity);
+
+    const plan = selected.map((task, index) => ({
+      task,
+      patch: {
+        bucket: 'today',
+        due_text: task.due_text || 'Planerad idag',
+        due_at: task.due_at || nextPlanningDate('today', index)
+      }
+    }));
+
+    if (a.dryRun) return { dryRun: true, capacity, count: plan.length, plan: plan.map(item => ({ taskId: item.task.id, title: item.task.title, patch: item.patch })) };
+
+    const updated = [];
+    for (const item of plan) {
+      const { data, error } = await db.from('tasks').update(item.patch).eq('id', item.task.id).select().single();
+      if (error) throw error;
+      updated.push(data);
+    }
+    return { capacity, count: updated.length, updated };
   }
 
   if (name === 'daily_brief') {

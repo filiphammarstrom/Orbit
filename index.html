@@ -18,7 +18,7 @@
   <link rel="stylesheet" href="auth.css">
   <link rel="stylesheet" href="project-management.css">
   <link rel="stylesheet" href="team.css">
-  <link rel="stylesheet" href="hierarchy.css">
+  <link rel="stylesheet" href="hierarchy.css?v=sidebar-cleanup">
   <link rel="stylesheet" href="agent.css">
 </head>
 <body>
@@ -30,19 +30,26 @@
     <div class="brand"><span class="brandmark">O</span><span>orbit</span><button class="collapse">‹</button></div>
     <button class="quick-add" id="quickAdd"><span>＋</span> Ny uppgift <kbd>N</kbd></button>
     <nav id="mainNav"></nav>
-    <div class="nav-section"><div class="nav-label"><span>KATEGORIER</span><button title="Ny kategori eller område" data-create-structure="category">＋</button></div><div id="projectNav"></div></div>
+    <div class="nav-section"><div class="nav-label"><span>Kategori</span><button title="Ny kategori" data-create-structure="category">＋</button></div><div id="projectNav"></div></div>
     <div class="sidebar-foot"><div class="avatar">FH</div><div><strong id="currentUserName">Mitt konto</strong><small>Min arbetsyta</small></div><button id="logoutButton" title="Logga ut">↪</button></div>
   </aside>
   <main>
-    <header><div><p class="eyebrow" id="eyebrow">MIN DAG</p><h1 id="pageTitle">Gör idag</h1><p id="subtitle"></p></div><div class="header-actions"><button class="icon-btn" title="Sök">⌕</button><button class="icon-btn" id="notificationButton" title="Notiser">♢<i id="notificationDot"></i><b id="notificationCount"></b></button></div></header>
+    <header><div><p class="eyebrow" id="eyebrow">MIN DAG</p><h1 id="pageTitle">Gör idag</h1><p id="subtitle"></p></div><div class="header-actions"><button class="icon-btn" id="commandButton" title="Sök">⌕</button><button class="icon-btn" id="notificationButton" title="Notiser">♢<i id="notificationDot"></i><b id="notificationCount"></b></button></div></header>
     <section class="project-toolbar" id="projectToolbar"><div id="projectHealth"></div><div class="view-switcher"><button data-project-view="list" class="active">☷ Lista</button><button data-project-view="board">▦ Tavla</button><button data-project-view="calendar">□ Kalender</button><button data-project-view="flow">⌁ Flöde</button></div></section>
     <section class="focus-card" id="focusCard"><div class="focus-icon">✦</div><div><strong>Du har <span id="todayCount">0</span> saker framför dig</strong><p>Ett tydligt nästa steg i taget.</p></div><div class="progress"><svg viewBox="0 0 42 42"><circle cx="21" cy="21" r="16"></circle><circle class="done-ring" cx="21" cy="21" r="16"></circle></svg><span id="progressText">0%</span></div></section>
     <section class="brief-card" id="briefCard"><div><p class="eyebrow">DAGLIG AI</p><h2>Dagens sammanfattning</h2><p id="briefSummary">Skapa en kort MCP/AI-brief av dagens uppgifter.</p><div id="briefFocusTasks"></div></div><button class="secondary" id="generateBrief">Uppdatera brief</button></section>
     <section class="agent-card" id="agentCard"><div class="agent-head"><div><p class="eyebrow">AI-AGENT</p><h2>Föreslagna nästa steg</h2><p id="agentSummary">Kör agenten för att få konkreta rekommendationer.</p></div><button class="secondary" id="runAgent">Kör agent</button></div><div id="agentActions" class="agent-actions"></div></section>
-    <section class="task-section"><div class="section-head"><h2 id="sectionTitle">Att göra</h2><div><button class="filter">☷ Visa</button><button class="filter">↕ Sortera</button></div></div><div id="taskList"></div><button class="add-row" id="addRow">＋ Lägg till uppgift</button></section>
+    <section class="task-section"><div class="section-head"><h2 id="sectionTitle">Att göra</h2><div class="task-view-controls"><input id="taskSearch" type="search" placeholder="Sök i listan…"><select id="taskScopeSelect" aria-label="Visa uppgifter"><option value="all">Alla</option><option value="mine">Mina</option></select><select id="taskSortSelect" aria-label="Sortera uppgifter"><option value="smart">Smart</option><option value="priority">Prioritet</option><option value="due">Datum</option><option value="name">Namn</option></select></div></div><div id="taskList"></div><button class="add-row" id="addRow">＋ Lägg till uppgift</button></section>
   </main>
   <aside class="inspector" id="inspector"><button class="close" id="closeInspector">×</button><div id="inspectorContent"></div></aside>
   <aside class="notification-panel" id="notificationPanel"><div class="notification-head"><div><p class="eyebrow">UPPDATERINGAR</p><h2>Notiser</h2></div><button class="close" id="closeNotifications">×</button></div><div id="notificationList"></div></aside>
+  <dialog id="commandDialog">
+    <form method="dialog" id="commandForm" class="command-form">
+      <div class="dialog-head"><div><p class="eyebrow">SÖK</p><h2>Öppna task eller projekt</h2></div><button type="button" id="closeCommand" class="close">×</button></div>
+      <input id="commandSearch" placeholder="Sök efter task, projekt, område eller person…" autocomplete="off">
+      <div id="commandResults" class="command-results"></div>
+    </form>
+  </dialog>
   <button class="mobile-fab" id="mobileAdd" aria-label="Ny uppgift">＋</button>
   <nav class="mobile-nav" id="mobileNav" aria-label="Huvudnavigation"></nav>
   <dialog id="taskDialog">
@@ -60,6 +67,7 @@
         <label>Underuppgift till<select name="parentTaskId" id="parentTaskSelect"><option value="">Ingen — fristående uppgift</option></select></label>
         <label>Återkommer<select name="recurrenceRule"><option value="">Nej</option><option value="daily">Dagligen</option><option value="weekly">Varje vecka</option><option value="monthly">Varje månad</option></select></label>
       </div>
+      <div class="task-context-card" id="taskContextCard"></div>
       <div class="form-grid schedule-grid">
         <label>Snabbtext<input name="due" placeholder="T.ex. imorgon 09:00 eller fredag 14:00"></label>
         <label>Deadline<input name="dueAt" type="datetime-local"></label>
@@ -93,6 +101,11 @@
     <form method="dialog" id="structureForm" class="structure-form">
       <div class="dialog-head"><div><p class="eyebrow" id="structureEyebrow">STRUKTUR</p><h2 id="structureTitle">Ny kategori</h2></div><button type="button" data-close-structure-dialog class="close">×</button></div>
       <p class="hint structure-help" id="structureHelp">Skapa kategori, område eller projekt på rätt nivå.</p>
+      <div class="structure-stepper" id="structureStepper" aria-label="Strukturnivå">
+        <button type="button" data-structure-step="category"><strong>1</strong><span>Kategori</span><small>Privat, Jobb, Bolag</small></button>
+        <button type="button" data-structure-step="area"><strong>2</strong><span>Område</span><small>Huset, Båten, Foreshadow</small></button>
+        <button type="button" data-structure-step="project"><strong>3</strong><span>Projekt</span><small>Bygga v1, Nytt ljudsystem</small></button>
+      </div>
       <input type="hidden" name="mode">
       <input type="hidden" name="entityId">
       <input type="hidden" name="originalCategory">
@@ -104,6 +117,7 @@
         <label id="structureColorField">Färg<input name="color" type="color" value="#7659ef"></label>
         <label id="structureTeamField">Delas med<select name="teamId" id="structureTeamSelect"></select></label>
       </div>
+      <div class="structure-next" id="structureNextHint"></div>
       <div class="dialog-actions"><button type="button" data-close-structure-dialog class="secondary">Avbryt</button><button value="default" class="primary" id="saveStructure">Skapa</button></div>
     </form>
   </dialog>
