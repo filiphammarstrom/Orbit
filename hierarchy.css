@@ -35,7 +35,7 @@
   border-radius: 9px;
   display: grid;
   gap: 3px;
-  grid-template-columns: 20px 1fr 22px;
+  grid-template-columns: 20px 1fr 22px 22px;
   min-height: 32px;
 }
 
@@ -76,6 +76,11 @@
   border-radius: 8px;
   color: var(--purple);
   font-weight: 900;
+}
+
+.tree-edit {
+  color: #9f98aa;
+  font-size: 11px;
 }
 
 .tree-row:hover .tree-toggle,
@@ -181,7 +186,7 @@
   align-items: center;
   display: grid;
   gap: 3px;
-  grid-template-columns: 20px 1fr 22px;
+  grid-template-columns: 20px 1fr 22px 22px;
   min-height: 30px;
 }
 
@@ -243,14 +248,6 @@
   margin: -8px 0 16px;
 }
 
-.structure-stepper {
-  display: grid;
-  gap: 8px;
-  grid-template-columns: repeat(3, 1fr);
-  margin: 0 0 14px;
-}
-
-.structure-stepper button,
 .structure-builder-grid button {
   background: #fbfafc;
   border: 1px solid #ebe7f0;
@@ -263,7 +260,6 @@
   text-align: left;
 }
 
-.structure-stepper button strong,
 .structure-builder-grid button strong {
   background: #eee9f8;
   border-radius: 8px;
@@ -275,29 +271,23 @@
   width: 23px;
 }
 
-.structure-stepper button span,
 .structure-builder-grid button span {
   color: var(--ink);
   font-size: 12px;
   font-weight: 850;
 }
 
-.structure-stepper button small,
 .structure-builder-grid button small {
   color: #96909d;
   font-size: 10px;
   line-height: 1.35;
 }
 
-.structure-stepper button:hover,
-.structure-stepper button.active,
 .structure-builder-grid button:hover {
   background: var(--purple-soft);
   border-color: #cfc2ff;
 }
 
-.structure-stepper.editing button:not(.active),
-.structure-stepper button:disabled,
 .structure-builder-grid button:disabled {
   cursor: not-allowed;
   opacity: .55;
@@ -308,7 +298,7 @@
 }
 
 .structure-form .structure-details {
-  grid-template-columns: 110px 110px 1fr;
+  grid-template-columns: 110px 110px minmax(180px, 1fr);
 }
 
 .structure-form input[type="color"] {
@@ -634,7 +624,6 @@
     grid-template-columns: 1fr;
   }
 
-  .structure-stepper,
   .structure-builder-grid {
     grid-template-columns: 1fr;
   }

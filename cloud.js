@@ -714,7 +714,6 @@ export async function renameCategory(oldCategory, newCategory, visual = {}) {
     .eq('category', from)
     .select();
   if (error) throw error;
-  if (!data?.length) throw new Error('Du kan bara byta namn på kategorier som innehåller egna områden.');
   await upsertCategorySetting({ name: to, icon: visual.icon, color: visual.color });
   await supabase.from('category_settings').delete().eq('owner_id', user.id).eq('name', from);
   return data;
