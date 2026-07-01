@@ -13,6 +13,19 @@ import Testing
 }
 
 @MainActor
+@Test func quickAddParsesNativeTokens() async {
+    let store = OrbitStore(snapshot: OrbitWorkspaceSnapshot())
+
+    await store.quickAdd(title: "Ring Pelle #imorgon #sen p1")
+
+    #expect(store.laterTasks.count == 1)
+    #expect(store.laterTasks.first?.title == "Ring Pelle")
+    #expect(store.laterTasks.first?.priority == 1)
+    #expect(store.laterTasks.first?.dueText == "imorgon")
+    #expect(store.laterTasks.first?.dueAt != nil)
+}
+
+@MainActor
 @Test func startFocusMovesTaskToTodayAndDoing() async {
     let task = OrbitTask(title: "Välj stereo", bucket: .inbox)
     let store = OrbitStore(snapshot: OrbitWorkspaceSnapshot(tasks: [task]))

@@ -53,6 +53,7 @@ public struct OrbitTask: Identifiable, Codable, Hashable, Sendable {
     public var priority: Int
     public var dueAt: Date?
     public var reminderAt: Date?
+    public var dueText: String
     public var projectId: UUID?
     public var assigneeId: UUID?
     public var completed: Bool
@@ -66,6 +67,7 @@ public struct OrbitTask: Identifiable, Codable, Hashable, Sendable {
         priority: Int = 3,
         dueAt: Date? = nil,
         reminderAt: Date? = nil,
+        dueText: String = "",
         projectId: UUID? = nil,
         assigneeId: UUID? = nil,
         completed: Bool = false
@@ -78,6 +80,7 @@ public struct OrbitTask: Identifiable, Codable, Hashable, Sendable {
         self.priority = priority
         self.dueAt = dueAt
         self.reminderAt = reminderAt
+        self.dueText = dueText
         self.projectId = projectId
         self.assigneeId = assigneeId
         self.completed = completed

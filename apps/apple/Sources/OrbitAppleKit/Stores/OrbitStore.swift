@@ -59,19 +59,33 @@ public final class OrbitStore {
         }
     }
 
-    public func quickAdd(title: String, notes: String = "", bucket: OrbitBucket = .inbox) async {
-        let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmedTitle.isEmpty else { return }
+    public func quickAdd(title: String, notes: String = "", bucket fallbackBucket: OrbitBucket = .inbox) async {
+        var draft = OrbitQuickAddParser.parse(title)
+        if draft.bucket == .inbox {
+            draft.bucket = fallbackBucket
+        }
+        guard !draft.title.isEmpty else { return }
         if let client {
             do {
-                let task = try await client.createTask(title: trimmedTitle, notes: notes, bucket: bucket)
+                let task = try await client.createTask(draft, notes: notes)
                 snapshot.tasks.insert(task, at: 0)
                 errorMessage = nil
             } catch {
                 errorMessage = error.localizedDescription
             }
         } else {
-            snapshot.tasks.insert(OrbitTask(title: trimmedTitle, notes: notes, bucket: bucket), at: 0)
+            snapshot.tasks.insert(
+                OrbitTask(
+                    title: draft.title,
+                    notes: notes,
+                    bucket: draft.bucket,
+                    priority: draft.priority,
+                    dueAt: draft.dueAt,
+                    reminderAt: draft.reminderAt,
+                    dueText: draft.dueText
+                ),
+                at: 0
+            )
         }
     }
 

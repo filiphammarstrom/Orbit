@@ -9,6 +9,7 @@ Target direction:
 - SwiftUI shared UI for iOS, iPadOS and macOS.
 - Same Supabase backend and Orbit task model as the web app.
 - Native Quick Add.
+- Shared Swift Quick Add parser for date, bucket and priority tokens.
 - App Intents for Siri and Shortcuts.
 - Future WidgetKit targets for Home Screen, Lock Screen and macOS widgets.
 - Future Share Extension for “send this mail/link/text to Orbit”.
@@ -21,6 +22,7 @@ Current package contains:
 - `OrbitStore` with preview data and API-client injection.
 - SwiftUI Today, Inbox, Quick Add, Review and Settings views.
 - Supabase REST client skeleton.
+- Native Quick Add token parsing for `#idag`, `#sen`, `#someday`, `#imorgon`, `#ikväll`, weekdays, `#nästa-vecka`, `#om3d`, `#om2v` and `p1/p2/p3`.
 - App Intents skeleton:
   - `AddOrbitTaskIntent`
   - `OpenOrbitIntent`

@@ -34,6 +34,7 @@ Innan Apple-koden ändras ska Xcode 27 verifieras:
 - Håll iOS/macOS gemensam produktlogik i `OrbitAppleKit`.
 - Undvik att duplicera tasklogik från webben i separata Apple-filer om den kan uttryckas via samma API-kontrakt.
 - Nya Siri/Shortcuts-flöden ska gå via App Intents och handoff till `OrbitStore`.
+- Siri, widgets, Share Extension och macOS-menyrad ska använda Swift-parsern `OrbitQuickAddParser` för Quick Add-tokenlogik istället för att duplicera egen parsing.
 - Widgets ska läsa minsta möjliga taskdata och aldrig behöva service role secrets.
 - Share Extension ska skapa en vanlig Orbit task med titel, text och länk, samma modell som webbens capture/share target.
 

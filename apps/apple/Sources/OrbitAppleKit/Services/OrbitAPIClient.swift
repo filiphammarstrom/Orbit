@@ -28,7 +28,7 @@ public enum OrbitAPIError: LocalizedError, Sendable {
 
 public protocol OrbitAPIClient: Sendable {
     func loadWorkspace() async throws -> OrbitWorkspaceSnapshot
-    func createTask(title: String, notes: String, bucket: OrbitBucket) async throws -> OrbitTask
+    func createTask(_ draft: OrbitParsedQuickAdd, notes: String) async throws -> OrbitTask
     func updateTask(_ task: OrbitTask) async throws -> OrbitTask
 }
 
@@ -58,8 +58,8 @@ public struct SupabaseOrbitAPIClient: OrbitAPIClient {
         )
     }
 
-    public func createTask(title: String, notes: String, bucket: OrbitBucket) async throws -> OrbitTask {
-        let row = CreateTaskRow(title: title, notes: notes, bucket: bucket.rawValue)
+    public func createTask(_ draft: OrbitParsedQuickAdd, notes: String) async throws -> OrbitTask {
+        let row = CreateTaskRow(draft: draft, notes: notes)
         var request = try request(path: "/rest/v1/tasks", method: "POST")
         request.setValue("return=representation", forHTTPHeaderField: "Prefer")
         request.httpBody = try encoder.encode(row)
@@ -113,6 +113,7 @@ private struct TaskRow: Codable {
     var bucket: String?
     var status: String?
     var priority: Int?
+    var due_text: String?
     var due_at: Date?
     var reminder_at: Date?
     var project_id: UUID?
@@ -129,6 +130,7 @@ private struct TaskRow: Codable {
             priority: priority ?? 3,
             dueAt: due_at,
             reminderAt: reminder_at,
+            dueText: due_text ?? "",
             projectId: project_id,
             assigneeId: assignee_id,
             completed: completed ?? false
@@ -163,6 +165,20 @@ private struct CreateTaskRow: Encodable {
     var title: String
     var notes: String
     var bucket: String
+    var priority: Int
+    var due_text: String
+    var due_at: Date?
+    var reminder_at: Date?
+
+    init(draft: OrbitParsedQuickAdd, notes: String) {
+        self.title = draft.title
+        self.notes = notes
+        self.bucket = draft.bucket.rawValue
+        self.priority = draft.priority
+        self.due_text = draft.dueText
+        self.due_at = draft.dueAt
+        self.reminder_at = draft.reminderAt
+    }
 }
 
 private struct UpdateTaskRow: Encodable {
@@ -171,6 +187,7 @@ private struct UpdateTaskRow: Encodable {
     var bucket: String
     var status: String
     var priority: Int
+    var due_text: String
     var due_at: Date?
     var reminder_at: Date?
     var project_id: UUID?
@@ -183,6 +200,7 @@ private struct UpdateTaskRow: Encodable {
         self.bucket = task.bucket.rawValue
         self.status = task.status.rawValue
         self.priority = task.priority
+        self.due_text = task.dueText
         self.due_at = task.dueAt
         self.reminder_at = task.reminderAt
         self.project_id = task.projectId
