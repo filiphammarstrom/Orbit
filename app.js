@@ -1316,11 +1316,28 @@ function setupChecklistHtml({google,slack,installed,mcpReady}){
 
 function bindSettings(){
   bindTeamSharing();
-  $('#settingsGoogleOAuth')?.addEventListener('click',async e=>{try{e.currentTarget.disabled=true;const url=await startGoogleCalendarOAuth();window.location.href=url}catch(error){e.currentTarget.disabled=false;toast(error.message)}});
-  $('#settingsSlackOAuth')?.addEventListener('click',async e=>{try{e.currentTarget.disabled=true;const url=await startSlackOAuth();window.location.href=url}catch(error){e.currentTarget.disabled=false;toast(error.message)}});
+  $('#settingsGoogleOAuth')?.addEventListener('click',e=>startOAuthFromButton(e.currentTarget,'google'));
+  $('#settingsSlackOAuth')?.addEventListener('click',e=>startOAuthFromButton(e.currentTarget,'slack'));
   $('#installOrbitButton')?.addEventListener('click',installOrbitApp);
   $('#enableNotificationsButton')?.addEventListener('click',async()=>{if('Notification' in window&&Notification.permission==='granted')await showLocalNotification('Orbit testnotis',{body:'Notiser fungerar.',tag:'orbit-test'});else await requestLocalNotifications()});
   document.querySelectorAll('[data-copy-settings]').forEach(b=>b.addEventListener('click',async()=>{await copyText(b.dataset.copySettings||'');toast(`${b.dataset.copyLabel||'Värdet'} är kopierat.`)}));
+}
+
+async function startOAuthFromButton(button,provider){
+  if(!button)return;
+  const original=button.textContent;
+  button.disabled=true;
+  button.textContent='Öppnar…';
+  toast(`Startar ${provider==='google'?'Google':'Slack'}-koppling…`);
+  try{
+    const url=provider==='google'?await startGoogleCalendarOAuth():await startSlackOAuth();
+    if(!url)throw new Error('Servern returnerade ingen OAuth-länk.');
+    window.location.assign(url);
+  }catch(error){
+    button.disabled=false;
+    button.textContent=original;
+    toast(`${provider==='google'?'Google':'Slack'} kunde inte startas: ${error.message}`);
+  }
 }
 
 function teamSharingContent(){
