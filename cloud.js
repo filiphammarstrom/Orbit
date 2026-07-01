@@ -649,8 +649,7 @@ export async function createTeam(name) {
 }
 
 export async function createArea(input = {}) {
-  const user = (await session())?.user;
-  if (!user) throw new Error('Du är inte inloggad.');
+  if (!(await session())?.user) throw new Error('Du är inte inloggad.');
   const name = String(input.name || '').trim();
   if (!name) throw new Error('Området behöver ett namn.');
   const category = String(input.category || 'Privat').trim() || 'Privat';
@@ -660,7 +659,6 @@ export async function createArea(input = {}) {
     category: category.slice(0, 80),
     icon: String(input.icon || '◫').trim().slice(0, 2) || '◫',
     color: input.color || '#7659ef',
-    owner_id: user.id,
     team_id: input.teamId || null
   }).select().single();
   if (error) throw error;
