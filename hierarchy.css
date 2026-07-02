@@ -32,28 +32,29 @@
 
 .tree-row {
   align-items: center;
-  border-radius: 11px;
+  border-radius: 9px;
   display: grid;
   gap: 2px;
   grid-template-columns: 16px minmax(0,1fr) 18px 18px;
-  min-height: 31px;
+  min-height: 30px;
   padding: 0 4px 0 0;
 }
 
 .tree-row:hover {
-  background: color-mix(in srgb, var(--node-color, var(--purple)) 14%, #fff);
+  background: rgba(255,255,255,.5);
 }
 
 .tree-row.active {
-  box-shadow: inset 3px 0 0 var(--node-color, var(--purple));
+  background: #fff;
+  box-shadow: inset 2px 0 0 var(--node-color, var(--purple));
 }
 
 .category-row {
-  background: color-mix(in srgb, var(--node-color, var(--purple)) 11%, transparent);
+  background: transparent;
 }
 
 .area-row {
-  background: color-mix(in srgb, var(--node-color, #42a68b) 11%, transparent);
+  background: transparent;
 }
 
 .tree-toggle,
@@ -114,7 +115,8 @@
   gap: 6px;
   grid-template-columns: 22px minmax(0,1fr) auto;
   min-width: 0;
-  padding: 4px 0;
+  min-height: 30px;
+  padding: 0;
   text-align: left;
 }
 
@@ -142,7 +144,7 @@
 .category-icon,
 .tree-project .project-icon {
   background: var(--node-color, var(--purple));
-  border-radius: 8px;
+  border-radius: 9px;
   color: #fff;
   display: grid;
   font-size: 13px;
@@ -171,7 +173,7 @@
   border-left: 0;
   display: grid;
   gap: 4px;
-  margin: 4px 0 5px;
+  margin: 2px 0 4px;
   padding-left: 8px;
 }
 
@@ -183,7 +185,7 @@
   border-left: 0;
   display: grid;
   gap: 4px;
-  margin: 4px 0 5px;
+  margin: 3px 0 5px;
   padding-left: 14px;
 }
 
@@ -197,15 +199,15 @@
 
 .tree-project {
   align-items: center;
-  background: color-mix(in srgb, var(--node-color, var(--purple)) 9%, transparent);
-  border-radius: 10px;
+  background: transparent;
+  border-radius: 8px;
   color: #5c5964;
   display: grid;
   font-size: 12px;
   gap: 6px;
   grid-template-columns: 22px minmax(0,1fr) auto;
   min-height: 28px;
-  padding: 0 7px 0 3px;
+  padding: 0 7px 0 0;
   text-align: left;
 }
 
@@ -220,9 +222,9 @@
 
 .tree-project:hover,
 .tree-project.active {
-  background: color-mix(in srgb, var(--node-color, var(--purple)) 15%, #fff);
+  background: #fff;
   color: var(--ink);
-  box-shadow: inset 3px 0 0 var(--node-color, var(--purple));
+  box-shadow: inset 2px 0 0 var(--node-color, var(--purple));
 }
 
 .tree-create-under {
