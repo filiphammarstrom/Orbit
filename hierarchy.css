@@ -27,25 +27,33 @@
 }
 
 .tree-category {
-  margin: 3px 0 7px;
+  margin: 4px 0 8px;
 }
 
 .tree-row {
   align-items: center;
-  border-radius: 8px;
+  border-radius: 11px;
   display: grid;
   gap: 2px;
   grid-template-columns: 16px minmax(0,1fr) 18px 18px;
-  min-height: 28px;
+  min-height: 31px;
+  padding: 0 4px 0 0;
 }
 
 .tree-row:hover {
-  background: rgba(255,255,255,.42);
+  background: rgba(255,255,255,.62);
 }
 
 .tree-row.active {
-  background: rgba(118,89,239,.08);
-  box-shadow: inset 2px 0 0 var(--purple);
+  box-shadow: inset 3px 0 0 var(--purple);
+}
+
+.category-row {
+  background: rgba(118,89,239,.10);
+}
+
+.area-row {
+  background: rgba(79,166,139,.10);
 }
 
 .tree-toggle,
@@ -106,7 +114,7 @@
   gap: 6px;
   grid-template-columns: 22px minmax(0,1fr) auto;
   min-width: 0;
-  padding: 3px 0;
+  padding: 4px 0;
   text-align: left;
 }
 
@@ -165,47 +173,49 @@
 }
 
 .tree-children {
-  border-left: 1px solid #e6e1eb;
-  margin: 2px 0 4px 8px;
-  padding-left: 7px;
+  border-left: 0;
+  display: grid;
+  gap: 4px;
+  margin: 4px 0 5px;
+  padding-left: 8px;
 }
 
 .tree-area {
-  margin: 2px 0 4px;
+  margin: 0;
 }
 
 .tree-projects {
-  border-left: 1px solid #eee9f4;
+  border-left: 0;
   display: grid;
-  gap: 1px;
-  margin: 1px 0 5px 8px;
-  padding-left: 7px;
+  gap: 4px;
+  margin: 4px 0 5px;
+  padding-left: 14px;
 }
 
 .tree-project-line {
   align-items: center;
   display: grid;
   gap: 2px;
-  grid-template-columns: 14px minmax(0,1fr) 18px 18px;
-  min-height: 26px;
+  grid-template-columns: 0 minmax(0,1fr) 18px 18px;
+  min-height: 28px;
 }
 
 .tree-project {
   align-items: center;
-  background: transparent;
-  border-radius: 7px;
+  background: rgba(118,89,239,.07);
+  border-radius: 10px;
   color: #5c5964;
   display: grid;
   font-size: 12px;
   gap: 6px;
   grid-template-columns: 22px minmax(0,1fr) auto;
-  min-height: 24px;
-  padding: 0 6px 0 0;
+  min-height: 28px;
+  padding: 0 7px 0 3px;
   text-align: left;
 }
 
 .tree-project-spacer {
-  width: 14px;
+  width: 0;
 }
 
 .tree-project-line .project-add {
@@ -215,9 +225,9 @@
 
 .tree-project:hover,
 .tree-project.active {
-  background: rgba(118,89,239,.08);
+  background: rgba(118,89,239,.13);
   color: var(--ink);
-  box-shadow: inset 2px 0 0 var(--purple);
+  box-shadow: inset 3px 0 0 var(--purple);
 }
 
 .tree-create-under {
@@ -241,7 +251,7 @@
   display: block;
   font-size: 10px;
   font-weight: 700;
-  padding: 5px 6px 7px 22px;
+  padding: 4px 6px 5px 25px;
 }
 
 .structure-form .structure-help {

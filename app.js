@@ -414,7 +414,7 @@ function renderNav(){
         return `<div class="tree-area ${areaOpen?'open':'closed'}">
           <div class="tree-row area-row ${areaIsActive(a)?'active':''}">
             <button class="tree-toggle" data-toggle-area="${a.id}">${areaOpen?'▾':'▸'}</button>
-            <button class="tree-main" data-view="area:${a.id}"><span class="area-icon" style="background:${a.color}">${a.icon}</span><span>${escapeHtml(areaName(a))}</span><small>${projects.length?`${projects.length} projekt`:'Inga projekt'}</small><i>${count||''}</i></button>
+            <button class="tree-main" data-view="area:${a.id}"><span class="area-icon" style="background:${a.color}">${a.icon}</span><span>${escapeHtml(areaName(a))}</span><small>${projects.length?`${projects.length} projekt`:''}</small><i>${count||''}</i></button>
             <button class="tree-action tree-edit" title="Byt namn på ${escapeHtml(areaName(a))}" data-edit-area="${a.id}">✎</button>
             <button class="tree-action" title="Nytt projekt i ${escapeHtml(areaName(a))}" data-create-project="${a.id}">＋</button>
           </div>
