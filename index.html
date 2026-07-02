@@ -30,11 +30,11 @@
     <div class="brand"><span class="brandmark">O</span><span>orbit</span><button class="collapse">‹</button></div>
     <button class="quick-add" id="quickAdd"><span>＋</span> Ny uppgift <kbd>N</kbd></button>
     <nav id="mainNav"></nav>
-    <div class="nav-section"><div class="nav-label"><span>Kategori</span><button title="Ny kategori" data-create-structure="category">＋</button></div><div id="projectNav"></div></div>
-    <div class="sidebar-foot"><div class="avatar">FH</div><div><strong id="currentUserName">Mitt konto</strong><small>Min arbetsyta</small></div><button id="logoutButton" title="Logga ut">↪</button></div>
+    <div class="nav-section"><div id="projectNav"></div></div>
+    <div class="sidebar-foot"><button class="sidebar-foot-action" id="structurePlusButton" title="Skapa struktur">＋</button><button class="sidebar-foot-action" id="sidebarSettingsButton" title="Inställningar">⚙</button><button class="avatar profile-button" id="profileButton" title="Profil">FH</button></div>
   </aside>
   <main>
-    <header><div><p class="eyebrow" id="eyebrow">MIN DAG</p><h1 id="pageTitle">Gör idag</h1><p id="subtitle"></p></div><div class="header-actions"><button class="icon-btn" id="commandButton" title="Sök">⌕</button><button class="icon-btn" id="notificationButton" title="Notiser">♢<i id="notificationDot"></i><b id="notificationCount"></b></button></div></header>
+    <header><div><p class="eyebrow" id="eyebrow">MIN DAG</p><h1 id="pageTitle">Idag</h1><p id="subtitle"></p></div><div class="header-actions"><button class="icon-btn" id="commandButton" title="Sök">⌕</button><button class="icon-btn" id="notificationButton" title="Notiser">♢<i id="notificationDot"></i><b id="notificationCount"></b></button></div></header>
     <section class="project-toolbar" id="projectToolbar"><div id="projectHealth"></div><div class="view-switcher"><button data-project-view="list" class="active">☷ Lista</button><button data-project-view="board">▦ Tavla</button><button data-project-view="calendar">□ Kalender</button><button data-project-view="flow">⌁ Flöde</button></div></section>
     <section class="focus-card" id="focusCard"><div class="focus-icon">✦</div><div><strong>Du har <span id="todayCount">0</span> saker framför dig</strong><p>Ett tydligt nästa steg i taget.</p></div><div class="progress"><svg viewBox="0 0 42 42"><circle cx="21" cy="21" r="16"></circle><circle class="done-ring" cx="21" cy="21" r="16"></circle></svg><span id="progressText">0%</span></div></section>
     <section class="brief-card" id="briefCard"><div><p class="eyebrow">DAGLIG AI</p><h2>Dagens sammanfattning</h2><p id="briefSummary">Skapa en kort MCP/AI-brief av dagens uppgifter.</p><div id="briefFocusTasks"></div></div><button class="secondary" id="generateBrief">Uppdatera brief</button></section>
@@ -58,7 +58,7 @@
       <input id="newTitle" name="title" placeholder="Vad behöver göras?" autocomplete="off" required>
       <textarea name="notes" placeholder="Anteckningar (valfritt)"></textarea>
       <div class="form-grid">
-        <label>Var<select name="bucket"><option value="inbox">Inbox</option><option value="today">Gör idag</option><option value="later">Gör sen</option><option value="someday">Gör nån gång</option></select></label>
+        <label>Var<select name="bucket"><option value="inbox">Inbox</option><option value="today">Idag</option><option value="later">Sen</option><option value="someday">Nån gång</option></select></label>
         <label>Projekt<select name="projectId" id="projectSelect"></select></label>
         <label>Tilldelad<select name="assigneeId" id="assigneeSelect"></select></label>
         <label>Prioritet<select name="priority"><option value="1">P1 — Hög</option><option value="2">P2 — Medium</option><option value="3" selected>P3 — Låg</option></select></label>
@@ -115,6 +115,23 @@
       <div class="structure-next" id="structureNextHint"></div>
       <div class="dialog-actions"><button type="button" data-close-structure-dialog class="secondary">Avbryt</button><button value="default" class="primary" id="saveStructure">Skapa</button></div>
     </form>
+  </dialog>
+  <dialog id="structureChoiceDialog" class="choice-dialog">
+    <div class="choice-dialog-body">
+      <div class="dialog-head"><div><p class="eyebrow">SKAPA</p><h2>Vad vill du lägga till?</h2></div><button type="button" data-close-structure-choice class="close">×</button></div>
+      <div class="choice-list">
+        <button type="button" data-structure-choice="category"><strong>Kategori</strong><small>Översta nivån, t.ex. Privat eller Jobb.</small></button>
+        <button type="button" data-structure-choice="area"><strong>Område</strong><small>Ligger under kategori, t.ex. Båten eller Foreshadow.</small></button>
+        <button type="button" data-structure-choice="project"><strong>Projekt</strong><small>Ligger under område och samlar uppgifter.</small></button>
+      </div>
+    </div>
+  </dialog>
+  <dialog id="profileDialog" class="profile-dialog">
+    <div class="profile-dialog-body">
+      <button type="button" data-close-profile class="close">×</button>
+      <div class="profile-dialog-head"><div class="avatar large" id="profileInitials">FH</div><div><p class="eyebrow">PROFIL</p><h2 id="profileName">Mitt konto</h2><p id="profileEmail"></p></div></div>
+      <div class="profile-actions"><button type="button" class="secondary" id="profileSettingsButton">Inställningar</button><button type="button" class="primary danger" id="profileLogoutButton">Logga ut</button></div>
+    </div>
   </dialog>
   <div class="toast" id="toast"></div>
   <script type="module" src="app.js"></script>

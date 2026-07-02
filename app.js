@@ -1,6 +1,6 @@
 import { configured, session, signIn, signUp, signOut, loadCloudState, createCloudTask, updateCloudTask, respondToAssignment, subscribeToChanges, addComment, addTaskLink, startGoogleCalendarOAuth, startSlackOAuth, slackEventSummary, createTaskFromSlackEvent, syncCalendarLinkNow, queueCalendarSync, saveDailyBrief, saveAgentRun, markNotificationRead, decideApproval, createTeam, createArea, createProject, updateProject, renameCategory, upsertCategorySetting, createInvitation, updateTeamMember, removeTeamMember, deleteInvitation, shareAreaWithTeam, updateAreaDetails } from './cloud.js';
 
-let state, view = 'today', projectView='list', liveChannel, deferredInstallPrompt=null, reminderTimer=null;
+let state, view = 'today', projectView='list', liveChannel, deferredInstallPrompt=null, reminderTimer=null, currentAuthUser=null;
 const $ = s => document.querySelector(s);
 const appShellSelectors = ['.sidebar','main','#inspector','#notificationPanel','#commandDialog','#taskDialog','#structureDialog','#mobileAdd','#mobileNav'];
 function setAppLocked(locked){
@@ -12,8 +12,8 @@ function setAppLocked(locked){
   });
 }
 const bucketViews = ['inbox','today','later','someday'];
-const navItems = [['inbox','⌄','Inbox'],['today','☀','Gör idag'],['later','◷','Gör sen'],['someday','◇','Gör nån gång'],['review','◎','Review'],['settings','⚙','Inställningar']];
-const mobileItems = [['inbox','⌄','Inbox'],['today','☀','Idag'],['later','◷','Sen'],['review','◎','Review'],['areas','▦','Områden'],['settings','⚙','Mer']];
+const navItems = [['inbox','▤','Inbox'],['today','☀︎','Idag'],['later','◷','Sen'],['someday','◇','Nån gång'],['settings','⚙','Inställningar']];
+const mobileItems = [['inbox','▤','Inbox'],['today','☀︎','Idag'],['later','◷','Sen'],['someday','◇','Nån gång'],['areas','▦','Områden'],['settings','⚙','Mer']];
 const initialView = new URLSearchParams(window.location.search).get('view');
 if(['inbox','today','later','someday','review','settings','areas'].includes(initialView))view=initialView;
 let pendingCapture = readCaptureIntent();
@@ -69,7 +69,7 @@ const safeColor=(value,fallback='#7659ef')=>/^#[0-9a-f]{6}$/i.test(String(value|
 const nodeStyle=(color,fallback='#7659ef')=>`style="--node-color:${escapeHtml(safeColor(color,fallback))}"`;
 const categoryVisual=name=>{const setting=categorySetting(name),firstArea=(state.areas||[]).find(a=>areaCategory(a)===name);return{icon:setting?.icon||firstArea?.icon||'📁',color:setting?.color||firstArea?.color||'#7659ef'}};
 const categoryIconHtml=name=>`<span class="category-icon">${escapeHtml(categoryVisual(name).icon)}</span>`;
-const projectIconHtml=p=>`<span class="project-icon">${escapeHtml(p?.icon||'✅')}</span>`;
+const projectIconHtml=p=>`<span class="project-color-dot"></span>`;
 const taskCountForProjects=projects=>visible().filter(t=>projects.some(p=>p.id===t.projectId)).length;
 const categoryViewId=category=>`category:${encodeURIComponent(category)}`;
 const categoryFromView=()=>decodeURIComponent(view.slice('category:'.length));
@@ -162,7 +162,7 @@ const reviewGroups=()=>{const active=topLevel(visible());return{
   someday:active.filter(t=>t.bucket==='someday')
 }};
 const reviewCount=()=>Object.values(reviewGroups()).reduce((sum,items)=>sum+items.length,0);
-const navCount=id=>bucketViews.includes(id)?tasksForBucketView(id).length:id==='review'?reviewCount():0;
+const navCount=id=>id==='inbox'?tasksForBucketView(id).length+reviewCount():bucketViews.includes(id)?tasksForBucketView(id).length:0;
 const option=(value,label,selected)=>`<option value="${escapeHtml(value)}" ${String(value)===String(selected||'')?'selected':''}>${escapeHtml(label)}</option>`;
 const projectOptionsHtml=selected=>'<option value="">Inbox / inget projekt</option>'+areaGroups().map(group=>`<optgroup label="${escapeHtml(group.category)}">${group.areas.flatMap(a=>projectsForArea(a).map(p=>option(p.id,`${areaName(a)} · ${p.name}`,selected))).join('')}</optgroup>`).join('');
 const assigneesForProject=projectId=>{const p=project(projectId);return p?membersForArea(area(p.areaId)):[person(state.currentUserId)]};
@@ -407,20 +407,18 @@ function renderNav(){
     return `<div class="tree-category ${open?'open':'closed'}">
       <div class="tree-row category-row ${categoryIsActive(group)?'active':''}" ${nodeStyle(categoryVisuals.color)}>
         <button class="tree-toggle" data-toggle-category="${escapeHtml(group.category)}">${open?'▾':'▸'}</button>
-        <button class="tree-main" data-view="${escapeHtml(categoryView)}">${categoryIconHtml(group.category)}<span>${escapeHtml(group.category)}</span><small>${group.areas.length} område${group.areas.length===1?'':'n'}</small><i>${categoryCount||''}</i></button>
+        <button class="tree-main" data-view="${escapeHtml(categoryView)}">${categoryIconHtml(group.category)}<span>${escapeHtml(group.category)}</span><i>${categoryCount||''}</i></button>
         <button class="tree-action tree-edit" title="Byt namn på ${escapeHtml(group.category)}" data-edit-category="${escapeHtml(group.category)}">✎</button>
-        <button class="tree-action" title="Nytt område i ${escapeHtml(group.category)}" data-create-area="${escapeHtml(group.category)}">＋</button>
       </div>
       ${open?`<div class="tree-children">${group.areas.map(a=>{
         const projects=projectsForArea(a),areaOpen=areaIsOpen(a),count=taskCountForProjects(projects);
         return `<div class="tree-area ${areaOpen?'open':'closed'}">
           <div class="tree-row area-row ${areaIsActive(a)?'active':''}" ${nodeStyle(a.color,'#42a68b')}>
             <button class="tree-toggle" data-toggle-area="${a.id}">${areaOpen?'▾':'▸'}</button>
-            <button class="tree-main" data-view="area:${a.id}"><span class="area-icon">${escapeHtml(a.icon)}</span><span>${escapeHtml(areaName(a))}</span><small>${projects.length?`${projects.length} projekt`:''}</small><i>${count||''}</i></button>
+            <button class="tree-main" data-view="area:${a.id}"><span class="area-icon">${escapeHtml(a.icon)}</span><span>${escapeHtml(areaName(a))}</span><i>${count||''}</i></button>
             <button class="tree-action tree-edit" title="Byt namn på ${escapeHtml(areaName(a))}" data-edit-area="${a.id}">✎</button>
-            <button class="tree-action" title="Nytt projekt i ${escapeHtml(areaName(a))}" data-create-project="${a.id}">＋</button>
           </div>
-          ${areaOpen?`<div class="tree-projects">${projects.map(p=>`<div class="tree-project-line"><span class="tree-project-spacer"></span><button class="tree-project ${view==='project:'+p.id?'active':''}" data-view="project:${p.id}" ${nodeStyle(p.color,'#8b70ff')}>${projectIconHtml(p)}<span>${escapeHtml(p.name)}</span><i>${visible().filter(t=>t.projectId===p.id).length||''}</i></button><button class="tree-action tree-edit" title="Byt namn på ${escapeHtml(p.name)}" data-edit-project="${p.id}">✎</button><button class="tree-action project-add" title="Ny uppgift i ${escapeHtml(p.name)}" data-create-task-project="${p.id}">＋</button></div>`).join('')}${projects.length?'':`<span class="tree-empty-note">Inga projekt ännu</span>`}</div>`:''}
+          ${areaOpen?`<div class="tree-projects">${projects.map(p=>`<div class="tree-project-line"><span class="tree-project-spacer"></span><button class="tree-project ${view==='project:'+p.id?'active':''}" data-view="project:${p.id}" ${nodeStyle(p.color,'#8b70ff')}>${projectIconHtml(p)}<span>${escapeHtml(p.name)}</span><i>${visible().filter(t=>t.projectId===p.id).length||''}</i></button><button class="tree-action tree-edit" title="Byt namn på ${escapeHtml(p.name)}" data-edit-project="${p.id}">✎</button></div>`).join('')}${projects.length?'':`<span class="tree-empty-note">Inga projekt ännu</span>`}</div>`:''}
         </div>`;
       }).join('') || `<span class="tree-empty-note">Inga områden ännu</span>`}</div>`:''}
     </div>`;
@@ -434,7 +432,7 @@ function render(){
   if(view==='assigned')view='today';
   if(view==='team')view='settings';
   renderNav();let tasks=[],title,eye='MIN DAG',showAreas=false,currentProject=null,currentCategory=null;
-  const labels={inbox:'Inbox',today:'Gör idag',later:'Gör sen',someday:'Gör nån gång',review:'Review'};
+  const labels={inbox:'Inbox',today:'Idag',later:'Sen',someday:'Nån gång',review:'Review'};
   if(view==='settings'){title='Inställningar';eye='ADMIN';showAreas=true}
   else if(view==='areas'){title='Kategorier & områden';eye='STRUKTUR';showAreas=true}
   else if(view.startsWith('category:')){const category=categoryFromView(),group=areaGroups().find(g=>g.category===category);if(!group){view='areas';return render()}const projects=group.areas.flatMap(projectsForArea),ids=projects.map(p=>p.id);tasks=topLevel(visible().filter(t=>ids.includes(t.projectId)));title=category;eye='KATEGORI';currentCategory=group}
@@ -543,7 +541,7 @@ function bindTaskViewButtons(){
 function commandItems(){
   const actionItems=[
     {type:'action',id:'new-task',title:'Ny uppgift',meta:'Fånga ett snabbt nästa steg'},
-    {type:'action',id:'today',title:'Gå till Gör idag',meta:'Dagens fokus och plan'},
+    {type:'action',id:'today',title:'Gå till Idag',meta:'Dagens fokus och plan'},
     {type:'action',id:'inbox',title:'Gå till Inbox',meta:'Rensa och planera osorterat'},
     {type:'action',id:'review',title:'Gå till Review',meta:'Besluta om lösa trådar'},
     {type:'action',id:'areas',title:'Gå till Struktur',meta:'Kategori, område och projekt'},
@@ -589,6 +587,34 @@ async function runCommandAction(id){
   if(id==='new-category'){openStructureDialog('category');return}
   if(id==='daily-brief'){const generated=buildDailyBrief();await saveDailyBrief(generated);await load();toast('Dagens brief är uppdaterad.');return}
   if(id==='run-agent'){const plan=buildAgentPlan();await saveAgentRun(plan);await load();toast('Agenten har föreslagit nästa steg.');return}
+}
+
+function openStructureChoice(){
+  const dialog=$('#structureChoiceDialog');
+  if(dialog&&!dialog.open)dialog.showModal();
+}
+
+function closeStructureChoice(){
+  $('#structureChoiceDialog')?.close();
+}
+
+function createStructureFromChoice(type){
+  closeStructureChoice();
+  if(type==='category'){openStructureDialog('category');return}
+  if(type==='area'){openStructureDialog('area',{category:currentCategory()});return}
+  if(type==='project'){
+    const areaId=currentAreaId()||state.areas[0]?.id||'';
+    openStructureDialog('project',{areaId});
+  }
+}
+
+function openProfileDialog(){
+  const me=person(state?.currentUserId),dialog=$('#profileDialog');
+  if(!dialog)return;
+  $('#profileInitials').textContent=me.initials||'FH';
+  $('#profileName').textContent=me.name||currentAuthUser?.email?.split('@')[0]||'Mitt konto';
+  $('#profileEmail').textContent=currentAuthUser?.email||'';
+  if(!dialog.open)dialog.showModal();
 }
 
 function todayContent(tasks){
@@ -649,7 +675,7 @@ function reviewContent(){
     ['recurring','Återkommande',groups.recurring,'Kontrollera att upprepade uppgifter har rätt nästa datum.'],
     ['inbox','Inbox utan projekt',groups.inbox,'Placera i projekt eller bestäm när den ska göras.'],
     ['unplanned','Oplanerat',groups.unplanned,'Sätt datum eller låt den ligga som någon gång.'],
-    ['someday','Gör nån gång',groups.someday,'Lyft bara sådant som faktiskt ska bli gjort snart.']
+    ['someday','Nån gång',groups.someday,'Lyft bara sådant som faktiskt ska bli gjort snart.']
   ].filter(([, ,items])=>items.length);
   return `<section class="review-dashboard">
     <div class="review-dashboard-head"><div><p class="eyebrow">REVIEW</p><h3>${total} saker behöver beslut</h3><p>Det här är städytan. Målet är inte att göra allt, utan att minska brus och välja nästa rätta plats.</p></div><span>${total}</span></div>
@@ -732,10 +758,10 @@ function approvalCardHtml({approval,task}){
 }
 
 function inboxContent(tasks){
-  if(!tasks.length)return'<div class="empty">Inbox är tom. Bra.</div>';
+  if(!tasks.length)return`${inboxReviewNudgeHtml()}<div class="empty">${reviewCount()?'Inbox är tom, men review har saker kvar.':'Inbox är tom. Bra.'}</div>`;
   const assignmentDecisions=tasks.filter(isPendingAssignmentForMe),normalTasks=tasks.filter(t=>!isPendingAssignmentForMe(t)),uncategorized=normalTasks.filter(t=>!t.projectId),withProject=normalTasks.filter(t=>t.projectId);
   const undated=normalTasks.filter(t=>!t.dueAt);
-  return `${assignmentDecisions.length?assignmentDecisionInboxHtml(assignmentDecisions):''}<section class="inbox-triage-card">
+  return `${inboxReviewNudgeHtml()}${assignmentDecisions.length?assignmentDecisionInboxHtml(assignmentDecisions):''}<section class="inbox-triage-card">
     <div class="inbox-triage-head"><div><p class="eyebrow">INBOX TRIAGE</p><h3>Bestäm vad varje sak betyder</h3><p>Inbox är bara en fångstplats. Ta ett snabbt beslut: gör idag, parkera, eller öppna och placera i projekt.</p></div><span>${tasks.length}</span></div>
     ${undated.length>=3?inboxPlanNudgeHtml(undated):''}
     <div class="inbox-triage-list">${normalTasks.slice(0,8).map(t=>`<article class="inbox-triage-item ${t.projectId?'has-project':''}">
@@ -750,6 +776,12 @@ function inboxContent(tasks){
     ${normalTasks.length>8?`<p class="inbox-triage-more">${normalTasks.length-8} till visas i listan nedanför.</p>`:''}
     <div class="inbox-triage-summary"><span>${uncategorized.length} utan projekt</span><span>${withProject.length} redan placerade</span></div>
   </section>${normalTasks.map(taskGroupHtml).join('')}`;
+}
+
+function inboxReviewNudgeHtml(){
+  const count=reviewCount();
+  if(!count)return'';
+  return `<section class="inbox-review-card"><button type="button" data-view="review"><span>◎</span><div><strong>${count} sak${count===1?'':'er'} behöver review</strong><small>Städa försenat, väntande, dolda och oplanerade saker.</small></div></button></section>`;
 }
 
 function inboxPlanNudgeHtml(tasks){
@@ -789,7 +821,7 @@ function laterContent(tasks){
   const scheduledTasks=applyTaskViewControls(topLevel(visible().filter(t=>t.dueAt&&!isDueToday(t)&&!isOverdue(t))));
   const displayTasks=laterView==='scheduled'?scheduledTasks:tasks;
   if(!displayTasks.length){
-    return `${laterTabsHtml(tasks.length,scheduledTasks.length)}<div class="empty">${laterView==='scheduled'?'Inget inbokat längre fram.':'Gör sen är tom. Bra.'}</div>`;
+    return `${laterTabsHtml(tasks.length,scheduledTasks.length)}<div class="empty">${laterView==='scheduled'?'Inget inbokat längre fram.':'Sen är tom. Bra.'}</div>`;
   }
   const weekEnd=dayAt(7,23,59);
   const sorted=[...displayTasks].sort((a,b)=>{
@@ -808,7 +840,7 @@ function laterContent(tasks){
   const next=groups[0]?.[2]?.[0];
   const unscheduled=sorted.filter(t=>!t.dueAt);
   return `<section class="later-planner-card">
-    <div class="later-planner-head"><div><p class="eyebrow">GÖR SEN</p><h3>${laterView==='scheduled'?'Inbokat längre fram':'Planera framåt utan att fylla idag'}</h3><p>${laterView==='scheduled'?'Datumlagda uppgifter som ligger efter idag. Idag och overdue hanteras i Gör idag/review.':'Här ska saker ha ett ungefärligt nästa datum. Om något är viktigt nog: lyft till idag.'}</p></div><span>${displayTasks.length}</span></div>
+    <div class="later-planner-head"><div><p class="eyebrow">SEN</p><h3>${laterView==='scheduled'?'Inbokat längre fram':'Planera framåt utan att fylla idag'}</h3><p>${laterView==='scheduled'?'Datumlagda uppgifter som ligger efter idag. Idag och overdue hanteras i Idag/review.':'Här ska saker ha ett ungefärligt nästa datum. Om något är viktigt nog: lyft till idag.'}</p></div><span>${displayTasks.length}</span></div>
     ${laterTabsHtml(tasks.length,scheduledTasks.length)}
     ${next?`<article class="later-next-card"><button data-later-open="${next.id}"><small>Närmast beslut</small><strong>${escapeHtml(next.title)}</strong><span>${escapeHtml(taskContextLabel(next))}</span></button><div><button class="primary" data-task="${next.id}" data-later-move="today">Idag</button><button class="secondary" data-task="${next.id}" data-later-move="someday">Någon gång</button></div></article>`:''}
     ${includeUnscheduled&&unscheduled.length>=3?laterNudgeHtml(unscheduled):''}
@@ -821,7 +853,7 @@ function laterContent(tasks){
 }
 
 function laterTabsHtml(allCount,scheduledCount){
-  return `<div class="later-tabs" role="tablist" aria-label="Gör sen-filter">
+  return `<div class="later-tabs" role="tablist" aria-label="Sen-filter">
     <button type="button" role="tab" aria-selected="${laterView==='all'}" class="${laterView==='all'?'active':''}" data-later-view="all">Alla <span>${allCount}</span></button>
     <button type="button" role="tab" aria-selected="${laterView==='scheduled'}" class="${laterView==='scheduled'?'active':''}" data-later-view="scheduled">Inbokat <span>${scheduledCount}</span></button>
   </div>`;
@@ -844,7 +876,7 @@ function laterCardHtml(t){
 }
 
 function somedayContent(tasks){
-  if(!tasks.length)return'<div class="empty">Gör nån gång är tom. Bra.</div>';
+  if(!tasks.length)return'<div class="empty">Nån gång är tom. Bra.</div>';
   const sorted=[...tasks].sort((a,b)=>Number(a.priority||4)-Number(b.priority||4)||String(a.title).localeCompare(String(b.title),'sv-SE'));
   const pick=sorted[0],groups=[[1,'P1 · Viktigt'],[2,'P2 · Bra att göra'],[3,'P3 · Låg energi'],[4,'P4 · Parkering']];
   const highParked=sorted.filter(t=>Number(t.priority||4)<=2);
@@ -855,7 +887,7 @@ function somedayContent(tasks){
     </div>
     <article class="someday-pick">
       <button data-someday-open="${pick.id}"><small>Föreslagen att lyfta</small><strong>${escapeHtml(pick.title)}</strong><span>${escapeHtml(taskContextLabel(pick))}</span></button>
-      <div><button class="primary" data-task="${pick.id}" data-someday-move="today">Gör idag</button><button class="secondary" data-task="${pick.id}" data-someday-move="later">Gör senare</button></div>
+      <div><button class="primary" data-task="${pick.id}" data-someday-move="today">Idag</button><button class="secondary" data-task="${pick.id}" data-someday-move="later">Senare</button></div>
     </article>
     ${highParked.length>=3?`<article class="parking-nudge someday"><div><small>VIKTIGT MEN PARKERAT</small><strong>${highParked.length} P1/P2 ligger i Someday</strong><p>Om det är viktigt ska det få ett nästa datum. Om det bara skaver: sänk prioriteten så listan blir ärlig.</p></div><div><button data-someday-bulk-priority="1">Planera P1 nästa vecka</button><button data-someday-bulk-priority="2">Planera P2 nästa vecka</button><button data-someday-downgrade-priority="1">Sänk P1 till P3</button><button data-someday-downgrade-priority="2">Sänk P2 till P3</button></div></article>`:''}
   </section>
@@ -867,7 +899,7 @@ function somedayContent(tasks){
 
 async function bulkMoveLaterUnscheduled(target){
   const items=topLevel(tasksForBucketView('later').filter(t=>!t.dueAt));
-  if(!items.length){toast('Inga odaterade Gör sen-uppgifter hittades.');return}
+  if(!items.length){toast('Inga odaterade Sen-uppgifter hittades.');return}
   for(const [index,t] of items.entries()){
     if(target==='nextweek'){
       const dueAt=dayAt(7+Math.min(index,4),9).toISOString();
@@ -1034,7 +1066,7 @@ async function rescheduleTask(id,preset){
   const patch={bucket,due,dueAt,reminderAt};
   await api('/tasks/'+id,{method:'PATCH',body:JSON.stringify(patch)});
   await load();
-  toast(preset==='someday'?'Flyttad till Gör nån gång.':'Uppgiften har fått nytt datum.');
+  toast(preset==='someday'?'Flyttad till Nån gång.':'Uppgiften har fått nytt datum.');
 }
 
 async function bulkRescheduleOverdue(preset){
@@ -1060,7 +1092,7 @@ async function triageInboxTask(id,target){
   else throw new Error('Okänt inbox-val.');
   await api('/tasks/'+id,{method:'PATCH',body:JSON.stringify(patch)});
   await load();
-  toast(target==='today'?'Flyttad till Gör idag.':target==='later'?'Flyttad till Gör sen.':'Flyttad till Gör nån gång.');
+  toast(target==='today'?'Flyttad till Idag.':target==='later'?'Flyttad till Sen.':'Flyttad till Nån gång.');
 }
 
 async function bulkPlanInboxUnscheduled(target){
@@ -1090,7 +1122,7 @@ async function reviewSomedayTask(id,target){
   else throw new Error('Okänt review-val.');
   await api('/tasks/'+id,{method:'PATCH',body:JSON.stringify(patch)});
   await load();
-  toast(target==='today'?'Flyttad till Gör idag.':'Flyttad till Gör sen.');
+  toast(target==='today'?'Flyttad till Idag.':'Flyttad till Sen.');
 }
 
 async function setTaskPriority(id,priority){
@@ -1612,7 +1644,7 @@ function renderTaskEditForm(t){
       <label>Titel<input name="title" value="${escapeHtml(t.title)}" required></label>
       <label>Anteckningar<textarea name="notes" placeholder="Lägg till mer kontext…">${escapeHtml(t.notes||'')}</textarea></label>
       <div class="form-grid compact-grid">
-        <label>Var<select name="bucket">${[['inbox','Inbox'],['today','Gör idag'],['later','Gör sen'],['someday','Gör nån gång']].map(([id,label])=>option(id,label,t.bucket)).join('')}</select></label>
+        <label>Var<select name="bucket">${[['inbox','Inbox'],['today','Idag'],['later','Sen'],['someday','Nån gång']].map(([id,label])=>option(id,label,t.bucket)).join('')}</select></label>
         <label>Status<select name="status">${[['todo','Att göra'],['planned','Planerad'],['doing','Pågår'],['waiting','Väntar'],['review','Granskning']].map(([id,label])=>option(id,label,t.status)).join('')}</select></label>
         <label>Projekt<select name="projectId" id="editProjectSelect">${projectOptionsHtml(t.projectId||'')}</select></label>
         <label>Tilldelad<select name="assigneeId" id="editAssigneeSelect">${assigneeOptionsHtml(t.projectId,t.assigneeId)}</select></label>
@@ -1640,7 +1672,7 @@ Skicka till Pelle
 Följ upp svaret"></textarea>
       <div class="breakdown-options">
         <label><input type="checkbox" name="sequential" checked> Lås upp ett steg i taget</label>
-        <label><input type="checkbox" name="today" checked> Lägg första steget i Gör idag</label>
+        <label><input type="checkbox" name="today" checked> Lägg första steget i Idag</label>
       </div>
       <button class="primary" type="submit">Skapa underuppgifter</button>
     </form>
@@ -2062,6 +2094,9 @@ $('#assigneeSelect').onchange=()=>updateTaskContext();
 $('#quickAdd').onclick=$('#addRow').onclick=$('#mobileAdd').onclick=openDialog;$('#closeInspector').onclick=()=>$('#inspector').classList.remove('open');
 document.querySelectorAll('[data-close-task-dialog]').forEach(b=>b.onclick=()=>$('#taskDialog').close());
 document.querySelectorAll('[data-close-structure-dialog]').forEach(b=>b.onclick=()=>$('#structureDialog').close());
+document.querySelectorAll('[data-close-structure-choice]').forEach(b=>b.onclick=closeStructureChoice);
+document.querySelectorAll('[data-structure-choice]').forEach(b=>b.onclick=()=>createStructureFromChoice(b.dataset.structureChoice));
+document.querySelectorAll('[data-close-profile]').forEach(b=>b.onclick=()=>$('#profileDialog')?.close());
 $('#commandButton').onclick=openCommandPalette;
 $('#commandSearch').oninput=e=>renderCommandResults(e.target.value);
 $('#commandForm').onsubmit=e=>{e.preventDefault();openFirstCommandResult()};
@@ -2070,6 +2105,11 @@ document.querySelectorAll('[data-icon-choice]').forEach(b=>b.onclick=()=>setStru
 document.querySelectorAll('[data-color-choice]').forEach(b=>b.onclick=()=>setStructureColor(b.dataset.colorChoice));
 document.querySelectorAll('[data-project-view]').forEach(b=>b.onclick=()=>{projectView=b.dataset.projectView;document.querySelectorAll('[data-project-view]').forEach(x=>x.classList.toggle('active',x===b));render()});
 $('#notificationButton').onclick=()=>$('#notificationPanel').classList.add('open');$('#closeNotifications').onclick=()=>$('#notificationPanel').classList.remove('open');
+$('#structurePlusButton').onclick=openStructureChoice;
+$('#sidebarSettingsButton').onclick=()=>{view='settings';render()};
+$('#profileButton').onclick=openProfileDialog;
+$('#profileSettingsButton').onclick=()=>{$('#profileDialog')?.close();view='settings';render()};
+$('#profileLogoutButton').onclick=async()=>{if(liveChannel)await liveChannel.unsubscribe();await signOut();$('#profileDialog')?.close();showAuth()};
 $('#taskForm').onsubmit=async e=>{
   e.preventDefault();
   const f=new FormData(e.target),data=Object.fromEntries(f),dependencies=f.getAll('dependencyTaskIds').filter(Boolean);
@@ -2102,7 +2142,6 @@ function showAuth(){ $('#authScreen').classList.add('open');setAppLocked(true);$
 function hideAuth(){ $('#authScreen').classList.remove('open');setAppLocked(false) }
 $('#authSwitch').onclick=()=>{authMode=authMode==='signin'?'signup':'signin';const signup=authMode==='signup';$('#nameLabel').classList.toggle('show',signup);$('#authTitle').textContent=signup?'Skapa ditt konto':'Välkommen tillbaka';$('#authSubmit').textContent=signup?'Skapa konto':'Logga in';$('#authSwitch').textContent=signup?'Har du redan ett konto? Logga in':'Inget konto? Skapa ett';$('#authError').textContent=''};
 $('#authForm').onsubmit=async e=>{e.preventDefault();const f=new FormData(e.target);$('#authError').textContent='';$('#authSubmit').disabled=true;try{if(authMode==='signup')await signUp(f.get('name'),f.get('email'),f.get('password'));else await signIn(f.get('email'),f.get('password'));await boot()}catch(err){$('#authError').textContent=err.message}finally{$('#authSubmit').disabled=false}};
-$('#logoutButton').onclick=async()=>{if(liveChannel)await liveChannel.unsubscribe();await signOut();showAuth()};
-async function boot(){if(!configured){showAuth();return}const current=await session();if(!current){showAuth();return}hideAuth();$('#currentUserName').textContent=current.user.user_metadata?.name||current.user.email.split('@')[0];await load();state.currentUserId=current.user.id;render();startReminderLoop();if(pendingTaskOpen){const id=pendingTaskOpen;pendingTaskOpen='';openInspector(id);clearQueryUrl()}if(pendingCapture){const capture=pendingCapture;pendingCapture=null;openDialog(capture);clearCaptureUrl();toast('Länken är fångad. Spara för att skapa uppgiften.')}if(liveChannel)await liveChannel.unsubscribe();liveChannel=subscribeToChanges(()=>load())}
+async function boot(){if(!configured){showAuth();return}const current=await session();if(!current){showAuth();return}currentAuthUser=current.user;hideAuth();await load();state.currentUserId=current.user.id;const me=person(state.currentUserId);$('#profileButton').textContent=me.initials||current.user.email.slice(0,2).toUpperCase();render();startReminderLoop();if(pendingTaskOpen){const id=pendingTaskOpen;pendingTaskOpen='';openInspector(id);clearQueryUrl()}if(pendingCapture){const capture=pendingCapture;pendingCapture=null;openDialog(capture);clearCaptureUrl();toast('Länken är fångad. Spara för att skapa uppgiften.')}if(liveChannel)await liveChannel.unsubscribe();liveChannel=subscribeToChanges(()=>load())}
 registerServiceWorker();
 boot();
