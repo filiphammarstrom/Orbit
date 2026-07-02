@@ -26,6 +26,8 @@ if(!['all','mine'].includes(taskScope))taskScope='all';
 let taskSort=localStorage.getItem('orbitTaskSort')||'smart';
 if(!['smart','priority','due','name'].includes(taskSort))taskSort='smart';
 let taskSearch=localStorage.getItem('orbitTaskSearch')||'';
+let laterView=localStorage.getItem('orbitLaterView')||'all';
+if(!['all','scheduled'].includes(laterView))laterView='all';
 let notifiedReminderKeys=new Set(JSON.parse(localStorage.getItem('orbitNotifiedReminders')||'[]'));
 let pendingTaskOpen = new URLSearchParams(window.location.search).get('task') || '';
 
@@ -72,8 +74,8 @@ const categoryFromView=()=>decodeURIComponent(view.slice('category:'.length));
 const areaHasActiveProject=a=>view.startsWith('project:')&&projectsForArea(a).some(p=>view==='project:'+p.id);
 const areaIsActive=a=>view==='area:'+a.id||areaHasActiveProject(a);
 const categoryIsActive=group=>view===categoryViewId(group.category)||group.areas.some(areaIsActive);
-const categoryIsOpen=group=>categoryIsActive(group)||!collapsedCategories.has(group.category);
-const areaIsOpen=a=>areaIsActive(a)||!collapsedAreas.has(a.id);
+const categoryIsOpen=group=>!collapsedCategories.has(group.category);
+const areaIsOpen=a=>!collapsedAreas.has(a.id);
 const escapeHtml=(s='')=>String(s).replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
 const toast=text=>{$('#toast').textContent=text;$('#toast').classList.add('show');setTimeout(()=>$('#toast').classList.remove('show'),2200)};
 const avatarHtml=p=>`<span class="mini-avatar" title="${p.name}" style="background:${p.color}">${p.initials}</span>`;
@@ -490,6 +492,7 @@ function render(){
   document.querySelectorAll('[data-later-move]').forEach(b=>b.onclick=async()=>{b.disabled=true;try{await rescheduleTask(b.dataset.task,b.dataset.laterMove)}catch(error){toast(error.message);b.disabled=false}});
   document.querySelectorAll('[data-later-open]').forEach(b=>b.onclick=()=>openInspector(b.dataset.laterOpen));
   document.querySelectorAll('[data-later-bulk-unscheduled]').forEach(b=>b.onclick=async()=>{b.disabled=true;try{await bulkMoveLaterUnscheduled(b.dataset.laterBulkUnscheduled)}catch(error){toast(error.message);b.disabled=false}});
+  document.querySelectorAll('[data-later-view]').forEach(b=>b.onclick=()=>{laterView=b.dataset.laterView;localStorage.setItem('orbitLaterView',laterView);render()});
   document.querySelectorAll('[data-someday-move]').forEach(b=>b.onclick=async()=>{b.disabled=true;try{await reviewSomedayTask(b.dataset.task,b.dataset.somedayMove)}catch(error){toast(error.message);b.disabled=false}});
   document.querySelectorAll('[data-someday-bulk-priority]').forEach(b=>b.onclick=async()=>{b.disabled=true;try{await bulkPlanSomedayPriority(Number(b.dataset.somedayBulkPriority))}catch(error){toast(error.message);b.disabled=false}});
   document.querySelectorAll('[data-someday-downgrade-priority]').forEach(b=>b.onclick=async()=>{b.disabled=true;try{await bulkDowngradeSomedayPriority(Number(b.dataset.somedayDowngradePriority))}catch(error){toast(error.message);b.disabled=false}});
@@ -781,32 +784,45 @@ function assignmentTodayNudgeHtml(){
 }
 
 function laterContent(tasks){
-  if(!tasks.length)return'<div class="empty">Gör sen är tom. Bra.</div>';
-  const now=startOfLocalDay(),weekEnd=dayAt(7,23,59);
-  const sorted=[...tasks].sort((a,b)=>{
+  const scheduledTasks=applyTaskViewControls(topLevel(visible().filter(t=>t.dueAt&&!isDueToday(t)&&!isOverdue(t))));
+  const displayTasks=laterView==='scheduled'?scheduledTasks:tasks;
+  if(!displayTasks.length){
+    return `${laterTabsHtml(tasks.length,scheduledTasks.length)}<div class="empty">${laterView==='scheduled'?'Inget inbokat längre fram.':'Gör sen är tom. Bra.'}</div>`;
+  }
+  const weekEnd=dayAt(7,23,59);
+  const sorted=[...displayTasks].sort((a,b)=>{
     const ad=a.dueAt?new Date(a.dueAt).getTime():Number.MAX_SAFE_INTEGER,bd=b.dueAt?new Date(b.dueAt).getTime():Number.MAX_SAFE_INTEGER;
     if(ad!==bd)return ad-bd;
     if(Number(a.priority||4)!==Number(b.priority||4))return Number(a.priority||4)-Number(b.priority||4);
     return String(a.title).localeCompare(String(b.title),'sv-SE');
   });
+  const includeUnscheduled=laterView==='all';
   const groups=[
     ['overdue','Släpar efter',sorted.filter(isOverdue),'Bestäm nytt datum eller flytta bort.'],
     ['week','Kommande vecka',sorted.filter(t=>t.dueAt&&!isOverdue(t)&&new Date(t.dueAt)<=weekEnd),'Det här är nära nog att vara planering.'],
     ['future','Senare',sorted.filter(t=>t.dueAt&&!isOverdue(t)&&new Date(t.dueAt)>weekEnd),'Ligger längre fram.'],
-    ['unscheduled','Utan datum',sorted.filter(t=>!t.dueAt),'Behöver ett beslut för att inte försvinna.']
+    ...(includeUnscheduled?[['unscheduled','Utan datum',sorted.filter(t=>!t.dueAt),'Behöver ett beslut för att inte försvinna.']]:[])
   ].filter(([, ,items])=>items.length);
   const next=groups[0]?.[2]?.[0];
   const unscheduled=sorted.filter(t=>!t.dueAt);
   return `<section class="later-planner-card">
-    <div class="later-planner-head"><div><p class="eyebrow">GÖR SEN</p><h3>Planera framåt utan att fylla idag</h3><p>Här ska saker ha ett ungefärligt nästa datum. Om något är viktigt nog: lyft till idag.</p></div><span>${tasks.length}</span></div>
+    <div class="later-planner-head"><div><p class="eyebrow">GÖR SEN</p><h3>${laterView==='scheduled'?'Inbokat längre fram':'Planera framåt utan att fylla idag'}</h3><p>${laterView==='scheduled'?'Datumlagda uppgifter som ligger efter idag. Idag och overdue hanteras i Gör idag/review.':'Här ska saker ha ett ungefärligt nästa datum. Om något är viktigt nog: lyft till idag.'}</p></div><span>${displayTasks.length}</span></div>
+    ${laterTabsHtml(tasks.length,scheduledTasks.length)}
     ${next?`<article class="later-next-card"><button data-later-open="${next.id}"><small>Närmast beslut</small><strong>${escapeHtml(next.title)}</strong><span>${escapeHtml(taskContextLabel(next))}</span></button><div><button class="primary" data-task="${next.id}" data-later-move="today">Idag</button><button class="secondary" data-task="${next.id}" data-later-move="someday">Någon gång</button></div></article>`:''}
-    ${unscheduled.length>=3?laterNudgeHtml(unscheduled):''}
+    ${includeUnscheduled&&unscheduled.length>=3?laterNudgeHtml(unscheduled):''}
   </section>
   <div class="later-timeline">${groups.map(([key,label,items,help])=>`<section class="later-group ${key}">
     <h3>${label}<span>${items.length}</span></h3>
     <p>${help}</p>
     <div>${items.map(laterCardHtml).join('')}</div>
   </section>`).join('')}</div>`;
+}
+
+function laterTabsHtml(allCount,scheduledCount){
+  return `<div class="later-tabs" role="tablist" aria-label="Gör sen-filter">
+    <button type="button" role="tab" aria-selected="${laterView==='all'}" class="${laterView==='all'?'active':''}" data-later-view="all">Alla <span>${allCount}</span></button>
+    <button type="button" role="tab" aria-selected="${laterView==='scheduled'}" class="${laterView==='scheduled'?'active':''}" data-later-view="scheduled">Inbokat <span>${scheduledCount}</span></button>
+  </div>`;
 }
 
 function laterNudgeHtml(tasks){
@@ -1820,11 +1836,23 @@ function showStructureField(id,show){
   if(el)el.style.display=show?'block':'none';
 }
 
+function markStructureIconChoice(value=''){
+  document.querySelectorAll('[data-icon-choice]').forEach(b=>b.classList.toggle('active',b.dataset.iconChoice===value));
+}
+
 function setStructureIcon(icon='📁'){
   const value=firstIcon(icon||'📁');
   const input=$('#structureForm')?.elements?.icon;
   if(input)input.value=value;
-  document.querySelectorAll('[data-icon-choice]').forEach(b=>b.classList.toggle('active',b.dataset.iconChoice===value));
+  markStructureIconChoice(value);
+}
+
+function normalizeStructureIcon(form){
+  const fallback=(form?.elements?.mode?.value||'').includes('project')?'✅':'📁';
+  const value=firstIcon(form?.elements?.icon?.value||fallback);
+  if(form?.elements?.icon)form.elements.icon.value=value;
+  markStructureIconChoice(value);
+  return value;
 }
 
 function structureLevel(mode='category'){
@@ -1899,6 +1927,7 @@ function openStructureDialog(mode='category',context={}){
 $('#structureForm').onsubmit=async e=>{
   e.preventDefault();
   const form=e.target,save=$('#saveStructure'),data=Object.fromEntries(new FormData(form)),mode=data.mode;
+  data.icon=normalizeStructureIcon(form);
   save.disabled=true;
   try{
     if(mode==='edit-category'){
@@ -2024,7 +2053,7 @@ $('#commandSearch').oninput=e=>renderCommandResults(e.target.value);
 $('#commandForm').onsubmit=e=>{e.preventDefault();openFirstCommandResult()};
 $('#closeCommand').onclick=()=>$('#commandDialog').close();
 document.querySelectorAll('[data-icon-choice]').forEach(b=>b.onclick=()=>setStructureIcon(b.dataset.iconChoice));
-$('#structureForm')?.elements?.icon?.addEventListener('input',e=>setStructureIcon(e.target.value));
+$('#structureForm')?.elements?.icon?.addEventListener('input',e=>markStructureIconChoice(e.target.value.trim()));
 document.querySelectorAll('[data-project-view]').forEach(b=>b.onclick=()=>{projectView=b.dataset.projectView;document.querySelectorAll('[data-project-view]').forEach(x=>x.classList.toggle('active',x===b));render()});
 $('#notificationButton').onclick=()=>$('#notificationPanel').classList.add('open');$('#closeNotifications').onclick=()=>$('#notificationPanel').classList.remove('open');
 $('#taskForm').onsubmit=async e=>{

@@ -1026,6 +1026,50 @@
   place-items: center;
 }
 
+.later-tabs {
+  background: #f7f3e8;
+  border: 1px solid #eee3c9;
+  border-radius: 12px;
+  display: inline-flex;
+  gap: 4px;
+  margin: 0 0 13px;
+  padding: 4px;
+}
+
+.later-tabs button {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: 9px;
+  color: #8b8069;
+  cursor: pointer;
+  display: inline-flex;
+  font-size: 11px;
+  font-weight: 850;
+  gap: 6px;
+  padding: 7px 10px;
+}
+
+.later-tabs button.active {
+  background: #fff;
+  color: #25202d;
+  box-shadow: 0 4px 12px #7b5a180f;
+}
+
+.later-tabs span {
+  background: #ece4d0;
+  border-radius: 999px;
+  color: #8a6a24;
+  font-size: 9px;
+  min-width: 18px;
+  padding: 2px 5px;
+}
+
+.later-tabs button.active span {
+  background: #efeaff;
+  color: var(--purple);
+}
+
 .later-next-card {
   align-items: center;
   background: #fff;

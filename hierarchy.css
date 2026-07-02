@@ -27,25 +27,25 @@
 }
 
 .tree-category {
-  margin: 6px 0;
+  margin: 3px 0 7px;
 }
 
 .tree-row {
   align-items: center;
-  border-radius: 9px;
+  border-radius: 8px;
   display: grid;
-  gap: 3px;
-  grid-template-columns: 20px 1fr 22px 22px;
-  min-height: 32px;
+  gap: 2px;
+  grid-template-columns: 16px minmax(0,1fr) 18px 18px;
+  min-height: 28px;
 }
 
 .tree-row:hover {
-  background: #fff;
+  background: rgba(255,255,255,.42);
 }
 
 .tree-row.active {
-  background: #fff;
-  box-shadow: inset 3px 0 0 var(--purple);
+  background: rgba(118,89,239,.08);
+  box-shadow: inset 2px 0 0 var(--purple);
 }
 
 .tree-toggle,
@@ -61,7 +61,7 @@
 .tree-action {
   background: transparent;
   color: #9f98aa;
-  height: 24px;
+  height: 22px;
   opacity: 0;
   padding: 0;
   transition: opacity .12s, background .12s, color .12s;
@@ -103,10 +103,10 @@
   background: transparent;
   color: #4d4955;
   display: grid;
-  gap: 7px;
-  grid-template-columns: auto minmax(0,1fr) auto auto;
+  gap: 6px;
+  grid-template-columns: 22px minmax(0,1fr) auto;
   min-width: 0;
-  padding: 6px 0;
+  padding: 3px 0;
   text-align: left;
 }
 
@@ -130,23 +130,23 @@
   white-space: nowrap;
 }
 
+.tree-main .area-icon,
 .category-icon,
-.project-icon {
-  color: #fff;
+.tree-project .project-icon {
+  background: transparent !important;
+  color: inherit;
   display: grid;
-  font-size: 11px;
-  font-weight: 900;
+  font-size: 17px;
+  font-weight: 400;
   height: 22px;
   place-items: center;
   width: 22px;
 }
 
-.category-icon {
-  border-radius: 8px;
-}
-
-.project-icon {
-  border-radius: 7px;
+.tree-main .area-icon,
+.category-icon,
+.tree-project .project-icon {
+  border-radius: 0;
 }
 
 .tree-main small {
@@ -166,58 +166,58 @@
 
 .tree-children {
   border-left: 1px solid #e6e1eb;
-  margin: 3px 0 4px 9px;
-  padding-left: 8px;
+  margin: 2px 0 4px 8px;
+  padding-left: 7px;
 }
 
 .tree-area {
-  margin: 4px 0;
+  margin: 2px 0 4px;
 }
 
 .tree-projects {
   border-left: 1px solid #eee9f4;
   display: grid;
   gap: 1px;
-  margin: 2px 0 6px 9px;
-  padding-left: 8px;
+  margin: 1px 0 5px 8px;
+  padding-left: 7px;
 }
 
 .tree-project-line {
   align-items: center;
   display: grid;
-  gap: 3px;
-  grid-template-columns: 20px 1fr 22px 22px;
-  min-height: 30px;
+  gap: 2px;
+  grid-template-columns: 14px minmax(0,1fr) 18px 18px;
+  min-height: 26px;
 }
 
 .tree-project {
   align-items: center;
   background: transparent;
-  border-radius: 8px;
+  border-radius: 7px;
   color: #5c5964;
   display: grid;
   font-size: 12px;
-  gap: 8px;
-  grid-template-columns: auto minmax(0,1fr) auto;
-  min-height: 28px;
-  padding: 0 7px;
+  gap: 6px;
+  grid-template-columns: 22px minmax(0,1fr) auto;
+  min-height: 24px;
+  padding: 0 6px 0 0;
   text-align: left;
 }
 
 .tree-project-spacer {
-  width: 20px;
+  width: 14px;
 }
 
 .tree-project-line .project-add {
-  height: 24px;
+  height: 22px;
   padding: 0;
 }
 
 .tree-project:hover,
 .tree-project.active {
-  background: #fff;
+  background: rgba(118,89,239,.08);
   color: var(--ink);
-  box-shadow: inset 3px 0 0 var(--purple);
+  box-shadow: inset 2px 0 0 var(--purple);
 }
 
 .tree-create-under {
@@ -239,13 +239,22 @@
 .tree-empty-note {
   color: #aaa2b0;
   display: block;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 700;
-  padding: 7px 8px 8px 28px;
+  padding: 5px 6px 7px 22px;
 }
 
 .structure-form .structure-help {
   margin: -8px 0 16px;
+}
+
+.structure-form .field-note {
+  color: #9a94a4;
+  display: block;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.35;
+  margin-top: 5px;
 }
 
 .structure-builder-grid button {
