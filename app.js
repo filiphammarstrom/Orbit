@@ -65,9 +65,11 @@ const firstIcon=value=>{
   if(globalThis.Intl?.Segmenter)return[...new Intl.Segmenter(undefined,{granularity:'grapheme'}).segment(text)][0]?.segment||'📁';
   return Array.from(text)[0]||'📁';
 };
+const safeColor=(value,fallback='#7659ef')=>/^#[0-9a-f]{6}$/i.test(String(value||''))?String(value):fallback;
+const nodeStyle=(color,fallback='#7659ef')=>`style="--node-color:${escapeHtml(safeColor(color,fallback))}"`;
 const categoryVisual=name=>{const setting=categorySetting(name),firstArea=(state.areas||[]).find(a=>areaCategory(a)===name);return{icon:setting?.icon||firstArea?.icon||'📁',color:setting?.color||firstArea?.color||'#7659ef'}};
-const categoryIconHtml=name=>{const visual=categoryVisual(name);return`<span class="category-icon" style="background:${escapeHtml(visual.color)}">${escapeHtml(visual.icon)}</span>`};
-const projectIconHtml=p=>`<span class="project-icon" style="background:${escapeHtml(p?.color||'#8b70ff')}">${escapeHtml(p?.icon||'✅')}</span>`;
+const categoryIconHtml=name=>`<span class="category-icon">${escapeHtml(categoryVisual(name).icon)}</span>`;
+const projectIconHtml=p=>`<span class="project-icon">${escapeHtml(p?.icon||'✅')}</span>`;
 const taskCountForProjects=projects=>visible().filter(t=>projects.some(p=>p.id===t.projectId)).length;
 const categoryViewId=category=>`category:${encodeURIComponent(category)}`;
 const categoryFromView=()=>decodeURIComponent(view.slice('category:'.length));
@@ -401,9 +403,9 @@ function bindStructureActions(root=document){
 function renderNav(){
   $('#mainNav').innerHTML=navItems.map(([id,ico,label])=>`<button class="nav-item ${view===id?'active':''}" data-view="${id}"><span class="ico">${ico}</span><span>${label}</span><span class="count">${navCount(id)||''}</span></button>`).join('');
   $('#projectNav').innerHTML=`${areaGroups().map(group=>{
-    const categoryProjects=group.areas.flatMap(projectsForArea),categoryView=categoryViewId(group.category),categoryCount=taskCountForProjects(categoryProjects),open=categoryIsOpen(group);
+    const categoryProjects=group.areas.flatMap(projectsForArea),categoryView=categoryViewId(group.category),categoryCount=taskCountForProjects(categoryProjects),open=categoryIsOpen(group),categoryVisuals=categoryVisual(group.category);
     return `<div class="tree-category ${open?'open':'closed'}">
-      <div class="tree-row category-row ${categoryIsActive(group)?'active':''}">
+      <div class="tree-row category-row ${categoryIsActive(group)?'active':''}" ${nodeStyle(categoryVisuals.color)}>
         <button class="tree-toggle" data-toggle-category="${escapeHtml(group.category)}">${open?'▾':'▸'}</button>
         <button class="tree-main" data-view="${escapeHtml(categoryView)}">${categoryIconHtml(group.category)}<span>${escapeHtml(group.category)}</span><small>${group.areas.length} område${group.areas.length===1?'':'n'}</small><i>${categoryCount||''}</i></button>
         <button class="tree-action tree-edit" title="Byt namn på ${escapeHtml(group.category)}" data-edit-category="${escapeHtml(group.category)}">✎</button>
@@ -412,13 +414,13 @@ function renderNav(){
       ${open?`<div class="tree-children">${group.areas.map(a=>{
         const projects=projectsForArea(a),areaOpen=areaIsOpen(a),count=taskCountForProjects(projects);
         return `<div class="tree-area ${areaOpen?'open':'closed'}">
-          <div class="tree-row area-row ${areaIsActive(a)?'active':''}">
+          <div class="tree-row area-row ${areaIsActive(a)?'active':''}" ${nodeStyle(a.color,'#42a68b')}>
             <button class="tree-toggle" data-toggle-area="${a.id}">${areaOpen?'▾':'▸'}</button>
-            <button class="tree-main" data-view="area:${a.id}"><span class="area-icon" style="background:${a.color}">${a.icon}</span><span>${escapeHtml(areaName(a))}</span><small>${projects.length?`${projects.length} projekt`:''}</small><i>${count||''}</i></button>
+            <button class="tree-main" data-view="area:${a.id}"><span class="area-icon">${escapeHtml(a.icon)}</span><span>${escapeHtml(areaName(a))}</span><small>${projects.length?`${projects.length} projekt`:''}</small><i>${count||''}</i></button>
             <button class="tree-action tree-edit" title="Byt namn på ${escapeHtml(areaName(a))}" data-edit-area="${a.id}">✎</button>
             <button class="tree-action" title="Nytt projekt i ${escapeHtml(areaName(a))}" data-create-project="${a.id}">＋</button>
           </div>
-          ${areaOpen?`<div class="tree-projects">${projects.map(p=>`<div class="tree-project-line"><span class="tree-project-spacer"></span><button class="tree-project ${view==='project:'+p.id?'active':''}" data-view="project:${p.id}">${projectIconHtml(p)}<span>${escapeHtml(p.name)}</span><i>${visible().filter(t=>t.projectId===p.id).length||''}</i></button><button class="tree-action tree-edit" title="Byt namn på ${escapeHtml(p.name)}" data-edit-project="${p.id}">✎</button><button class="tree-action project-add" title="Ny uppgift i ${escapeHtml(p.name)}" data-create-task-project="${p.id}">＋</button></div>`).join('')}${projects.length?'':`<span class="tree-empty-note">Inga projekt ännu</span>`}</div>`:''}
+          ${areaOpen?`<div class="tree-projects">${projects.map(p=>`<div class="tree-project-line"><span class="tree-project-spacer"></span><button class="tree-project ${view==='project:'+p.id?'active':''}" data-view="project:${p.id}" ${nodeStyle(p.color,'#8b70ff')}>${projectIconHtml(p)}<span>${escapeHtml(p.name)}</span><i>${visible().filter(t=>t.projectId===p.id).length||''}</i></button><button class="tree-action tree-edit" title="Byt namn på ${escapeHtml(p.name)}" data-edit-project="${p.id}">✎</button><button class="tree-action project-add" title="Ny uppgift i ${escapeHtml(p.name)}" data-create-task-project="${p.id}">＋</button></div>`).join('')}${projects.length?'':`<span class="tree-empty-note">Inga projekt ännu</span>`}</div>`:''}
         </div>`;
       }).join('') || `<span class="tree-empty-note">Inga områden ännu</span>`}</div>`:''}
     </div>`;
@@ -1840,11 +1842,23 @@ function markStructureIconChoice(value=''){
   document.querySelectorAll('[data-icon-choice]').forEach(b=>b.classList.toggle('active',b.dataset.iconChoice===value));
 }
 
+function markStructureColorChoice(value=''){
+  const color=safeColor(value);
+  document.querySelectorAll('[data-color-choice]').forEach(b=>b.classList.toggle('active',b.dataset.colorChoice.toLowerCase()===color.toLowerCase()));
+}
+
 function setStructureIcon(icon='📁'){
   const value=firstIcon(icon||'📁');
   const input=$('#structureForm')?.elements?.icon;
   if(input)input.value=value;
   markStructureIconChoice(value);
+}
+
+function setStructureColor(color='#7659ef'){
+  const value=safeColor(color);
+  const input=$('#structureForm')?.elements?.color;
+  if(input)input.value=value;
+  markStructureColorChoice(value);
 }
 
 function normalizeStructureIcon(form){
@@ -1891,7 +1905,7 @@ function openStructureDialog(mode='category',context={}){
   form.elements.mode.value=mode;
   form.elements.entityId.value=context.areaId||context.projectId||'';
   form.elements.originalCategory.value=category||'';
-  form.elements.color.value=currentProject?.color||currentArea?.color||visual?.color||(mode.includes('project')?'#8b70ff':'#7659ef');
+  setStructureColor(currentProject?.color||currentArea?.color||visual?.color||(mode.includes('project')?'#8b70ff':'#7659ef'));
   setStructureIcon(currentProject?.icon||currentArea?.icon||visual?.icon||(mode.includes('project')?'✅':'📁'));
   form.elements.category.value=editingCategory?category:(category==='Privat'&&mode==='category'?'':category);
   form.elements.category.readOnly=mode==='area';
@@ -2053,7 +2067,7 @@ $('#commandSearch').oninput=e=>renderCommandResults(e.target.value);
 $('#commandForm').onsubmit=e=>{e.preventDefault();openFirstCommandResult()};
 $('#closeCommand').onclick=()=>$('#commandDialog').close();
 document.querySelectorAll('[data-icon-choice]').forEach(b=>b.onclick=()=>setStructureIcon(b.dataset.iconChoice));
-$('#structureForm')?.elements?.icon?.addEventListener('input',e=>markStructureIconChoice(e.target.value.trim()));
+document.querySelectorAll('[data-color-choice]').forEach(b=>b.onclick=()=>setStructureColor(b.dataset.colorChoice));
 document.querySelectorAll('[data-project-view]').forEach(b=>b.onclick=()=>{projectView=b.dataset.projectView;document.querySelectorAll('[data-project-view]').forEach(x=>x.classList.toggle('active',x===b));render()});
 $('#notificationButton').onclick=()=>$('#notificationPanel').classList.add('open');$('#closeNotifications').onclick=()=>$('#notificationPanel').classList.remove('open');
 $('#taskForm').onsubmit=async e=>{

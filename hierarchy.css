@@ -41,19 +41,19 @@
 }
 
 .tree-row:hover {
-  background: rgba(255,255,255,.62);
+  background: color-mix(in srgb, var(--node-color, var(--purple)) 14%, #fff);
 }
 
 .tree-row.active {
-  box-shadow: inset 3px 0 0 var(--purple);
+  box-shadow: inset 3px 0 0 var(--node-color, var(--purple));
 }
 
 .category-row {
-  background: rgba(118,89,239,.10);
+  background: color-mix(in srgb, var(--node-color, var(--purple)) 11%, transparent);
 }
 
 .area-row {
-  background: rgba(79,166,139,.10);
+  background: color-mix(in srgb, var(--node-color, #42a68b) 11%, transparent);
 }
 
 .tree-toggle,
@@ -102,8 +102,8 @@
 
 .tree-toggle:hover,
 .tree-action:hover {
-  background: var(--purple-soft);
-  color: var(--purple);
+  background: color-mix(in srgb, var(--node-color, var(--purple)) 14%, #fff);
+  color: var(--node-color, var(--purple));
 }
 
 .tree-main {
@@ -141,20 +141,15 @@
 .tree-main .area-icon,
 .category-icon,
 .tree-project .project-icon {
-  background: transparent !important;
-  color: inherit;
+  background: var(--node-color, var(--purple));
+  border-radius: 8px;
+  color: #fff;
   display: grid;
-  font-size: 17px;
-  font-weight: 400;
+  font-size: 13px;
+  font-weight: 800;
   height: 22px;
   place-items: center;
   width: 22px;
-}
-
-.tree-main .area-icon,
-.category-icon,
-.tree-project .project-icon {
-  border-radius: 0;
 }
 
 .tree-main small {
@@ -202,7 +197,7 @@
 
 .tree-project {
   align-items: center;
-  background: rgba(118,89,239,.07);
+  background: color-mix(in srgb, var(--node-color, var(--purple)) 9%, transparent);
   border-radius: 10px;
   color: #5c5964;
   display: grid;
@@ -225,9 +220,9 @@
 
 .tree-project:hover,
 .tree-project.active {
-  background: rgba(118,89,239,.13);
+  background: color-mix(in srgb, var(--node-color, var(--purple)) 15%, #fff);
   color: var(--ink);
-  box-shadow: inset 3px 0 0 var(--purple);
+  box-shadow: inset 3px 0 0 var(--node-color, var(--purple));
 }
 
 .tree-create-under {
@@ -398,7 +393,7 @@
 .icon-picker {
   display: grid;
   gap: 5px;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(5, 1fr);
   margin-top: 8px;
 }
 
@@ -417,6 +412,27 @@
   background: var(--purple-soft);
   border-color: #cfc2ff;
   color: var(--purple);
+}
+
+.color-picker {
+  display: grid;
+  gap: 7px;
+  grid-template-columns: repeat(4, 1fr);
+  margin-top: 8px;
+}
+
+.color-picker button {
+  background: var(--choice-color);
+  border: 2px solid transparent;
+  border-radius: 10px;
+  cursor: pointer;
+  min-height: 34px;
+}
+
+.color-picker button:hover,
+.color-picker button.active {
+  border-color: #25202d;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--choice-color) 20%, transparent);
 }
 
 .hierarchy-intro {
